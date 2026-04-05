@@ -54,7 +54,8 @@
           "cameraPermission": "Permite tirar uma nova fotografia com a câmera para atribuir ao seu perfil.",
           "microphonePermission": "Permite o acesso ao microfone ao gravar imagens em movimento."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},
