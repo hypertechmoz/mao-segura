@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Modal, ScrollView, TouchableOpacity, Platform, Dimensions, StatusBar } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Spacing, Fonts } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -105,13 +105,15 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         padding: Spacing.md,
+        paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
     },
     modalCard: {
         backgroundColor: Colors.white,
         borderRadius: 24,
         width: '100%',
         maxWidth: 500,
-        maxHeight: height * 0.85,
+        maxHeight: '90%', 
+        flexShrink: 1, 
         overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
@@ -126,6 +128,7 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: Colors.borderLight,
         backgroundColor: Colors.primaryBg,
+        flexShrink: 0,
     },
     title: {
         fontSize: 22,
@@ -141,6 +144,7 @@ const styles = StyleSheet.create({
         lineHeight: 20,
     },
     scrollView: {
+        flexShrink: 1,
         paddingHorizontal: Spacing.xl,
     },
     scrollContent: {

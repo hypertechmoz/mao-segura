@@ -603,7 +603,7 @@ export default function Home() {
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')}>
                                 <Ionicons name="search-outline" size={24} color={Colors.primary} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={{ position: 'relative' }}>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
                                 <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
                                 {unreadNotifications > 0 && (
                                     <View style={styles.headerBadge}>
@@ -760,7 +760,16 @@ const styles = StyleSheet.create({
     },
     headerLogo: { width: 32, height: 32, borderRadius: 8, marginRight: 8 },
     headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-    headerActions: { flexDirection: 'row', gap: 16 },
+    headerActions: { flexDirection: 'row', gap: 12 },
+    headerIconBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryBg,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
 });
 
 // === Web-Only Styles ===
@@ -929,8 +938,8 @@ const webStyles = StyleSheet.create({
     tabBtnTextWebActive: { color: Colors.primary },
     headerBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
+        top: -2,
+        right: -2,
         backgroundColor: Colors.error,
         borderRadius: 8,
         minWidth: 16,
@@ -938,6 +947,7 @@ const webStyles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 2,
+        zIndex: 10,
     },
     headerBadgeText: {
         color: Colors.white,

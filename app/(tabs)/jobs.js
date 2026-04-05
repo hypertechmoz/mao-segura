@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert, Platform, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
 import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
+import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Jobs() {
@@ -15,6 +17,8 @@ export default function Jobs() {
     const [tab, setTab] = useState('active');
     const [items, setItems] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
+    const { t } = useTranslation();
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
 
@@ -104,6 +108,8 @@ export default function Jobs() {
             }
         } catch (err) {
             console.warn('Load jobs error:', err);
+        } finally {
+            setInitialLoading(false);
         }
     }, [tab, isEmployer, user]);
 
@@ -152,7 +158,7 @@ export default function Jobs() {
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')}>
                                 <Ionicons name="search-outline" size={24} color={Colors.primary} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={{ position: 'relative' }}>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
                                 <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
                                 {unreadNotifications > 0 && (
                                     <View style={styles.headerBadge}>
@@ -232,10 +238,16 @@ export default function Jobs() {
                     </View>
                 )}
                 ListEmptyComponent={() => (
-                    <View style={styles.empty}>
-                        <Ionicons name={isEmployer ? 'clipboard-outline' : 'document-text-outline'} size={48} color={Colors.textLight} style={{ marginBottom: Spacing.md }} />
-                        <Text style={styles.emptyText}>{isEmployer ? 'Nenhuma vaga publicada' : 'Nenhuma candidatura'}</Text>
-                    </View>
+                    initialLoading ? (
+                        <View style={[styles.empty, { marginTop: 40 }]}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                        </View>
+                    ) : (
+                        <View style={styles.empty}>
+                            <Ionicons name={isEmployer ? 'clipboard-outline' : 'document-text-outline'} size={48} color={Colors.textLight} style={{ marginBottom: Spacing.md }} />
+                            <Text style={styles.emptyText}>{isEmployer ? 'Nenhuma vaga publicada' : 'Nenhuma candidatura'}</Text>
+                        </View>
+                    )
                 )}
                 contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT }]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
@@ -275,8 +287,8 @@ const styles = StyleSheet.create({
     },
     headerBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
+        top: -2,
+        right: -2,
         backgroundColor: Colors.error,
         borderRadius: 8,
         minWidth: 16,
@@ -284,6 +296,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 2,
+        zIndex: 10,
     },
     headerBadgeText: {
         color: Colors.white,
@@ -310,5 +323,14 @@ const styles = StyleSheet.create({
     },
     headerLogo: { width: 32, height: 32, borderRadius: 8, marginRight: 8 },
     headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-    headerActions: { flexDirection: 'row', gap: 16 },
+    headerActions: { flexDirection: 'row', gap: 12 },
+    headerIconBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryBg,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+    },
 });

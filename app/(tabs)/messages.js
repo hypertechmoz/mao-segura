@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Image, Animated, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
 import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -15,6 +15,7 @@ export default function Messages() {
     const { user } = useAuthStore();
     const [conversations, setConversations] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
     const { unreadMessages, unreadNotifications } = useUnreadCount();
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
@@ -74,6 +75,8 @@ export default function Messages() {
             setConversations(formatted);
         } catch (err) {
             console.error('Load conversations error:', err);
+        } finally {
+            setInitialLoading(false);
         }
     };
 
@@ -154,11 +157,17 @@ export default function Messages() {
                     </TouchableOpacity>
                 )}
                 ListEmptyComponent={() => (
-                    <View style={styles.empty}>
-                        <Ionicons name="chatbubbles-outline" size={48} color={Colors.textLight} style={{ marginBottom: Spacing.md }} />
-                        <Text style={styles.emptyText}>Nenhuma conversa</Text>
-                        <Text style={styles.emptySubtext}>Inicie uma conversa a partir do perfil de um utilizador</Text>
-                    </View>
+                    initialLoading ? (
+                        <View style={[styles.empty, { marginTop: 40 }]}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                        </View>
+                    ) : (
+                        <View style={styles.empty}>
+                            <Ionicons name="chatbubbles-outline" size={48} color={Colors.textLight} style={{ marginBottom: Spacing.md }} />
+                            <Text style={styles.emptyText}>Nenhuma conversa</Text>
+                            <Text style={styles.emptySubtext}>Inicie uma conversa a partir do perfil de um utilizador</Text>
+                        </View>
+                    )
                 )}
                 contentContainerStyle={[styles.list, !isWeb && { marginTop: HEADER_HEIGHT }]}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}

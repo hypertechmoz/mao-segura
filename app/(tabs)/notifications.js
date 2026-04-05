@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
 import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
@@ -36,6 +36,7 @@ export default function Notifications() {
     const router = useRouter();
     const [notifications, setNotifications] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
+    const [initialLoading, setInitialLoading] = useState(true);
     const { unreadMessages, unreadNotifications } = useUnreadCount();
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
@@ -223,7 +224,15 @@ export default function Notifications() {
             updateState();
         }));
 
-        return () => unsubscribers.forEach(unsub => unsub());
+        // Set a timeout to clear the loading state, allowing the async snapshots above to fully resolve
+        const loadingTimer = setTimeout(() => {
+            setInitialLoading(false);
+        }, 1200);
+
+        return () => {
+            unsubscribers.forEach(unsub => unsub());
+            clearTimeout(loadingTimer);
+        };
     }, [user, user?.role]);
 
     const onRefresh = async () => {
@@ -246,8 +255,8 @@ export default function Notifications() {
                 ]}>
                     <View style={nStyles.headerContent}>
                         <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <View>
-                                <Ionicons name="notifications-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
+                            <View style={nStyles.headerIconBtn}>
+                                <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
                                 {unreadNotifications > 0 && (
                                     <View style={nStyles.headerBadge}>
                                         <Text style={nStyles.headerBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
@@ -257,7 +266,7 @@ export default function Notifications() {
                             <Text style={nStyles.headerTitle}>Notificações</Text>
                         </View>
                         <View style={nStyles.headerActions}>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/messages')}>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={nStyles.headerIconBtn}>
                                 <Ionicons name="chatbubble-outline" size={24} color={Colors.primary} />
                                 {unreadMessages > 0 && (
                                     <View style={nStyles.headerBadge}>
@@ -279,18 +288,21 @@ export default function Notifications() {
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
             >
-
-            {notifications.length === 0 ? (
-                <View style={nStyles.empty}>
-                    <Ionicons name="notifications-off-outline" size={56} color={Colors.textLight} style={{ marginBottom: Spacing.md, opacity: 0.4 }} />
-                    <Text style={nStyles.emptyTitle}>Sem notificações</Text>
-                    <Text style={nStyles.emptyDesc}>Quando houver atualizações sobre as suas candidaturas, mensagens ou novas vagas, elas aparecerão aqui.</Text>
-                </View>
-            ) : (
-                notifications.map(n => (
-                    <NotificationItem key={n.id} {...n} />
-                ))
-            )}
+                {initialLoading ? (
+                    <View style={[nStyles.empty, { marginTop: 40 }]}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                    </View>
+                ) : notifications.length === 0 ? (
+                    <View style={nStyles.empty}>
+                        <Ionicons name="notifications-off-outline" size={56} color={Colors.textLight} style={{ marginBottom: Spacing.md, opacity: 0.4 }} />
+                        <Text style={nStyles.emptyTitle}>Sem notificações</Text>
+                        <Text style={nStyles.emptyDesc}>Quando houver atualizações sobre as suas candidaturas, mensagens ou novas vagas, elas aparecerão aqui.</Text>
+                    </View>
+                ) : (
+                    notifications.map(n => (
+                        <NotificationItem key={n.id} {...n} />
+                    ))
+                )}
             </Animated.ScrollView>
         </View>
     );
@@ -348,11 +360,21 @@ const nStyles = StyleSheet.create({
     },
     headerLogo: { width: 32, height: 32, borderRadius: 8, marginRight: 8 },
     headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-    headerActions: { flexDirection: 'row', gap: 16 },
+    headerActions: { flexDirection: 'row', gap: 12 },
+    headerIconBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryBg,
+        justifyContent: 'center',
+        alignItems: 'center',
+        position: 'relative',
+        marginRight: 8,
+    },
     headerBadge: {
         position: 'absolute',
-        top: -4,
-        right: -4,
+        top: -2,
+        right: -2,
         backgroundColor: Colors.error,
         borderRadius: 8,
         minWidth: 16,
@@ -360,6 +382,7 @@ const nStyles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         paddingHorizontal: 2,
+        zIndex: 10,
     },
     headerBadgeText: {
         color: Colors.white,

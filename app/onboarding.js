@@ -2,12 +2,14 @@ import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Image, StatusBar 
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { Colors, Spacing, Fonts } from '../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
 export default function Onboarding() {
     const router = useRouter();
     const setOnboarded = useAuthStore((s) => s.setOnboarded);
+    const insets = useSafeAreaInsets();
 
     const handleStart = () => {
         setOnboarded();
@@ -33,7 +35,7 @@ export default function Onboarding() {
             {/* Dark Overlay for readability */}
             <View style={styles.darkOverlay} />
 
-            <View style={styles.contentContainer}>
+            <View style={[styles.contentContainer, { paddingBottom: Math.max(insets.bottom + 20, Spacing.xxl + 20) }]}>
                 <View style={styles.topSpacer} />
                 
                 <View style={styles.textSection}>
@@ -80,10 +82,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#000',
     },
     backgroundImage: {
-        position: 'absolute',
-        width: width,
-        height: height,
-        opacity: 0.65, // user asked for not 100%
+        ...StyleSheet.absoluteFillObject,
+        opacity: 0.65,
     },
     darkOverlay: {
         position: 'absolute',
@@ -95,7 +95,6 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingHorizontal: Spacing.xl,
         justifyContent: 'space-between',
-        paddingBottom: Spacing.xxl + 20,
     },
     topSpacer: {
         height: 80,

@@ -5,6 +5,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '../constants';
 import { useAuthStore } from '../store/authStore';
 import TermsModal from '../components/TermsModal';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
 
 import { db } from '../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
@@ -21,16 +23,20 @@ export default function RootLayout() {
     const isLoading = useAuthStore(s => s.isLoading);
     const user = useAuthStore(s => s.user);
     const { expoPushToken } = usePushNotifications();
+    
+    const [fontsLoaded] = useFonts({
+        ...Ionicons.font,
+    });
 
     useEffect(() => {
         initialize();
     }, []);
 
     useEffect(() => {
-        if (!isLoading) {
+        if (!isLoading && fontsLoaded) {
             SplashScreen.hideAsync().catch(() => {});
         }
-    }, [isLoading]);
+    }, [isLoading, fontsLoaded]);
 
     useEffect(() => {
         if (user && expoPushToken && user.pushToken !== expoPushToken) {

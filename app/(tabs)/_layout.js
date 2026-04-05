@@ -100,72 +100,73 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
             )}
 
             <View style={styles.webNavbar}>
-                {/* Left: Logo + Search */}
-                <View style={styles.webNavLeft}>
-                    <TouchableOpacity onPress={() => { router.push('/(tabs)/home'); closeAllMenus(); }} style={styles.webLogoContainer}>
-                        <Image source={require('../../assets/images/logo.png')} style={styles.webLogo} resizeMode="contain" />
-                        {!isMobile && <Text style={styles.webBrandText}>Mão Segura</Text>}
-                    </TouchableOpacity>
-                    {!isMobile && (
-                        <View style={[styles.webSearchBox, { zIndex: 9999 }]}>
-                            <Ionicons name="search" size={18} color="#C7C7C7" style={styles.webSearchIcon} />
-                            <TextInput
-                                style={styles.webSearchInput}
-                                placeholder="Pesquisar..."
-                                placeholderTextColor="#C7C7C7"
-                                value={searchQuery}
-                                onChangeText={(text) => {
-                                    setSearchQuery(text);
-                                    setShowSuggestions(text.length > 0);
-                                }}
-                                onSubmitEditing={() => handleSearchSubmit(searchQuery)}
-                                onFocus={() => setShowSuggestions(searchQuery.length > 0)}
-                            />
-                            {showSuggestions && filteredSuggestions.length > 0 && (
-                                <View style={styles.searchSuggestions}>
-                                    {filteredSuggestions.map((sug, idx) => (
-                                        <TouchableOpacity
-                                            key={idx}
-                                            style={styles.suggestionItem}
-                                            onPress={() => {
-                                                setSearchQuery(sug);
-                                                handleSearchSubmit(sug);
-                                            }}
-                                        >
-                                            <Ionicons name="search-outline" size={16} color={Colors.textSecondary} style={{ marginRight: 8 }} />
-                                            <Text style={styles.suggestionText}>{sug}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-                            )}
-                        </View>
-                    )}
-                </View>
-
-                {/* Center & Right: Nav items and Profile grouped */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
-                    <View style={[styles.webNavCenter, { overflow: 'visible', gap: isMobile ? 0 : 8 }]}>
-                        {navItems.map(item => (
-                            <WebNavIcon
-                                key={item.route}
-                                icon={item.icon}
-                                label={item.label}
-                                isSmall={isSmall}
-                                isActive={pathname?.endsWith(item.route)}
-                                badge={item.route === '/messages' ? unreadMessages : (item.route === '/notifications' ? unreadNotifications : 0)}
-                                onPress={() => {
-                                    if (['/messages', '/notifications'].includes(item.route)) {
-                                        if (!requireAuth()) {
-                                            closeAllMenus();
-                                            return;
-                                        }
-                                    }
-                                    router.push(`/(tabs)${item.route}`);
-                                    closeAllMenus();
-                                }}
-                            />
-                        ))}
+                <View style={styles.webNavInner}>
+                    {/* Left: Logo + Search */}
+                    <View style={styles.webNavLeft}>
+                        <TouchableOpacity onPress={() => { router.push('/(tabs)/home'); closeAllMenus(); }} style={styles.webLogoContainer}>
+                            <Image source={require('../../assets/images/logo.png')} style={styles.webLogo} resizeMode="contain" />
+                            {!isMobile && <Text style={styles.webBrandText}>Mão Segura</Text>}
+                        </TouchableOpacity>
+                        {!isMobile && (
+                            <View style={[styles.webSearchBox, { zIndex: 9999 }]}>
+                                <Ionicons name="search" size={18} color="#C7C7C7" style={styles.webSearchIcon} />
+                                <TextInput
+                                    style={styles.webSearchInput}
+                                    placeholder="Pesquisar..."
+                                    placeholderTextColor="#C7C7C7"
+                                    value={searchQuery}
+                                    onChangeText={(text) => {
+                                        setSearchQuery(text);
+                                        setShowSuggestions(text.length > 0);
+                                    }}
+                                    onSubmitEditing={() => handleSearchSubmit(searchQuery)}
+                                    onFocus={() => setShowSuggestions(searchQuery.length > 0)}
+                                />
+                                {showSuggestions && filteredSuggestions.length > 0 && (
+                                    <View style={styles.searchSuggestions}>
+                                        {filteredSuggestions.map((sug, idx) => (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={styles.suggestionItem}
+                                                onPress={() => {
+                                                    setSearchQuery(sug);
+                                                    handleSearchSubmit(sug);
+                                                }}
+                                            >
+                                                <Ionicons name="search-outline" size={16} color={Colors.textSecondary} style={{ marginRight: 8 }} />
+                                                <Text style={styles.suggestionText}>{sug}</Text>
+                                            </TouchableOpacity>
+                                        ))}
+                                    </View>
+                                )}
+                            </View>
+                        )}
                     </View>
+
+                    {/* Center & Right: Nav items and Profile grouped */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
+                        <View style={[styles.webNavCenter, { overflow: 'visible', gap: isMobile ? 0 : 8 }]}>
+                            {navItems.map(item => (
+                                <WebNavIcon
+                                    key={item.route}
+                                    icon={item.icon}
+                                    label={item.label}
+                                    isSmall={isSmall}
+                                    isActive={pathname?.endsWith(item.route)}
+                                    badge={item.route === '/messages' ? unreadMessages : (item.route === '/notifications' ? unreadNotifications : 0)}
+                                    onPress={() => {
+                                        if (['/messages', '/notifications'].includes(item.route)) {
+                                            if (!requireAuth()) {
+                                                closeAllMenus();
+                                                return;
+                                            }
+                                        }
+                                        router.push(`/(tabs)${item.route}`);
+                                        closeAllMenus();
+                                    }}
+                                />
+                            ))}
+                        </View>
 
                     <View style={styles.navDivider} />
 
@@ -271,6 +272,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
                             </View>
                         )}
                     </View>
+                </View>
                 </View>
             </View>
         </View>
@@ -500,11 +502,7 @@ const styles = StyleSheet.create({
 
     // === Web Navbar (LinkedIn-style) ===
     webNavbar: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         backgroundColor: Colors.white,
-        paddingHorizontal: '2%',
         height: 70,
         borderBottomWidth: 1,
         borderBottomColor: '#E0DFDC',
@@ -512,6 +510,16 @@ const styles = StyleSheet.create({
         position: 'sticky',
         top: 0,
         overflow: 'visible',
+    },
+    webNavInner: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        width: '100%',
+        maxWidth: 1300,
+        marginHorizontal: 'auto',
+        paddingHorizontal: 24,
+        height: '100%',
     },
 
     // Left: Logo + Search
