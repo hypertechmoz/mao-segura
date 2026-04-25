@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, ScrollView, Image, ActivityIndicator, useWindowDimensions, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, getDoc, limit } from 'firebase/firestore';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -69,7 +69,7 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
             <View style={styles.cardFooter}>
                 <View style={styles.cardLocation}>
                     <Text style={styles.locationText}>
-                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {job.city || 'Moçambique'}{job.province ? `, ${job.province}` : ''}
+                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {job.city || 'Moçambique'}{(job.bairro || job.province) ? `, ${job.bairro || job.province}` : ''}
                     </Text>
                 </View>
                 <View style={styles.cardContract}>
@@ -134,7 +134,7 @@ function WorkerCard({ worker, onPress, userLocation, isContacted }) {
                     )}
                 </View>
                 <Text style={styles.cardTime}>
-                    {worker.province || ''}
+                    {worker.bairro || worker.province || ''}
                 </Text>
             </View>
             <View style={styles.workerMain}>
@@ -152,40 +152,102 @@ function WorkerCard({ worker, onPress, userLocation, isContacted }) {
                     </Text>
                 </View>
             </View>
-            <View style={styles.cardFooter}>
-                <View style={styles.cardLocation}>
-                    <Text style={styles.locationText}>
-                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {worker.city}, {worker.bairro}
-                    </Text>
-                </View>
-                {worker.rating_avg > 0 && (
-                    <View style={styles.cardRating}>
-                        <Ionicons name="star" size={12} color="#FFB800" />
-                        <Text style={styles.cardRatingText}>{worker.rating_avg.toFixed(1)}</Text>
-                        <Text style={styles.cardCompletedText}>({worker.completed_contracts || 0})</Text>
+            <View style={[styles.cardFooter, { alignItems: 'center', justifyContent: 'space-between', marginBottom: 0, marginTop: 12 }]}>
+                <View style={{flexDirection: 'row', gap: 12, alignItems: 'center'}}>
+                    <View style={styles.cardLocation}>
+                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> 
+                        <Text style={styles.locationText}> {worker.city}, {worker.bairro}</Text>
                     </View>
-                )}
-            </View>
+                    {worker.rating_avg > 0 && (
+                        <View style={styles.cardRating}>
+                            <Ionicons name="star" size={12} color="#FFB800" />
+                            <Text style={styles.cardRatingText}>{worker.rating_avg.toFixed(1)}</Text>
+                            <Text style={styles.cardCompletedText}>({worker.completed_contracts || 0})</Text>
+                        </View>
+                    )}
+                </View>
 
-            <TouchableOpacity
-                style={[
-                    { marginTop: 16, paddingVertical: 12, borderRadius: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center' },
-                    isContacted ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primaryBg, borderWidth: 1, borderColor: Colors.primary + '30' }
-                ]}
-                onPress={() => !isContacted && onPress('CONTACT', worker)}
-                disabled={isContacted}
-            >
-                <Ionicons name={isContacted ? "checkmark-circle" : "chatbubble-ellipses"} size={16} color={isContacted ? Colors.textSecondary : Colors.primary} style={{ marginRight: 6 }} />
-                <Text style={{ color: isContacted ? Colors.textSecondary : Colors.primary, fontWeight: '700', fontSize: 14 }}>
-                    {isContacted ? 'Contactado' : 'Contactar profissional'}
-                </Text>
-            </TouchableOpacity>
+                <TouchableOpacity
+                    style={[
+                        { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
+                        isContacted ? { backgroundColor: Colors.borderLight } : { borderWidth: 1, borderColor: Colors.primary }
+                    ]}
+                    onPress={() => !isContacted && onPress('CONTACT', worker)}
+                    disabled={isContacted}
+                >
+                    <Ionicons name={isContacted ? "checkmark-circle" : "chatbubble-ellipses"} size={14} color={isContacted ? Colors.textSecondary : Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: isContacted ? Colors.textSecondary : Colors.primary, fontWeight: '700', fontSize: 12 }}>
+                        {isContacted ? 'Contactado' : 'Contactar'}
+                    </Text>
+                </TouchableOpacity>
+            </View>
         </TouchableOpacity>
     );
 }
 
+// === Web-Only: Left Sidebar ===
+function WebLeftSidebar({ user, completeness, router }) {
+    if (!user) return <View style={webStyles.leftSidebar} />;
+
+    return (
+        <View style={webStyles.leftSidebar}>
+            <View style={webStyles.profileCard}>
+                <View style={webStyles.profileBanner} />
+                <View style={webStyles.profileCardContent}>
+                    <TouchableOpacity onPress={() => router.push('/(tabs)/profile')} style={webStyles.profileAvatar}>
+                        {user.profile_photo ? (
+                            <Image source={{ uri: user.profile_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                        ) : (
+                            <Text style={webStyles.profileAvatarText}>{user.name?.[0] || '?'}</Text>
+                        )}
+                    </TouchableOpacity>
+                    <Text style={webStyles.profileName} numberOfLines={1}>{user.name}</Text>
+                    <Text style={webStyles.profileRole}>
+                        {user.role === 'WORKER' ? user.profession_category || 'Profissional' : 'Empregador'}
+                    </Text>
+                    {user.city && (
+                        <Text style={webStyles.profileLocation}>{user.city}{(user.bairro || user.province) ? `, ${user.bairro || user.province}` : ''}</Text>
+                    )}
+                </View>
+
+                <View style={webStyles.profileDivider} />
+
+                {completeness < 100 && (
+                    <View style={webStyles.completenessSection}>
+                        <View style={webStyles.completenessRow}>
+                            <Text style={webStyles.completenessLabel}>Perfil completo</Text>
+                            <Text style={webStyles.completenessValue}>{Math.round(completeness)}%</Text>
+                        </View>
+                        <View style={webStyles.completenessBar}>
+                            <View style={[webStyles.completenessFill, { width: `${completeness}%` }]} />
+                        </View>
+                    </View>
+                )}
+
+                <View style={webStyles.profileDivider} />
+
+                <TouchableOpacity style={webStyles.statRow} onPress={() => router.push('/(tabs)/network')}>
+                    <View>
+                        <Text style={webStyles.statLabel}>Conexões</Text>
+                        <Text style={[webStyles.statLabel, { color: Colors.text, fontSize: 12 }]}>Gerir a sua rede</Text>
+                    </View>
+                    <Text style={[webStyles.statArrow, { color: Colors.primary, fontWeight: '700' }]}>+</Text>
+                </TouchableOpacity>
+
+                <View style={webStyles.profileDivider} />
+
+                <TouchableOpacity style={[webStyles.statRow, { paddingVertical: 12 }]} onPress={() => router.push('/settings/premium')}>
+                    <Text style={[webStyles.statLabel, { color: Colors.text }]}>
+                        <Ionicons name="star" size={12} color={Colors.premium} /> Tentar Premium Grátis
+                    </Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+}
+
 // === Web-Only: Right Sidebar (Widgets) ===
-function WebRightSidebar({ router }) {
+function WebRightSidebar({ router, suggestedUsers, handleContact }) {
     const trendingTypes = PROFESSION_CATEGORIES.slice(0, 5);
 
     return (
@@ -209,18 +271,37 @@ function WebRightSidebar({ router }) {
                 </TouchableOpacity>
             </View>
 
-            {/* Trending */}
-            <View style={webStyles.widget}>
-                <Text style={webStyles.widgetTitle}>
-                    <Ionicons name="flame-outline" size={16} color="#FF5722" /> Tendências
-                </Text>
-                {trendingTypes.map((type, i) => (
-                    <TouchableOpacity key={i} style={webStyles.trendItem}>
-                        <Text style={webStyles.trendText}>{type}</Text>
-                        <Text style={webStyles.trendSub}>Procura em alta</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
+            {/* Recomendado para si */}
+            {suggestedUsers && suggestedUsers.length > 0 && (
+                <View style={webStyles.widget}>
+                    <Text style={webStyles.widgetTitle}>Recomendado para si</Text>
+                    {suggestedUsers.map((sugg, i) => (
+                        <View key={`sugg-${i}`} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+                            <TouchableOpacity onPress={() => router.push(`/(tabs)/profile?id=${sugg.id}`)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' }}>
+                                {sugg.profile_photo ? (
+                                    <Image source={{ uri: sugg.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                                ) : (
+                                    <Text style={{fontSize: 16, fontWeight: '700', color: Colors.primary}}>{sugg.name?.[0] || '?'}</Text>
+                                )}
+                            </TouchableOpacity>
+                            <View style={{ flex: 1 }}>
+                                <TouchableOpacity onPress={() => router.push(`/(tabs)/profile?id=${sugg.id}`)}>
+                                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
+                                </TouchableOpacity>
+                                <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
+                                    {sugg.role === 'EMPLOYER' ? 'Empregador' : (sugg.profession_category || 'Profissional')}
+                                </Text>
+                                <TouchableOpacity onPress={() => handleContact('CONTACT', sugg)} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center' }}>
+                                    <Ionicons name="add" size={14} color={Colors.primary} />
+                                    <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>Seguir / Ligar</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    ))}
+                </View>
+            )}
+
+
 
             {/* Support Links */}
             <View style={webStyles.widget}>
@@ -263,6 +344,7 @@ export default function Home() {
     const { requireAuth } = useAuthGuard();
     const [jobs, setJobs] = useState([]);
     const [posts, setPosts] = useState([]);
+    const [suggestedUsers, setSuggestedUsers] = useState([]);
     const [feedTab, setFeedTab] = useState('POSTS');
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -299,20 +381,25 @@ export default function Home() {
         const targetId = type === 'APPLY' ? item.employer_id : item.id;
         if (user.uid === targetId) return;
 
+        // Feedback imediato na UI
+        setActionedIds(prev => new Set(prev).add(item.id));
+
         try {
-            const conversationId = await startOrGetConversation(user, targetId, {
-                job_id: type === 'APPLY' ? item.id : null,
-                last_message: type === 'APPLY' ? 'Candidatou-se à vaga' : 'Interessado no perfil',
+            const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
+            await sendConnectionRequest(user, targetId, {
+                type: type,
+                job_id: type === 'APPLY' ? item.id : null
             });
-            
-            // Optimistic update for home feed
-            setActionedIds(prev => new Set(prev).add(item.id));
-            
-            router.push({ pathname: `/chat/${conversationId}`, params: { name: item.name || item.employer?.name || 'Contacto' } });
         } catch (err) {
-            console.error('Error starting chat:', err);
+            console.error('Error sending request:', err);
+            // Reverter em caso de erro
+            setActionedIds(prev => {
+                const next = new Set(prev);
+                next.delete(item.id);
+                return next;
+            });
         }
-    }, [user, requireAuth, router]);
+    }, [user, requireAuth]);
 
     const loadData = useCallback(async () => {
         setLoading(true);
@@ -431,20 +518,56 @@ export default function Home() {
 
             setPosts(postsData);
 
-            // Fetch Actioned IDs (Conversations)
+            // Fetch Actioned IDs (Conversations & Connection Requests) first for filtering
+            let currentActionedIds = new Set();
             if (user) {
+                // 1. Existing Conversations
                 const fieldSelf = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
                 const convQ = query(collection(db, 'chat_conversations'), where(fieldSelf, '==', user.uid));
                 const convSnap = await getDocs(convQ);
-                const ids = new Set();
                 convSnap.forEach(d => {
                     const data = d.data();
-                    if (data.job_id) ids.add(data.job_id);
-                    // For workers, we track the user ID of the employer they contacted via profile
+                    if (data.job_id) currentActionedIds.add(data.job_id);
                     const otherId = user.role === 'WORKER' ? data.employer_id : data.worker_id;
-                    if (otherId) ids.add(otherId);
+                    if (otherId) currentActionedIds.add(otherId);
                 });
-                setActionedIds(ids);
+
+                // 2. Sent Connection Requests
+                const sentReqQ = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid), where('status', '==', 'PENDING'));
+                const sentSnap = await getDocs(sentReqQ);
+                sentSnap.forEach(d => {
+                    const data = d.data();
+                    if (data.job_id) currentActionedIds.add(data.job_id);
+                    if (data.receiver_id) currentActionedIds.add(data.receiver_id);
+                });
+
+                // 3. Received Connection Requests
+                const receivedReqQ = query(collection(db, 'connection_requests'), where('receiver_id', '==', user.uid), where('status', '==', 'PENDING'));
+                const receivedSnap = await getDocs(receivedReqQ);
+                receivedSnap.forEach(d => {
+                    const data = d.data();
+                    if (data.sender_id) currentActionedIds.add(data.sender_id);
+                });
+
+                setActionedIds(currentActionedIds);
+            }
+
+            // Fetch Suggested Users for Sidebar (Filtered by currentActionedIds)
+            try {
+                let suggQuery;
+                if (user?.province) {
+                    suggQuery = query(collection(db, 'users'), where('province', '==', user.province), limit(15));
+                } else {
+                    suggQuery = query(collection(db, 'users'), limit(10));
+                }
+                const suggSnap = await getDocs(suggQuery);
+                const suggData = suggSnap.docs
+                    .map(d => ({ id: d.id, ...d.data() }))
+                    .filter(u => u.id !== user?.uid && !currentActionedIds.has(u.id))
+                    .slice(0, 3);
+                setSuggestedUsers(suggData);
+            } catch (err) {
+                console.warn('Suggested users error:', err);
             }
 
             // Calculate Completeness
@@ -479,9 +602,24 @@ export default function Home() {
 
     // === WEB: 3-Column Layout ===
     if (isWeb) {
+        // Prepare mixed feed (Only include jobs if they are NOT user profiles. i.e., they have a title property)
+        let mixedFeed = [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
+            const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
+            const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
+            return dateB - dateA;
+        });
+
         return (
             <View style={[webStyles.webContainer, { height: '100vh', overflow: 'hidden' }]}>
                 <View style={[webStyles.threeCol, isSmallScreen && { flexDirection: 'column', maxWidth: 600, alignItems: 'center' }, { flex: 1 }]}>
+                    
+                    {/* Left Sidebar */}
+                    {!isSmallScreen && (
+                        <View style={{ width: 225 }}>
+                            <WebLeftSidebar user={user} completeness={completeness} router={router} />
+                        </View>
+                    )}
+
                     {/* Center Feed */}
                     <View style={webStyles.centerFeed}>
                         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -539,7 +677,7 @@ export default function Home() {
                                     {/* Sort bar & Tabs */}
                                     <View style={webStyles.tabContainerWeb}>
                                         <TouchableOpacity style={[webStyles.tabBtnWeb, feedTab === 'POSTS' && webStyles.tabBtnWebActive]} onPress={() => setFeedTab('POSTS')}>
-                                            <Text style={[webStyles.tabBtnTextWeb, feedTab === 'POSTS' && webStyles.tabBtnWebActive]}>Comunidade</Text>
+                                            <Text style={[webStyles.tabBtnTextWeb, feedTab === 'POSTS' && webStyles.tabBtnWebActive]}>Atualizações</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={[webStyles.tabBtnWeb, feedTab === 'OPORTUNIDADES' && webStyles.tabBtnWebActive]} onPress={() => setFeedTab('OPORTUNIDADES')}>
                                             <Text style={[webStyles.tabBtnTextWeb, feedTab === 'OPORTUNIDADES' && webStyles.tabBtnWebActive]}>
@@ -548,22 +686,23 @@ export default function Home() {
                                         </TouchableOpacity>
                                     </View>
 
-                                    {(feedTab === 'POSTS' ? posts : jobs).length === 0 ? (
+                                    {(feedTab === 'POSTS' ? mixedFeed : jobs).length === 0 ? (
                                         <View style={styles.empty}>
                                             <Ionicons name="document-text-outline" size={48} color={Colors.textLight} style={{ marginBottom: 16 }} />
                                             <Text style={styles.emptyText}>Nenhuma informação disponível</Text>
                                             <Text style={styles.emptySubtext}>Não há atualizações para mostrar agora.</Text>
                                         </View>
                                     ) : (
-                                        (feedTab === 'POSTS' ? posts : jobs).map(item => (
-                                            feedTab === 'POSTS' ? (
-                                                <PostCard key={item.id} post={item} />
-                                            ) : (
-                                                (!user || user.role === 'WORKER')
-                                                    ? <JobCard key={item.id} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />
-                                                    : <WorkerCard key={item.id} worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.has(item.id)} />
-                                            )
-                                        ))
+                                        (feedTab === 'POSTS' ? mixedFeed : jobs).map(item => {
+                                            // Identify if it's a post or job/worker
+                                            if (item.content || item.image_url || item.likes_count !== undefined) {
+                                                return <PostCard key={`post-${item.id}`} post={item} />;
+                                            } else {
+                                                return (!user || user.role === 'WORKER')
+                                                    ? <JobCard key={`job-${item.id}`} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />
+                                                    : <WorkerCard key={`worker-${item.id}`} worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.has(item.id)} />;
+                                            }
+                                        })
                                     )}
                                 </>
                             )}
@@ -573,7 +712,7 @@ export default function Home() {
                     {!isSmallScreen && (
                         <View style={webStyles.rightSidebar}>
                             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                                <WebRightSidebar router={router} />
+                                <WebRightSidebar router={router} suggestedUsers={suggestedUsers} handleContact={handleContact} />
                             </ScrollView>
                         </View>
                     )}
@@ -581,6 +720,13 @@ export default function Home() {
             </View>
         );
     }
+
+    // Mobile Mixed Feed preparation (Only include jobs if they are NOT user profiles)
+    let mobileMixedFeed = [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
+        const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
+        const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
+        return dateB - dateA;
+    });
 
     // === MOBILE: Single column (unchanged) ===
     return (
@@ -617,7 +763,7 @@ export default function Home() {
                     {/* Integrated Mobile Tabs */}
                     <View style={styles.tabContainer}>
                         <TouchableOpacity style={[styles.tabBtn, feedTab === 'POSTS' && styles.tabBtnActive]} onPress={() => setFeedTab('POSTS')}>
-                            <Text style={[styles.tabBtnText, feedTab === 'POSTS' && styles.tabBtnTextActive]}>Comunidade</Text>
+                            <Text style={[styles.tabBtnText, feedTab === 'POSTS' && styles.tabBtnTextActive]}>Atualizações</Text>
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.tabBtn, feedTab === 'OPORTUNIDADES' && styles.tabBtnActive]} onPress={() => setFeedTab('OPORTUNIDADES')}>
                             <Text style={[styles.tabBtnText, feedTab === 'OPORTUNIDADES' && styles.tabBtnTextActive]}>
@@ -634,7 +780,7 @@ export default function Home() {
                 </View>
             ) : (
                 <Animated.FlatList
-                    data={feedTab === 'POSTS' ? posts : jobs}
+                    data={feedTab === 'POSTS' ? mobileMixedFeed : jobs}
                     keyExtractor={(item) => item.id}
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -647,7 +793,13 @@ export default function Home() {
                     )}
                     renderItem={({ item }) => {
                         if (feedTab === 'POSTS') {
-                            return <PostCard post={item} />;
+                            if (item.content || item.image_url || item.likes_count !== undefined) {
+                                return <PostCard post={item} />;
+                            } else {
+                                return (!user || user.role === 'WORKER')
+                                    ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />
+                                    : <WorkerCard worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.has(item.id)} />;
+                            }
                         }
                         return (!user || user.role === 'WORKER')
                             ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />

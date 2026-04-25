@@ -6,6 +6,7 @@ import { db } from '../../services/firebase';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
+import { useAlertStore } from '../../store/alertStore';
 import { Colors, Spacing, Fonts, JOB_TYPES, COMMON_SKILLS, PROFESSION_CATEGORIES, JOBS_CATEGORIES_MAP } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -130,7 +131,7 @@ export default function EditProfile() {
             update('skills', form.skills.filter((s) => s !== skill));
         } else {
             if (form.skills.length >= 5) {
-                Alert.alert('Limite atingido', 'Você pode adicionar no máximo 5 habilidades.');
+                useAlertStore.getState().showAlert('Aviso', 'Pode adicionar no máximo 5 habilidades.', 'error');
                 return;
             }
             update('skills', [...form.skills, skill]);
@@ -143,7 +144,7 @@ export default function EditProfile() {
             const newSkill = parts[0].trim();
             if (newSkill) {
                 if (form.skills.length >= 5) {
-                    Alert.alert('Limite atingido', 'Você pode adicionar no máximo 5 habilidades.');
+                    useAlertStore.getState().showAlert('Aviso', 'Pode adicionar no máximo 5 habilidades.', 'error');
                     update('tempSkill', '');
                     return;
                 }
@@ -230,17 +231,14 @@ export default function EditProfile() {
             await refreshUser();
             
             setSaveSuccess(true);
+            useAlertStore.getState().showAlert('Sucesso', 'O seu perfil foi atualizado.', 'success');
             setTimeout(() => {
                 setSaveSuccess(false);
                 router.replace('/(tabs)/profile');
             }, 2500);
             
-            if (Platform.OS === 'web') {
-                // Keep the alert as fallback but with better wording
-                window.alert('Alterações salvas com sucesso!');
-            }
         } catch (err) {
-            Alert.alert('Erro', err.message);
+            useAlertStore.getState().showAlert('Erro', err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -252,15 +250,16 @@ export default function EditProfile() {
             await deleteAccount();
             setShowDeleteModal(false);
             
+            useAlertStore.getState().showAlert('Sucesso', 'A sua conta foi apagada permanentemente.', 'success');
+            
             if (Platform.OS === 'web') {
-                window.alert('Conta apagada com sucesso.');
                 window.location.href = '/auth/choose-type';
             } else {
                 router.replace('/auth/choose-type');
             }
         } catch (err) {
             console.error('Delete error:', err);
-            Alert.alert('Erro', 'Ocorreu um problema ao apagar a conta. Por questões de segurança, pode ser necessário voltar a fazer login antes de apagar a conta.');
+            useAlertStore.getState().showAlert('Erro', 'Por questões de segurança, pode ser necessário voltar a fazer login antes de apagar a conta.', 'error');
             setLoading(false);
         }
     };

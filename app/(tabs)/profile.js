@@ -21,8 +21,12 @@ export default function Profile() {
     const { expoPushToken } = usePushNotifications();
     const [profile, setProfile] = useState(null);
     const [completeness, setCompleteness] = useState(0);
+    const [connectionsCount, setConnectionsCount] = useState(0);
+    const [isConnected, setIsConnected] = useState(false);
+    const [hasPendingRequest, setHasPendingRequest] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
+    const [processing, setProcessing] = useState(false);
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
 
@@ -71,6 +75,12 @@ export default function Profile() {
                 setCompleteness(calculateCompleteness(mergedData, profileData, userData.role));
             }
 
+            // Get Connections Count
+            const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', targetId));
+            const connQ2 = query(collection(db, 'connections'), where('user2_id', '==', targetId));
+            const [snap1, snap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
+            setConnectionsCount(snap1.size + snap2.size);
+
             setProfile(p);
         } catch (err) {
             console.error('Profile error:', err);
@@ -80,7 +90,26 @@ export default function Profile() {
     }, [user, id]);
 
 
-    useEffect(() => { load(); }, [load]);
+    const checkConnection = useCallback(async () => {
+        if (!user || !id) return;
+        try {
+            const reqQ1 = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid), where('receiver_id', '==', id), where('status', '==', 'PENDING'));
+            const reqQ2 = query(collection(db, 'connection_requests'), where('sender_id', '==', id), where('receiver_id', '==', user.uid), where('status', '==', 'PENDING'));
+            
+            const [snap1, snap2] = await Promise.all([getDocs(reqQ1), getDocs(reqQ2)]);
+            if (!snap1.empty || !snap2.empty) setHasPendingRequest(true);
+
+            const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', user.uid), where('user2_id', '==', id));
+            const connQ2 = query(collection(db, 'connections'), where('user1_id', '==', id), where('user2_id', '==', user.uid));
+            
+            const [csnap1, csnap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
+            if (!csnap1.empty || !csnap2.empty) setIsConnected(true);
+        } catch(e) {
+            console.log(e);
+        }
+    }, [user, id]);
+
+    useEffect(() => { load(); checkConnection(); }, [load, checkConnection]);
     
     const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
@@ -184,7 +213,25 @@ export default function Profile() {
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                     <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.location}>{p?.city || 'Moçambique'}, {p?.province || ''}</Text>
+                    <Text style={styles.location}>{p?.city || 'Moçambique'}, {p?.bairro || ''}</Text>
+                </View>
+
+                {/* Stats Section */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginTop: 24, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 20 }}>
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text }}>{connectionsCount || 0}</Text>
+                        <Text style={{ fontSize: 11, color: Colors.textSecondary, marginTop: 4 }}>Conexões</Text>
+                    </View>
+                    <View style={{ width: 1, backgroundColor: Colors.borderLight }} />
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text }}>0</Text>
+                        <Text style={{ fontSize: 11, color: Colors.textSecondary, marginTop: 4 }}>Seguidores</Text>
+                    </View>
+                    <View style={{ width: 1, backgroundColor: Colors.borderLight }} />
+                    <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: Colors.text }}>0</Text>
+                        <Text style={{ fontSize: 11, color: Colors.textSecondary, marginTop: 4 }}>Seguindo</Text>
+                    </View>
                 </View>
             </View>
 
@@ -320,6 +367,15 @@ export default function Profile() {
                         <Text style={styles.menuText}>{t('common.terms')}</Text>
                         <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
                     </TouchableOpacity>
+                    {/* Admin Dashboard */}
+                    {(user?.role === 'ADMIN' || user?.email?.toLowerCase() === 'fernandopinto@gmail.com' || user?.email?.toLowerCase() === 'frennadopinto@gmil.com') && isOwnProfile && (
+                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/admin/users')}>
+                            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} style={{ marginRight: Spacing.sm }} />
+                            <Text style={styles.menuText}>Dashboard do Administrador</Text>
+                            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+                        </TouchableOpacity>
+                    )}
+
                     <TouchableOpacity style={[styles.menuItem, styles.logoutItem]} onPress={handleLogout}>
                         <Ionicons name="log-out-outline" size={20} color={Colors.error} style={{ marginRight: Spacing.sm }} />
                         <Text style={[styles.menuText, styles.logoutText]}>{t('common.logout')}</Text>
@@ -327,44 +383,52 @@ export default function Profile() {
 
                     <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: Spacing.xs }}>
                         <Text style={{ fontSize: 12, color: Colors.textLight }}>Mão Segura v1.0.0</Text>
-                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text style={{fontWeight: '700', color: Colors.primary}}>Hypertech</Text></Text>
+                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text style={{fontWeight: '700', color: Colors.primary}}>Studio do Scott</Text></Text>
                     </View>
-
-                    {/* Debug Notifications (Only for dev/testing) */}
-                    {isOwnProfile && (
-                        <View style={[styles.section, { borderStyle: 'dashed', borderColor: Colors.border, borderWidth: 1, backgroundColor: 'transparent', marginTop: 12 }]}>
-                            <View style={styles.tipsHeader}>
-                                <Ionicons name="bug-outline" size={18} color={Colors.textLight} />
-                                <Text style={[styles.tipsTitle, { color: Colors.text, fontSize: 14 }]}>Depuração de Notificações</Text>
-                            </View>
-                            <Text style={{ fontSize: 11, color: Colors.textLight, marginBottom: 8 }}>
-                                Token: {expoPushToken || 'Nenhum token disponível (Verificar Permissões)'}
-                            </Text>
-                            {expoPushToken ? (
-                                <TouchableOpacity 
-                                    style={{ backgroundColor: Colors.primaryBg, padding: 8, borderRadius: 8, alignItems: 'center' }}
-                                    onPress={() => {
-                                        sendPushNotification(
-                                            expoPushToken, 
-                                            'Teste de Notificação', 
-                                            'Este é o sinal de que o Mão Segura está a funcionar!',
-                                            { type: 'test' }
-                                        );
-                                        Alert.alert('Teste Enviado', 'Verifica se recebeste um aviso no ecrã.');
-                                    }}
-                                >
-                                    <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '700' }}>Enviar Notificação de Teste</Text>
-                                </TouchableOpacity>
-                            ) : (
-                                <Text style={{ fontSize: 11, color: Colors.error, fontStyle: 'italic' }}>
-                                    As notificações não funcionam no navegador. Testa num telemóvel real.
-                                </Text>
-                            )}
-                        </View>
-                    )}
                 </View>
             ) : (
                 <View style={styles.actions}>
+                    <TouchableOpacity 
+                        style={[
+                            styles.chatButton, 
+                            { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.primary, marginBottom: 12 },
+                            (isConnected || hasPendingRequest) && { borderColor: Colors.border, backgroundColor: Colors.borderLight }
+                        ]} 
+                        onPress={async () => {
+                            if (!user) { router.push('/auth/login'); return; }
+                            if (isConnected || hasPendingRequest || processing) return;
+                            
+                            setProcessing(true);
+                            try {
+                                const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
+                                await sendConnectionRequest(user, p.id, { type: 'CONTACT' });
+                                setHasPendingRequest(true);
+                            } catch (e) {
+                                console.error(e);
+                            } finally {
+                                setProcessing(false);
+                            }
+                        }}
+                        disabled={isConnected || hasPendingRequest || processing}
+                        activeOpacity={0.8}
+                    >
+                        {processing ? (
+                            <ActivityIndicator size="small" color={Colors.primary} />
+                        ) : (
+                            <>
+                                <Ionicons 
+                                    name={isConnected ? "checkmark-circle" : (hasPendingRequest ? "time" : "person-add")} 
+                                    size={22} 
+                                    color={isConnected || hasPendingRequest ? Colors.textSecondary : Colors.primary} 
+                                    style={{ marginRight: 8 }} 
+                                />
+                                <Text style={[styles.chatButtonText, { color: isConnected || hasPendingRequest ? Colors.textSecondary : Colors.primary }]}>
+                                    {isConnected ? 'Conectados' : (hasPendingRequest ? 'Pedido Enviado' : 'Conectar')}
+                                </Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+
                     <TouchableOpacity 
                         style={styles.chatButton} 
                         onPress={async () => {

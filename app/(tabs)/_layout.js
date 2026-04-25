@@ -82,6 +82,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
 
     const navItems = [
         { label: t('tabs.home'), icon: 'home', route: '/home' },
+        { label: 'Minha Rede', icon: 'people', route: '/network' },
         { label: t('tabs.search'), icon: 'search', route: '/search' },
         { label: t('tabs.jobs'), icon: 'briefcase', route: '/jobs' },
         { label: t('tabs.messages'), icon: 'chatbubble-ellipses', route: '/messages' },
@@ -312,6 +313,9 @@ export default function TabLayout() {
                 }
             });
             setUnreadMessages(total);
+        }, (err) => {
+            console.log('Chat listener permission error (non-critical):', err.code);
+            setUnreadMessages(0);
         });
 
         // Notification unread listener
@@ -359,6 +363,15 @@ export default function TabLayout() {
                     title: t('tabs.home'),
                     headerShown: Platform.OS === 'web', // Hide on mobile for custom animated header
                     tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.home')} icon="home" focused={focused} />,
+                }}
+            />
+
+            <Tabs.Screen
+                name="network"
+                options={{
+                    title: 'Minha Rede',
+                    headerShown: Platform.OS === 'web',
+                    tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} />,
                 }}
             />
 

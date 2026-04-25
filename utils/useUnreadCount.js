@@ -66,7 +66,7 @@ export const useUnreadCount = () => {
                 const employerJobIds = jobsSnap.docs.map(d => d.id);
                 if (employerJobIds.length > 0) {
                     const chunkedIds = employerJobIds.slice(0, 10);
-                    const qEmpApps = query(collection(db, 'applications'), where('job_id', 'in', chunkedIds));
+                    const qEmpApps = query(collection(db, 'applications'), where('job_id', 'in', chunkedIds), where('employer_id', '==', user.uid));
                     unsubscribers.push(onSnapshot(qEmpApps, (snap) => {
                         let count = 0;
                         snap.forEach(d => {

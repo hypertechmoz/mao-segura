@@ -21,6 +21,8 @@ export default function WorkerDetail() {
     const [isReporting, setIsReporting] = useState(false);
     const [reviews, setReviews] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
+    const [isConnected, setIsConnected] = useState(false);
+    const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
     const REPORT_REASONS = ['Perfil Falso', 'Comportamento Abusivo', 'Fraude ou Burla', 'Outro'];
 
@@ -109,41 +111,75 @@ export default function WorkerDetail() {
         }
     }, [id]);
 
+    const checkConnection = useCallback(async () => {
+        if (!user || !id) return;
+        try {
+            const reqQ1 = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid), where('receiver_id', '==', id), where('status', '==', 'PENDING'));
+            const reqQ2 = query(collection(db, 'connection_requests'), where('sender_id', '==', id), where('receiver_id', '==', user.uid), where('status', '==', 'PENDING'));
+            
+            const [snap1, snap2] = await Promise.all([getDocs(reqQ1), getDocs(reqQ2)]);
+            if (!snap1.empty || !snap2.empty) setHasPendingRequest(true);
+
+            const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', user.uid), where('user2_id', '==', id));
+            const connQ2 = query(collection(db, 'connections'), where('user1_id', '==', id), where('user2_id', '==', user.uid));
+            
+            const [csnap1, csnap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
+            if (!csnap1.empty || !csnap2.empty) setIsConnected(true);
+        } catch(e) {
+            console.log(e);
+        }
+    }, [user, id]);
+
     useEffect(() => {
         loadWorker();
         loadReviews();
-    }, [loadWorker, loadReviews]);
+        checkConnection();
+    }, [loadWorker, loadReviews, checkConnection]);
 
     const handleChat = async () => {
         if (!requireAuth()) return;
-        try {
-            // Check for existing conversation between these two
-            const q = query(
-                collection(db, 'chat_conversations'), 
-                where('employer_id', '==', user.uid), 
-                where('worker_id', '==', id)
-            );
-            const snap = await getDocs(q);
+        
+        if (isConnected) {
+            try {
+                const isEmployer = user.role === 'EMPLOYER';
+                const q = query(
+                    collection(db, 'chat_conversations'), 
+                    where('employer_id', '==', isEmployer ? user.uid : id), 
+                    where('worker_id', '==', isEmployer ? id : user.uid)
+                );
+                const snap = await getDocs(q);
 
-            let conversationId;
-            if (!snap.empty) {
-                conversationId = snap.docs[0].id;
-            } else {
-                // Create new conversation
-                const newRef = await addDoc(collection(db, 'chat_conversations'), {
-                    employer_id: user.uid,
-                    worker_id: id,
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp(),
-                    last_message: 'Pedido de contacto enviado',
-                    is_authorized: false,
-                    initiated_by: user.uid
-                });
-                conversationId = newRef.id;
+                let conversationId;
+                if (!snap.empty) {
+                    conversationId = snap.docs[0].id;
+                } else {
+                    const newRef = await addDoc(collection(db, 'chat_conversations'), {
+                        employer_id: isEmployer ? user.uid : id,
+                        worker_id: isEmployer ? id : user.uid,
+                        created_at: serverTimestamp(),
+                        updated_at: serverTimestamp(),
+                        last_message: 'Conectados',
+                        is_authorized: true,
+                        initiated_by: user.uid
+                    });
+                    conversationId = newRef.id;
+                }
+                router.push({ pathname: `/chat/${conversationId}`, params: { name: worker.name } });
+            } catch (err) {
+                Alert.alert('Erro', err.message);
             }
-            router.push({ pathname: `/chat/${conversationId}`, params: { name: worker.name } });
-        } catch (err) {
-            Alert.alert('Erro', err.message);
+        } else if (hasPendingRequest) {
+            Alert.alert("Aviso", "Já enviou um pedido de conexão para este utilizador.");
+        } else {
+            try {
+                import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
+                    await sendConnectionRequest(user, id, { type: 'CONTACT' });
+                    setHasPendingRequest(true);
+                    Alert.alert("Pedido Enviado", "Será notificado quando a outra parte aceitar iniciar a conversa.");
+                });
+            } catch (e) {
+                console.error(e);
+            }
         }
     };
 
@@ -176,7 +212,7 @@ export default function WorkerDetail() {
                 
                 <View style={styles.locationRow}>
                     <Ionicons name="location" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.locationText}>{worker.city}, {worker.province}</Text>
+                    <Text style={styles.locationText}>{worker.city}, {worker.bairro || worker.province}</Text>
                 </View>
 
                 {/* Rating Summary */}
@@ -256,6 +292,33 @@ export default function WorkerDetail() {
             </View>
 
             <View style={styles.actions}>
+                <TouchableOpacity 
+                    style={[styles.chatButton, { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.primary, marginBottom: 12 }]} 
+                    onPress={async () => {
+                        if (!requireAuth()) return;
+                        if (isConnected) return;
+                        if (hasPendingRequest) {
+                            Alert.alert("Aviso", "Já enviou um pedido de conexão.");
+                            return;
+                        }
+                        try {
+                            import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
+                                await sendConnectionRequest(user, id, { type: 'CONTACT' });
+                                setHasPendingRequest(true);
+                                Alert.alert("Sucesso", "Pedido de conexão enviado!");
+                            });
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }}
+                    activeOpacity={0.8}
+                >
+                    <Ionicons name={isConnected ? "checkmark" : (hasPendingRequest ? "time" : "person-add")} size={22} color={Colors.primary} style={{ marginRight: 8 }} />
+                    <Text style={[styles.chatButtonText, { color: Colors.primary }]}>
+                        {isConnected ? 'Conectado' : (hasPendingRequest ? 'Pedido Pendente' : 'Conectar')}
+                    </Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity style={styles.chatButton} onPress={handleChat} activeOpacity={0.8}>
                     <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} style={{ marginRight: 8 }} />
                     <Text style={styles.chatButtonText}>Contactar Profissional</Text>

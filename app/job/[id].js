@@ -53,7 +53,7 @@ export default function JobDetail() {
 
             // Fetch applicants if Employer owns the job
             if (user.role === 'EMPLOYER' && jobData.employer_id === user.uid) {
-                const q = query(collection(db, 'applications'), where('job_id', '==', id), orderBy('created_at', 'desc'));
+                const q = query(collection(db, 'applications'), where('job_id', '==', id), where('employer_id', '==', user.uid), orderBy('created_at', 'desc'));
                 const snap = await getDocs(q);
                 const appsData = [];
                 for (const d of snap.docs) {
@@ -154,7 +154,7 @@ export default function JobDetail() {
                 <Text style={styles.title}>{job.title}</Text>
                 <View style={styles.metaRow}>
                     <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
-                    <Text style={styles.meta}> {job.city}, {job.province}</Text>
+                    <Text style={styles.meta}> {job.city}, {job.bairro || job.province}</Text>
                 </View>
                 <View style={styles.metaRow}>
                     <Text style={styles.meta}>
@@ -184,7 +184,7 @@ export default function JobDetail() {
                             {job.employer?.isVerified && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Ionicons name="checkmark-circle" size={14} color={Colors.primary} /><Text style={styles.verified}>Verificado</Text></View>}
                         </View>
                         <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
-                        <Text style={styles.empLocation}> {job.employer?.city}, {job.employer?.province}</Text>
+                        <Text style={styles.empLocation}> {job.employer?.city}, {job.employer?.bairro || job.employer?.province}</Text>
                     </View>
                 </View>
             </View>

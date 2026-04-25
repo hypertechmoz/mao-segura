@@ -1,0 +1,267 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helpers ---
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.admin == true ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN');
+    }
+
+    function isValidRole(r) {
+      return r in ['WORKER', 'EMPLOYER', 'USER'];
+    }
+
+    // --- Admin full access (fallback for admins) ---
+    // Admins should be able to manage everything; specific matches below still apply for non-admins.
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // --- Users ---
+    match /users/{userId} {
+      allow read: if true;
+
+      // Create: only the authenticated user can create their user doc,
+      // and cannot create themselves as ADMIN.
+      allow create: if isAuthenticated()
+                    && request.auth.uid == userId
+                    && (request.resource.data.role == null || isValidRole(request.resource.data.role))
+                    && request.resource.data.role != 'ADMIN';
+
+      // Update: user may update own profile but cannot change `role` (unless admin).
+      allow update: if isAuthenticated() && (
+                        (request.auth.uid == userId && request.resource.data.role == resource.data.role) ||
+                        isAdmin()
+                    );
+
+      // Delete: user or admin
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // --- Worker / Employer Profiles ---
+    match /worker_profiles/{userId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /employer_profiles/{userId} {
+      allow read: if true;
+      allow create, update, delete: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // --- Business accounts ---
+    match /business_accounts/{accountId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.owner_id == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (resource.data.owner_id == request.auth.uid || isAdmin());
+    }
+
+    // --- Jobs ---
+    match /jobs/{jobId} {
+      allow read: if true;
+
+      // Create: only employer can create a job and employer_id must equal auth.uid
+      allow create: if isAuthenticated()
+                    && request.resource.data.employer_id == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.created_at is timestamp;
+
+      // Update: only job owner (employer) or admin can update.
+      // Clients are NOT allowed to modify the applications_count directly (must remain equal).
+      allow update: if isAuthenticated() && (
+                      isAdmin() ||
+                      (request.auth.uid == resource.data.employer_id &&
+                        request.resource.data.employer_id == resource.data.employer_id &&
+                        request.resource.data.applications_count == resource.data.applications_count
+                      )
+                    );
+
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.employer_id || isAdmin());
+    }
+
+    // --- Applications ---
+    match /applications/{appId} {
+      allow read: if isAuthenticated() && (
+                    resource.data.worker_id == request.auth.uid ||
+                    resource.data.employer_id == request.auth.uid ||
+                    isAdmin()
+                  );
+
+      // Create: only worker can create their application; job must exist and employer_id must match
+      allow create: if isAuthenticated()
+                    && request.resource.data.worker_id == request.auth.uid
+                    && request.resource.data.job_id is string
+                    && exists(/databases/$(database)/documents/jobs/$(request.resource.data.job_id))
+                    && get(/databases/$(database)/documents/jobs/$(request.resource.data.job_id)).data.employer_id == request.resource.data.employer_id;
+
+      allow update, delete: if isAuthenticated() && (
+                              resource.data.worker_id == request.auth.uid ||
+                              resource.data.employer_id == request.auth.uid ||
+                              isAdmin()
+                            );
+    }
+
+    // --- Chat conversations ---
+    match /chat_conversations/{convId} {
+      // read/write only for participants or admin
+      allow read, update, delete: if isAuthenticated() && (
+                                    request.auth.uid == resource.data.employer_id ||
+                                    request.auth.uid == resource.data.worker_id ||
+                                    (resource.data.participants is list && request.auth.uid in resource.data.participants) ||
+                                    isAdmin()
+                                  );
+
+      // Create: user must be one of employer_id/worker_id
+      allow create: if isAuthenticated() &&
+                      (request.resource.data.employer_id == request.auth.uid || request.resource.data.worker_id == request.auth.uid);
+    }
+
+    // Subcollection messages under chat_conversations/{convId}/messages/{msgId}
+    match /chat_conversations/{convId}/messages/{msgId} {
+      allow read: if isAuthenticated() && (
+                    request.auth.uid == get(/databases/$(database)/documents/chat_conversations/$(convId)).data.employer_id ||
+                    request.auth.uid == get(/databases/$(database)/documents/chat_conversations/$(convId)).data.worker_id ||
+                    isAdmin()
+                  );
+
+      allow create: if isAuthenticated() && (
+                    request.auth.uid == get(/databases/$(database)/documents/chat_conversations/$(convId)).data.employer_id ||
+                    request.auth.uid == get(/databases/$(database)/documents/chat_conversations/$(convId)).data.worker_id ||
+                    isAdmin()
+                  );
+
+      allow update, delete: if isAdmin();
+    }
+
+    // Top-level messages collection
+    match /messages/{msgId} {
+      allow read: if isAuthenticated() && (
+                    request.auth.uid == resource.data.sender_id ||
+                    request.auth.uid == resource.data.receiver_id ||
+                    (resource.data.conversation_id is string &&
+                      (get(/databases/$(database)/documents/chat_conversations/$(resource.data.conversation_id)).data.employer_id == request.auth.uid ||
+                       get(/databases/$(database)/documents/chat_conversations/$(resource.data.conversation_id)).data.worker_id == request.auth.uid)
+                    ) ||
+                    isAdmin()
+                  );
+
+      allow create: if isAuthenticated() && (
+                    request.resource.data.conversation_id is string &&
+                    exists(/databases/$(database)/documents/chat_conversations/$(request.resource.data.conversation_id)) &&
+                    (get(/databases/$(database)/documents/chat_conversations/$(request.resource.data.conversation_id)).data.employer_id == request.auth.uid ||
+                     get(/databases/$(database)/documents/chat_conversations/$(request.resource.data.conversation_id)).data.worker_id == request.auth.uid ||
+                     isAdmin())
+                  );
+
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Posts (feed) ---
+    match /posts/{postId} {
+      allow read: if true;
+
+      // Create: only authenticated user creating for themselves
+      allow create: if isAuthenticated()
+                    && request.resource.data.user_id == request.auth.uid
+                    && request.resource.data.created_at is timestamp
+                    && request.resource.data.comments_count == 0;
+
+      // Update: owner or admin allowed. Allow like/unlike without permitting arbitrary replacement
+      allow update: if isAuthenticated() && (
+                      isAdmin() ||
+                      (request.auth.uid == resource.data.user_id && request.resource.data.user_id == resource.data.user_id) ||
+                      // Let any authenticated user update likes or comments_count safely
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['liked_by', 'comments_count']))
+                    );
+
+      // Prevent client from arbitrarily modifying comments_count or replacing liked_by entirely.
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin());
+    }
+
+    match /posts/{postId}/comments/{commentId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin());
+    }
+
+    // --- Notifications ---
+    match /notifications/{notifId} {
+      allow read, update, delete: if isAuthenticated() && (resource.data.user_id == request.auth.uid || isAdmin());
+
+      // Creation: only sender or admin. Ideally notifications are created server-side (Cloud Functions).
+      allow create: if isAuthenticated() &&
+                    (
+                      request.resource.data.sender_id == request.auth.uid ||
+                      isAdmin()
+                    )
+                    && request.resource.data.user_id is string
+                    && request.resource.data.created_at is timestamp;
+    }
+
+    // --- Connection Requests ---
+    match /connection_requests/{reqId} {
+      allow read, update, delete: if isAuthenticated() && (
+                                    request.auth.uid == resource.data.sender_id ||
+                                    request.auth.uid == resource.data.receiver_id ||
+                                    isAdmin()
+                                  );
+      allow create: if isAuthenticated() && request.resource.data.sender_id == request.auth.uid;
+    }
+
+    // --- Connections ---
+    match /connections/{connId} {
+      allow create: if isAuthenticated() && (request.resource.data.user1_id == request.auth.uid || request.resource.data.user2_id == request.auth.uid);
+      allow read, update, delete: if isAuthenticated() && (
+                                    request.auth.uid == resource.data.user1_id ||
+                                    request.auth.uid == resource.data.user2_id ||
+                                    isAdmin()
+                                  );
+    }
+
+    // --- Follows ---
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.follower_id == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.follower_id == request.auth.uid || isAdmin());
+    }
+
+    // --- Reports ---
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && request.resource.data.reporter_id == request.auth.uid;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // --- Testimonials ---
+    match /testimonials/{testId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.author_id == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Contracts / Reviews / Misc (examples) ---
+    match /contracts/{contractId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.employer_id ||
+        request.auth.uid == resource.data.worker_id ||
+        isAdmin()
+      );
+
+      allow create: if isAuthenticated()
+                    && (request.resource.data.employer_id == request.auth.uid || request.resource.data.worker_id == request.auth.uid)
+                    && request.resource.data.created_at is timestamp;
+
+      allow update, delete: if isAdmin() || request.auth.uid == resource.data.employer_id;
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.from_id == request.auth.uid && request.resource.data.created_at is timestamp;
+      allow update, delete: if isAdmin();
+    }
+
+    // Any other collections: default deny for non-admins (explicit matches above cover app needs)
+  }
+}

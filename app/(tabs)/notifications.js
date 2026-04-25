@@ -9,9 +9,21 @@ import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { toDate } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 
-function NotificationItem({ icon, iconColor, title, description, time, isNew, route }) {
+function NotificationItem({ icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
     const router = useRouter();
+
+    const handleAccept = async () => {
+        try {
+            const chatId = await acceptConnectionRequest(reqId, user, senderId);
+            if (chatId) {
+                router.push(`/chat/${chatId}`);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
     return (
         <TouchableOpacity 
             style={[nStyles.item, isNew && nStyles.itemNew]}
@@ -25,8 +37,19 @@ function NotificationItem({ icon, iconColor, title, description, time, isNew, ro
                 <Text style={nStyles.itemTitle}>{title}</Text>
                 <Text style={nStyles.itemDesc} numberOfLines={2}>{description}</Text>
                 <Text style={nStyles.itemTime}>{time}</Text>
+
+                {requiresAction && (
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+                        <TouchableOpacity onPress={handleAccept} style={{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
+                            <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => rejectConnectionRequest(reqId)} style={{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
+                            <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
             </View>
-            {isNew && <View style={nStyles.dot} />}
+            {isNew && !requiresAction && <View style={nStyles.dot} />}
         </TouchableOpacity>
     );
 }
@@ -58,14 +81,15 @@ export default function Notifications() {
         }
 
         const unsubscribers = [];
-        let aggregatedNotifications = { apps: [], employerApps: [], msgs: [], jobs: [] };
+        let aggregatedNotifications = { apps: [], employerApps: [], msgs: [], jobs: [], connectionReqs: [] };
 
         const updateState = () => {
             const all = [
                 ...aggregatedNotifications.apps,
                 ...aggregatedNotifications.employerApps,
                 ...aggregatedNotifications.msgs,
-                ...aggregatedNotifications.jobs
+                ...aggregatedNotifications.jobs,
+                ...aggregatedNotifications.connectionReqs
             ];
             // Sort by isNew priority, then by time (implied by Firestore order usually)
             // But we'll try to keep them reasonably sorted
@@ -149,7 +173,8 @@ export default function Notifications() {
                     const chunkedIds = employerJobIds.slice(0, 10);
                     const qEmpApps = query(
                         collection(db, 'applications'), 
-                        where('job_id', 'in', chunkedIds)
+                        where('job_id', 'in', chunkedIds),
+                        where('employer_id', '==', user.uid || user.id)
                     );
                     unsubscribers.push(onSnapshot(qEmpApps, async (snap) => {
                         let filteredEmpApps = [];
@@ -228,6 +253,35 @@ export default function Notifications() {
         const loadingTimer = setTimeout(() => {
             setInitialLoading(false);
         }, 1200);
+
+        // 5. ALL: Connection Requests (Secure Flow)
+        const qReqs = query(
+            collection(db, 'connection_requests'),
+            where('receiver_id', '==', user.uid || user.id),
+            where('status', '==', 'PENDING')
+        );
+        unsubscribers.push(onSnapshot(qReqs, (snap) => {
+            const list = [];
+            snap.forEach(d => {
+                const data = d.data();
+                list.push({
+                    id: `connreq-${d.id}`,
+                    reqId: d.id, // For actions
+                    type: 'CONNECTION_REQUEST',
+                    senderId: data.sender_id,
+                    icon: 'person-add',
+                    iconColor: Colors.primary,
+                    title: data.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
+                    description: `${data.sender_name} enviou um pedido de contacto${data.job_id ? ' para uma vaga' : ''}.`,
+                    time: data.created_at ? toDate(data.created_at).toLocaleDateString('pt-MZ') : 'Agora',
+                    isNew: true,
+                    requiresAction: true,
+                    user: user
+                });
+            });
+            aggregatedNotifications.connectionReqs = list;
+            updateState();
+        }));
 
         return () => {
             unsubscribers.forEach(unsub => unsub());

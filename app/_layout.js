@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db } from '../services/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { usePushNotifications } from '../hooks/usePushNotifications';
+import { GlobalAlerts } from '../components/GlobalAlerts';
 
 // Initialize i18n
 import '../utils/i18n';
@@ -53,6 +54,7 @@ export default function RootLayout() {
     return (
         <>
             <StatusBar style="dark" />
+            <GlobalAlerts />
             <TermsModal />
             <Stack
                 screenOptions={{

@@ -51,9 +51,11 @@ export default function ChatScreen() {
                 }
 
                 // Check for active contract
+                const isEmployer = user.role === 'EMPLOYER';
                 const contractsQ = query(
                     collection(db, 'contracts'),
                     where('conversation_id', '==', id),
+                    where(isEmployer ? 'employer_id' : 'worker_id', '==', user.uid),
                     where('status', '==', 'hired')
                 );
                 const contractsSnap = await getDocs(contractsQ);
