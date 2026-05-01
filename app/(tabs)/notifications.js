@@ -7,7 +7,7 @@ import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
-import { toDate } from '../../utils/profileUtils';
+import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 
@@ -36,7 +36,7 @@ function NotificationItem({ icon, iconColor, title, description, time, isNew, ro
             <View style={nStyles.itemContent}>
                 <Text style={nStyles.itemTitle}>{title}</Text>
                 <Text style={nStyles.itemDesc} numberOfLines={2}>{description}</Text>
-                <Text style={nStyles.itemTime}>{time}</Text>
+                <Text style={nStyles.itemTime}>{formatRelativeTime(time)}</Text>
 
                 {requiresAction && (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
@@ -127,8 +127,8 @@ export default function Notifications() {
                         iconColor: data.status === 'ACCEPTED' ? '#4CAF50' : Colors.error,
                         title: data.status === 'ACCEPTED' ? 'Candidatura Aceite!' : 'Candidatura Rejeitada',
                         description: `A sua candidatura para "${jobTitle}" foi ${data.status === 'ACCEPTED' ? 'aceite' : 'rejeitada'}.`,
-                        time: toDate(data.updated_at).toLocaleDateString('pt-MZ'),
-                        isNew: (Date.now() - toDate(data.updated_at).getTime()) < 86400000,
+                        time: data.updated_at,
+                        isNew: (Date.now() - toDate(data.updated_at).getTime()) < 604800000,
                     });
                 }
                 aggregatedNotifications.apps = list;
@@ -153,8 +153,8 @@ export default function Notifications() {
                         iconColor: '#1976D2',
                         title: 'Nova Vaga Publicada',
                         description: `"${data.title}" — ${data.contract_type === 'DAILY' ? 'Diarista' : 'Trabalho'}`,
-                        time: toDate(data.created_at).toLocaleDateString('pt-MZ'),
-                        isNew: (Date.now() - toDate(data.created_at).getTime()) < 86400000,
+                        time: data.created_at,
+                        isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
                     };
                 });
                 aggregatedNotifications.jobs = list;
@@ -203,8 +203,8 @@ export default function Notifications() {
                                 iconColor: Colors.info,
                                 title: 'Nova Candidatura',
                                 description: `${workerName} candidatou-se a "${jobTitle}".`,
-                                time: toDate(data.created_at).toLocaleDateString('pt-MZ'),
-                                isNew: (Date.now() - toDate(data.created_at).getTime()) < 86400000,
+                                time: formatTime(data.created_at),
+                                isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
                             });
                         }
                         aggregatedNotifications.employerApps = list;
@@ -235,12 +235,12 @@ export default function Notifications() {
 
                     list.push({
                         id: `msg-${d.id}`,
-                        route: `/chat/${d.id}`,
-                        icon: 'chatbubble',
+                        route: `/(tabs)/messages`,
+                        icon: 'chatbubble-ellipses',
                         iconColor: Colors.primary,
                         title: 'Novas Mensagens',
                         description: `Você tem ${data.unread_count[user.uid || user.id]} mensagem(ns) não lida(s) de ${senderName}.`,
-                        time: data.updated_at ? toDate(data.updated_at).toLocaleDateString('pt-MZ') : 'Agora',
+                        time: data.updated_at || data.created_at,
                         isNew: true,
                     });
                 }
@@ -254,18 +254,16 @@ export default function Notifications() {
             setInitialLoading(false);
         }, 1200);
 
-        // 5. ALL: Connection Requests (Secure Flow)
         const qReqs = query(
             collection(db, 'connection_requests'),
             where('receiver_id', '==', user.uid || user.id),
             where('status', '==', 'PENDING')
         );
         unsubscribers.push(onSnapshot(qReqs, (snap) => {
-            const list = [];
-            snap.forEach(d => {
+            const list = snap.docs.map(d => {
                 const data = d.data();
-                list.push({
-                    id: `connreq-${d.id}`,
+                return {
+                    id: d.id,
                     reqId: d.id, // For actions
                     type: 'CONNECTION_REQUEST',
                     senderId: data.sender_id,
@@ -273,11 +271,15 @@ export default function Notifications() {
                     iconColor: Colors.primary,
                     title: data.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
                     description: `${data.sender_name} enviou um pedido de contacto${data.job_id ? ' para uma vaga' : ''}.`,
-                    time: data.created_at ? toDate(data.created_at).toLocaleDateString('pt-MZ') : 'Agora',
+                    time: data.created_at,
                     isNew: true,
                     requiresAction: true,
                     user: user
-                });
+                };
+            }).sort((a, b) => {
+                const timeA = toDate(a.time).getTime();
+                const timeB = toDate(b.time).getTime();
+                return timeB - timeA;
             });
             aggregatedNotifications.connectionReqs = list;
             updateState();
@@ -338,7 +340,7 @@ export default function Notifications() {
                 contentContainerStyle={[nStyles.content, !isWeb && { marginTop: HEADER_HEIGHT }]}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true }
+                    { useNativeDriver: Platform.OS !== 'web' }
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
             >

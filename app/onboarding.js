@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { Colors, Spacing, Fonts } from '../constants';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import BrandWordmark from '../components/BrandWordmark';
 
 const { width, height } = Dimensions.get('window');
 
@@ -39,9 +40,9 @@ export default function Onboarding() {
                 <View style={styles.topSpacer} />
                 
                 <View style={styles.textSection}>
-                    <Text style={styles.title}>Mão Segura</Text>
+                    <BrandWordmark variant="onDarkLarge" style={{ marginBottom: 12 }} />
                     <Text style={styles.subtitle}>
-                        A maior rede de confiança para serviços{'\n'}
+                        Clientes e profissionais mais perto, para serviços{'\n'}
                         domésticos e comerciais em Moçambique.
                     </Text>
                     <View style={styles.divider} />
@@ -101,13 +102,6 @@ const styles = StyleSheet.create({
     },
     textSection: {
         alignItems: 'center',
-    },
-    title: {
-        fontSize: 42,
-        fontWeight: '900',
-        color: Colors.white,
-        marginBottom: Spacing.xs,
-        letterSpacing: -1,
     },
     subtitle: {
         fontSize: Fonts.sizes.md,

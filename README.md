@@ -1,6 +1,6 @@
-# Mão Segura 🤝
+# Trabalhe já
 
-O **Mão Segura** é uma plataforma móvel e web desenvolvida para conectar trabalhadores de serviços e empregadores em Moçambique (e além), focada na confiança, transparência e agilidade. Este projeto utiliza o ecossistema **Expo/React Native** para garantir uma experiência premium em Android, iOS e Web a partir de uma única base de código.
+O **Trabalhe já** é uma plataforma móvel e web para aproximar **clientes** e **profissionais** em Moçambique: quem procura serviços caseiros encontra quem está perto; quem oferece trabalho encontra oportunidades. O projeto usa **Expo/React Native** para Android, iOS e Web a partir de uma única base de código.
 
 ---
 
@@ -67,7 +67,7 @@ A aplicação encontra-se num estado de **Build Final de Preview**, com as segui
 ---
 
 ## 🌍 Missão Social
-O Mão Segura não é apenas uma app de empregos; é uma ferramenta de dignificação do trabalho informal e técnico, trazendo segurança jurídica e reputacional para quem contrata e para quem presta o serviço através de avaliações e histórico transparente.
+O Trabalhe já foca-se em ligar oferta e procura de trabalho informal e técnico, com perfis, avaliações e histórico transparente para quem contrata e para quem presta o serviço.
 
 ---
 **Status:** Pronta para Deploy / Testes de Usuário Real.

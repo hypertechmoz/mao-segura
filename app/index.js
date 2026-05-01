@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { Colors, Fonts, Spacing } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
+import BrandWordmark from '../components/BrandWordmark';
 
 export default function WebLandingOrSplash() {
     const router = useRouter();
@@ -14,11 +15,12 @@ export default function WebLandingOrSplash() {
     const { user, isOnboarded, isLoading } = useAuthStore();
     const { width, height } = useWindowDimensions();
     const isMobileWeb = width < 768; // Simple responsive check
+    const isNarrowWeb = width < 640;
     
     // Refs for smooth scroll navigation
     const scrollRef = useRef(null);
     const howItWorksRef = useRef(null);
-    const securityRef = useRef(null);
+    const supportSectionRef = useRef(null);
     const testimonialsRef = useRef(null);
     const aboutUsRef = useRef(null);
 
@@ -123,10 +125,13 @@ export default function WebLandingOrSplash() {
             {/* ====== FIXED NAVBAR ====== */}
             <View style={styles.navbarFixed}>
                 <View style={styles.navLeft}>
-                    <View style={styles.logoBox}>
-                        <Image source={require('../assets/images/logo.png')} style={styles.logoImg} resizeMode="contain" />
-                    </View>
-                    <Text style={[styles.brandName, { color: Colors.white }]} dataSet={{ translate: 'no' }}>Mão Segura</Text>
+                    <BrandWordmark
+                        variant={isMobileWeb ? 'onDark' : 'onDarkLarge'}
+                        layout="inline"
+                        showIcon
+                        iconOnly={isNarrowWeb}
+                        style={{ marginRight: 4 }}
+                    />
                 </View>
                 
                 {!isMobileWeb && (
@@ -134,8 +139,8 @@ export default function WebLandingOrSplash() {
                         <TouchableOpacity onPress={() => scrollToSection(howItWorksRef)}>
                             <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.how_it_works')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => scrollToSection(securityRef)}>
-                            <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.security')}</Text>
+                        <TouchableOpacity onPress={() => scrollToSection(supportSectionRef)}>
+                            <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.support_nav')}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => scrollToSection(testimonialsRef)}>
                             <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.testimonials')}</Text>
@@ -146,10 +151,10 @@ export default function WebLandingOrSplash() {
                     </View>
                 )}
 
-                <View style={styles.navRight}>
+                <View style={[styles.navRight, isNarrowWeb && styles.navRightTight]}>
                     <TouchableOpacity onPress={() => i18n.changeLanguage(i18n.language === 'pt' ? 'en' : 'pt')} style={{ marginRight: 15, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Ionicons name="globe-outline" size={18} color={Colors.white} />
-                        <Text style={{ color: Colors.white, fontSize: 13, fontWeight: '700' }}>
+                        <Text style={[{ color: Colors.white, fontSize: 13, fontWeight: '700' }, isNarrowWeb && { display: 'none' }]}>
                             {i18n.language === 'pt' ? 'English' : 'Português'}
                         </Text>
                     </TouchableOpacity>
@@ -304,8 +309,8 @@ export default function WebLandingOrSplash() {
                 </View>
             </View>
 
-            {/* ====== SECTION 4: SUPPORT/SECURITY (LIGHT) ====== */}
-            <View ref={securityRef} style={styles.sectionLight}>
+            {/* ====== SECTION 4: SUPPORT (LIGHT) ====== */}
+            <View ref={supportSectionRef} style={styles.sectionLight}>
                 <Image source={require('../assets/images/support_bg.png')} style={[styles.sectionBgImage, {opacity: 0.1}]} resizeMode="cover" />
                 <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
                     <View style={styles.sectionVisualCol}>
@@ -363,7 +368,7 @@ export default function WebLandingOrSplash() {
                                             <Text style={styles.testimoRole}>Empregadora - Maputo</Text>
                                         </View>
                                     </View>
-                                    <Text style={styles.testimoQuote}>"Consegui uma babá maravilhosa em menos de 2 dias. A segurança de ver o perfil verificado deu-me muita paz."</Text>
+                                    <Text style={styles.testimoQuote}>"Consegui uma babá maravilhosa em menos de 2 dias. Ver o perfil verificado e as avaliações deu-me confiança para decidir rápido."</Text>
                                     <Text style={styles.stars}>★★★★★</Text>
                                 </View>
                                 <View style={styles.testimoCard}>
@@ -374,7 +379,7 @@ export default function WebLandingOrSplash() {
                                             <Text style={styles.testimoRole}>Trabalhador - Matola</Text>
                                         </View>
                                     </View>
-                                    <Text style={styles.testimoQuote}>"Desde que entrei para o Mão Segura, a minha agenda de jardinagem está sempre cheia. Recomendo a todos."</Text>
+                                    <Text style={styles.testimoQuote}>"Desde que entrei no Trabalhe Já, a minha agenda de jardinagem está sempre cheia. Recomendo a todos."</Text>
                                     <Text style={styles.stars}>★★★★★</Text>
                                 </View>
                             </>
@@ -393,7 +398,7 @@ export default function WebLandingOrSplash() {
                     </View>
                     {!isMobileWeb && (
                         <View style={styles.sectionVisualCol}>
-                             <Image source={require('../assets/images/logo.png')} style={{width: 200, height: 200, opacity: 0.1}} resizeMode="contain" />
+                            <BrandWordmark variant="muted" />
                         </View>
                     )}
                 </View>
@@ -404,8 +409,7 @@ export default function WebLandingOrSplash() {
                 <View style={[styles.footerGrid, isMobileWeb && styles.gridMobile]}>
                     <View style={styles.footerCol}>
                         <View style={styles.footerBrand}>
-                            <View style={styles.footerLogoBox} />
-                            <Text style={styles.footerBrandText}>Mão Segura</Text>
+                            <BrandWordmark variant="footer" />
                         </View>
                         <Text style={styles.footerDesc}>{t('lander.footer_desc')}</Text>
                         <View style={styles.socialIcons}>
@@ -426,16 +430,9 @@ export default function WebLandingOrSplash() {
                         <TouchableOpacity onPress={() => router.push('/info/privacy')}><Text style={styles.footerLink}>{t('lander.footer_privacy')}</Text></TouchableOpacity>
                         <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={styles.footerLink}>{t('lander.footer_terms')}</Text></TouchableOpacity>
                     </View>
-                    <View style={styles.footerColMap}>
-                        <Text style={styles.footerTitle}>{t('lander.footer_location')}</Text>
-                        <Text style={styles.footerLink}>Nampula, Moçambique</Text>
-                        <View style={styles.mapBox}>
-                            <Ionicons name="map-outline" size={24} color="#6B7280" style={{ opacity: 0.5 }} />
-                        </View>
-                    </View>
                 </View>
                 <View style={styles.footerBottom}>
-                    <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Mão Segura. Todos os direitos reservados. Nampula, Moçambique.</Text>
+                    <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Trabalhe Já. Todos os direitos reservados.</Text>
                 </View>
             </View>
 
@@ -457,12 +454,10 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(30, 41, 59, 0.4)', // Slightly transparent dark
     },
     navLeft: { flexDirection: 'row', alignItems: 'center' },
-    logoBox: { width: 32, height: 32, marginRight: 8, backgroundColor: Colors.primary, borderRadius: 6, overflow: 'hidden' },
-    logoImg: { width: '100%', height: '100%' },
-    brandName: { fontSize: 20, fontWeight: '800', color: Colors.text },
     navCenter: { flexDirection: 'row', gap: 24 },
     navLinkCenter: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
     navRight: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+    navRightTight: { gap: 8 },
     btnEntrar: { backgroundColor: Colors.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 6 },
     btnEntrarText: { color: Colors.white, fontSize: 13, fontWeight: '700' },
     btnRegistar: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 6 },
@@ -487,7 +482,15 @@ const styles = StyleSheet.create({
     heroSubtitleOver: { fontSize: 16, color: '#D1D5DB', lineHeight: 26, marginBottom: 32, maxWidth: 600 },
     
     heroButtonsOver: { flexDirection: 'row', gap: 16, marginBottom: 40 },
-    btnHeroPrimary: { backgroundColor: Colors.primary, paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8, shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10 },
+    btnHeroPrimary: { 
+        backgroundColor: Colors.primary, 
+        paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8,
+        ...Platform.select({
+            web: { boxShadow: '0 4px 10px rgba(0,0,0,0.3)' },
+            ios: { shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10 },
+            android: { elevation: 5 }
+        })
+    },
     btnHeroPrimaryText: { color: '#000', fontSize: 14, fontWeight: '800' },
     btnHeroSecondary: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8, borderWidth: 1 },
     btnHeroSecondaryText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
@@ -519,7 +522,15 @@ const styles = StyleSheet.create({
     btnSectionOutlineText: { color: Colors.text, fontSize: 15, fontWeight: '700' },
 
     // Visual elements
-    floatingPreviewCard: { backgroundColor: Colors.white, padding: 24, borderRadius: 12, width: '100%', maxWidth: 350, alignSelf: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20, elevation: 10 },
+    floatingPreviewCard: { 
+        backgroundColor: Colors.white, padding: 24, borderRadius: 12, width: '100%', maxWidth: 350, alignSelf: 'center', 
+        elevation: 10,
+        ...Platform.select({
+            web: { boxShadow: '0 10px 20px rgba(0,0,0,0.1)' },
+            ios: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 20 },
+            android: { elevation: 10 }
+        })
+    },
     previewDot: { color: '#E2E8F0', fontSize: 10, marginRight: 4 },
     previewHeader: { flexDirection: 'row', marginBottom: 16 },
     previewTitle: { fontSize: 16, fontWeight: '800', color: '#111', marginBottom: 16 },
@@ -529,7 +540,15 @@ const styles = StyleSheet.create({
     previewBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginTop: 12 },
 
     profilesGrid: { width: '100%', maxWidth: 450, gap: 16 },
-    miniProfileCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+    miniProfileCard: { 
+        flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, padding: 16, borderRadius: 12, 
+        elevation: 2,
+        ...Platform.select({
+            web: { boxShadow: '0 2px 10px rgba(0,0,0,0.05)' },
+            ios: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
+            android: { elevation: 2 }
+        })
+    },
     miniAvatar: { width: 50, height: 50, borderRadius: 25, marginRight: 16 },
     miniInfo: { flex: 1 },
     miniName: { fontSize: 15, fontWeight: '700', color: '#111' },
@@ -546,7 +565,14 @@ const styles = StyleSheet.create({
     sealTitle: { color: Colors.white, fontSize: 20, fontWeight: '800', marginBottom: 8 },
     sealSubtitle: { color: '#9CA3AF', fontSize: 13 },
 
-    supportCard: { backgroundColor: Colors.white, padding: 40, borderRadius: 24, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 30, elevation: 5 },
+    supportCard: { 
+        backgroundColor: Colors.white, padding: 40, borderRadius: 24, alignItems: 'center', 
+        elevation: 5,
+        ...Platform.select({
+            web: { boxShadow: '0 10px 30px rgba(0,0,0,0.05)' },
+            default: { shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 30 }
+        })
+    },
     supportEmoji: { fontSize: 48, marginBottom: 20 },
     supportCardTitle: { fontSize: 20, fontWeight: '800', color: '#111', marginBottom: 12 },
     supportCardText: { fontSize: 14, color: '#64748B', textAlign: 'center', lineHeight: 22 },
@@ -559,7 +585,14 @@ const styles = StyleSheet.create({
     gridMobile: { flexDirection: 'column' },
 
     // Cards
-    card: { flex: 1, backgroundColor: Colors.white, padding: 32, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
+    card: { 
+        flex: 1, backgroundColor: Colors.white, padding: 32, borderRadius: 16, 
+        elevation: 2,
+        ...Platform.select({
+            web: { boxShadow: '0 4px 10px rgba(0,0,0,0.03)' },
+            default: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.03, shadowRadius: 10 }
+        })
+    },
     iconBox: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
     cardIcon: { fontSize: 24 },
     cardTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, marginBottom: 12 },
@@ -578,7 +611,13 @@ const styles = StyleSheet.create({
     shieldRing: { width: 140, height: 140, borderRadius: 70, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', position: 'relative' },
     shieldInner: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
     shieldIcon: { fontSize: 40 },
-    checkBadge: { position: 'absolute', bottom: 5, right: 5, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 },
+    checkBadge: { 
+        position: 'absolute', bottom: 5, right: 5, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center', 
+        ...Platform.select({
+            web: { boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
+            default: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 }
+        })
+    },
     checkIcon: { color: Colors.primary, fontSize: 18, fontWeight: '900' },
     securityRight: { flex: 2, paddingLeft: 40 },
     securityRightMobile: { paddingLeft: 0 },
@@ -595,7 +634,7 @@ const styles = StyleSheet.create({
     testimoHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
     testimoAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F2F2F2', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     testimoName: { fontSize: 15, fontWeight: '700', color: Colors.text },
-    testimoRole: { fontSize: 11, color: Colors.textLight, marginTop: 2 },
+    testimoRole: { fontSize: 12, color: Colors.textLight, marginTop: 2 },
     testimoQuote: { fontSize: 14, color: Colors.textSecondary, fontStyle: 'italic', lineHeight: 22, marginBottom: 16 },
     stars: { fontSize: 12 },
 
@@ -606,15 +645,13 @@ const styles = StyleSheet.create({
     footerColLinks: { flex: 1, minWidth: 120 },
     footerColMap: { flex: 1.5, minWidth: 200 },
     footerBrand: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-    footerLogoBox: { width: 24, height: 24, backgroundColor: Colors.primary, borderRadius: 4, marginRight: 8 },
-    footerBrandText: { fontSize: 20, fontWeight: '800', color: Colors.white },
-    footerDesc: { color: '#9CA3AF', fontSize: 13, lineHeight: 20, marginBottom: 20, maxWidth: 280 },
+    footerDesc: { color: '#D1D5DB', fontSize: 14, lineHeight: 22, marginBottom: 20, maxWidth: 280 },
     socialIcons: { flexDirection: 'row', gap: 16 },
     socialIcon: { fontSize: 18, opacity: 0.7 },
     footerTitle: { color: Colors.white, fontSize: 14, fontWeight: '700', marginBottom: 20 },
-    footerLink: { color: '#9CA3AF', fontSize: 13, marginBottom: 12 },
+    footerLink: { color: '#D1D5DB', fontSize: 14, marginBottom: 12 },
     mapBox: { height: 100, backgroundColor: '#1F2937', borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 12 },
     mapIcon: { fontSize: 24, opacity: 0.5 },
     footerBottom: { borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 24, alignItems: 'center' },
-    footerBottomText: { color: '#6B7280', fontSize: 11 },
+    footerBottomText: { color: '#9CA3AF', fontSize: 12 },
 });

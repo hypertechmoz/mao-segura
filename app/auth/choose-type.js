@@ -12,7 +12,7 @@ export default function ChooseType() {
     return (
         <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Como deseja usar{'\n'}o Mão Segura?</Text>
+                <Text style={styles.title}>Como deseja usar{'\n'}o Trabalhe Já?</Text>
                 <Text style={styles.subtitle}>Escolha o tipo de conta que melhor se adequa a si.</Text>
             </View>
 

@@ -386,7 +386,7 @@ export default function Profile() {
                     </TouchableOpacity>
 
                     <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: Spacing.xs }}>
-                        <Text style={{ fontSize: 12, color: Colors.textLight }}>Mão Segura v1.0.0</Text>
+                        <Text style={{ fontSize: 12, color: Colors.textLight }}>Trabalhe já v1.0.0</Text>
                         <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text style={{fontWeight: '700', color: Colors.primary}}>Studio do Scott</Text></Text>
                     </View>
                 </View>

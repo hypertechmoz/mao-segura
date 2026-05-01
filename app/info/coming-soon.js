@@ -11,7 +11,7 @@ export default function ComingSoon() {
             <Ionicons name="construct-outline" size={80} color={Colors.primary} style={{ marginBottom: 20 }} />
             <Text style={styles.title}>Em Breve</Text>
             <Text style={styles.subtitle}>
-                Esta página está em desenvolvimento. Estamos a preparar secções dedicadas e novas funcionalidades para a comunidade Mão Segura.
+                Esta página está em desenvolvimento. Estamos a preparar secções dedicadas e novas funcionalidades para a comunidade Trabalhe já.
             </Text>
             
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

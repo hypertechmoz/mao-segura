@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Mão Segura",
+    "name": "Trabalhe Já",
     "slug": "mao-segura",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -52,7 +52,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Mão Segura.",
+          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Trabalhe Já.",
           "cameraPermission": "Permite tirar uma nova fotografia com a câmera para atribuir ao seu perfil.",
           "microphonePermission": "Permite o acesso ao microfone ao gravar imagens em movimento."
         }

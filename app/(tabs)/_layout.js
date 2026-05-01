@@ -6,10 +6,12 @@ import { useAuthStore } from '../../store/authStore';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { useTranslation } from 'react-i18next';
+import BrandWordmark from '../../components/BrandWordmark';
 
 import { Ionicons } from '@expo/vector-icons';
 import { db } from '../../services/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { useUnreadCount } from '../../utils/useUnreadCount';
 
 function TabIcon({ icon, focused, badge }) {
     return (
@@ -106,8 +108,12 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
                     {/* Left: Logo + Search */}
                     <View style={styles.webNavLeft}>
                         <TouchableOpacity onPress={() => { router.push('/(tabs)/home'); closeAllMenus(); }} style={styles.webLogoContainer}>
-                            <Image source={require('../../assets/images/logo.png')} style={styles.webLogo} resizeMode="contain" />
-                            {!isMobile && <Text style={styles.webBrandText}>Mão Segura</Text>}
+                            <BrandWordmark
+                                variant={isMobile ? 'compact' : 'default'}
+                                layout="inline"
+                                showIcon
+                                iconOnly={isSmall}
+                            />
                         </TouchableOpacity>
                         {!isMobile && (
                             <View style={[styles.webSearchBox, { zIndex: 9999 }]}>
@@ -291,8 +297,7 @@ export default function TabLayout() {
     const isSmallScreen = width < 768;
     const isMobileWeb = width < 480;
 
-    const [unreadMessages, setUnreadMessages] = useState(0);
-    const [unreadNotifications, setUnreadNotifications] = useState(0);
+    const { unreadMessages, unreadNotifications } = useUnreadCount();
 
     useEffect(() => {
         // Load fonts for web
@@ -303,43 +308,6 @@ export default function TabLayout() {
             });
         }
     }, []);
-
-    useEffect(() => {
-        if (!user) {
-            setUnreadMessages(0);
-            setUnreadNotifications(0);
-            return;
-        }
-
-        // Message unread listener
-        const fieldMatch = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
-        const qMsg = query(collection(db, 'chat_conversations'), where(fieldMatch, '==', user.uid));
-        
-        const unsubMsg = onSnapshot(qMsg, (snap) => {
-            let total = 0;
-            snap.forEach(d => {
-                const data = d.data();
-                if (data.unread_count && data.unread_count[user.uid]) {
-                    total += data.unread_count[user.uid];
-                }
-            });
-            setUnreadMessages(total);
-        }, (err) => {
-            console.log('Chat listener permission error (non-critical):', err.code);
-            setUnreadMessages(0);
-        });
-
-        // Notification unread listener
-        const qNotif = query(collection(db, 'notifications'), where('user_id', '==', user.uid), where('read', '==', false));
-        const unsubNotif = onSnapshot(qNotif, (snap) => {
-            setUnreadNotifications(snap.size);
-        });
-
-        return () => {
-            unsubMsg();
-            unsubNotif();
-        };
-    }, [user?.uid]);
 
     if (Platform.OS === 'web') {
         return (
@@ -360,7 +328,7 @@ export default function TabLayout() {
                 tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
                     backgroundColor: Colors.white,
                     borderTopWidth: 1,
-                    borderTopColor: '#F4F2EE',
+                    borderTopColor: Colors.background,
                     height: 60,
                     paddingBottom: 8,
                 },
@@ -521,8 +489,8 @@ const styles = StyleSheet.create({
     },
 
     // === Web Layout ===
-    webLayout: { flex: 1, backgroundColor: '#F4F2EE' },
-    webContent: { flex: 1, width: '100%', backgroundColor: '#F4F2EE' },
+    webLayout: { flex: 1, backgroundColor: Colors.background },
+    webContent: { flex: 1, width: '100%', backgroundColor: Colors.background },
 
     // === Web Navbar (LinkedIn-style) ===
     webNavbar: {
@@ -549,8 +517,6 @@ const styles = StyleSheet.create({
     // Left: Logo + Search
     webNavLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 20 },
     webLogoContainer: { marginRight: 16, flexDirection: 'row', alignItems: 'center' },
-    webLogo: { width: 44, height: 44, marginRight: 10, borderRadius: 10 },
-    webBrandText: { fontSize: 24, fontWeight: '800', color: Colors.primary, letterSpacing: -0.5 },
     webSearchBox: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -700,7 +666,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     dropdownViewProfileText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
-    dropdownDivider: { height: 1, backgroundColor: '#F4F2EE', marginVertical: 4 },
+    dropdownDivider: { height: 1, backgroundColor: Colors.background, marginVertical: 4 },
     dropdownItem: { paddingHorizontal: 16, paddingVertical: 10 },
     dropdownItemText: { fontSize: 14, color: Colors.text },
 
@@ -733,7 +699,7 @@ const styles = StyleSheet.create({
     dropdownIcon: { marginRight: 12, width: 22 },
     dropdownItemTitle: { fontSize: 13, fontWeight: '600', color: Colors.text },
     dropdownItemSub: { fontSize: 11, color: Colors.textSecondary, marginTop: 2 },
-    dropdownDivider: { height: 1, backgroundColor: '#F4F2EE', marginVertical: 4 },
+    dropdownDivider: { height: 1, backgroundColor: Colors.background, marginVertical: 4 },
     webMenuOverlay: {
         position: 'fixed',
         top: 0,

@@ -95,7 +95,7 @@ export default function Premium() {
                 <View style={styles.crown}>
                     <Ionicons name="trophy" size={32} color={Colors.premium} />
                 </View>
-                <Text style={styles.title}>Mão Segura Premium</Text>
+                <Text style={styles.title}>Trabalhe já Premium</Text>
                 <Text style={styles.subtitle}>
                     Destaque o seu perfil e tenha acesso a funcionalidades exclusivas
                 </Text>

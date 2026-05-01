@@ -24,7 +24,7 @@ export default function SubmitTestimonial() {
             setSubmitting(true);
             await addDoc(collection(db, 'testimonials'), {
                 user_id: user.uid,
-                name: user.name || 'Utilizador Mão Segura',
+                name: user.name || 'Utilizador Trabalhe já',
                 role: user.role,
                 text: text.trim(),
                 rating: rating,
@@ -77,7 +77,7 @@ export default function SubmitTestimonial() {
                     <Text style={[styles.label, { marginTop: Spacing.lg }]}>O seu depoimento</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Escreva aqui como o Mão Segura mudou a sua vida ou o seu negócio..."
+                        placeholder="Escreva aqui como o Trabalhe já mudou a sua vida ou o seu negócio..."
                         placeholderTextColor={Colors.textLight}
                         multiline
                         numberOfLines={6}

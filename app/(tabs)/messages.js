@@ -2,12 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Image, Animated, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
-import { formatTime } from '../../utils/profileUtils';
+import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Messages() {
@@ -30,59 +30,87 @@ export default function Messages() {
         outputRange: [0, -HEADER_HEIGHT],
     });
 
-    const loadConversations = async () => {
+    // Cache for profiles and jobs to avoid redundant fetches
+    const profilesCache = useRef({});
+    const jobsCache = useRef({});
+
+    useEffect(() => {
         if (!user) return;
-        try {
-            const isWorker = user.role === 'WORKER';
-            const field = isWorker ? 'worker_id' : 'employer_id';
-            
-            const q = query(collection(db, 'chat_conversations'), where(field, '==', user.uid), orderBy('updated_at', 'desc'));
-            const snap = await getDocs(q);
 
-            const convDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const isWorker = user.role === 'WORKER';
+        const field = isWorker ? 'worker_id' : 'employer_id';
+        const q = query(
+            collection(db, 'chat_conversations'), 
+            where(field, '==', user.uid)
+        );
 
-            // Batch-fetch all other user profiles in parallel
-            const otherUids = [...new Set(convDocs.map(c => isWorker ? c.employer_id : c.worker_id).filter(Boolean))];
-            const userProfiles = {};
-            if (otherUids.length > 0) {
-                const userSnaps = await Promise.all(otherUids.map(uid => getDoc(doc(db, 'users', uid))));
-                userSnaps.forEach(s => {
-                    if (s.exists()) userProfiles[s.id] = { id: s.id, ...s.data() };
+        const unsubscribe = onSnapshot(q, async (snap) => {
+            try {
+                const convDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+                    .sort((a, b) => {
+                        const timeA = a.updated_at?.seconds || 0;
+                        const timeB = b.updated_at?.seconds || 0;
+                        return timeB - timeA;
+                    });
+
+                // Identify missing profiles and jobs
+                const missingUids = convDocs
+                    .map(c => isWorker ? c.employer_id : c.worker_id)
+                    .filter(uid => uid && !profilesCache.current[uid]);
+                
+                const missingJobIds = convDocs
+                    .map(c => c.job_id)
+                    .filter(jid => jid && !jobsCache.current[jid]);
+
+                // Fetch missing profiles in parallel
+                if (missingUids.length > 0) {
+                    const uniqueUids = [...new Set(missingUids)];
+                    const snaps = await Promise.all(uniqueUids.map(uid => getDoc(doc(db, 'users', uid))));
+                    snaps.forEach(s => {
+                        if (s.exists()) profilesCache.current[s.id] = { id: s.id, ...s.data() };
+                    });
+                }
+
+                // Fetch missing job titles in parallel
+                if (missingJobIds.length > 0) {
+                    const uniqueJobIds = [...new Set(missingJobIds)];
+                    const snaps = await Promise.all(uniqueJobIds.map(jid => getDoc(doc(db, 'jobs', jid))));
+                    snaps.forEach(s => {
+                        if (s.exists()) jobsCache.current[s.id] = s.data().title;
+                    });
+                }
+
+                // Format the final list using cache
+                const formatted = convDocs.map(conv => {
+                    const otherUid = isWorker ? conv.employer_id : conv.worker_id;
+                    return {
+                        id: conv.id,
+                        otherUser: profilesCache.current[otherUid] || { name: 'Utilizador', is_verified: false },
+                        lastMessage: conv.job_id ? (jobsCache.current[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Conversa sobre vaga'),
+                        lastMessageAt: conv.updated_at,
+                        unread: conv.unread_count && conv.unread_count[user.uid] > 0 ? conv.unread_count[user.uid] : 0,
+                    };
                 });
+
+                setConversations(formatted);
+            } catch (err) {
+                console.error('Snapshot conversations error:', err);
+            } finally {
+                setInitialLoading(false);
             }
-
-            // Batch-fetch all job titles in parallel
-            const jobIds = [...new Set(convDocs.map(c => c.job_id).filter(Boolean))];
-            const jobTitles = {};
-            if (jobIds.length > 0) {
-                const jobSnaps = await Promise.all(jobIds.map(jid => getDoc(doc(db, 'jobs', jid))));
-                jobSnaps.forEach(s => {
-                    if (s.exists()) jobTitles[s.id] = s.data().title;
-                });
-            }
-
-            const formatted = convDocs.map(conv => {
-                const otherUid = isWorker ? conv.employer_id : conv.worker_id;
-                return {
-                    id: conv.id,
-                    otherUser: userProfiles[otherUid] || { name: 'Utilizador', is_verified: false },
-                    lastMessage: conv.job_id ? (jobTitles[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Conversa sobre vaga'),
-                    lastMessageAt: conv.updated_at,
-                    unread: conv.unread_count && conv.unread_count[user.uid] > 0 ? conv.unread_count[user.uid] : 0,
-                };
-            });
-
-            setConversations(formatted);
-        } catch (err) {
-            console.error('Load conversations error:', err);
-        } finally {
+        }, (err) => {
+            console.error('Conversations listener error:', err);
             setInitialLoading(false);
-        }
+        });
+
+        return () => unsubscribe();
+    }, [user?.uid]);
+
+    const onRefresh = async () => { 
+        setRefreshing(true); 
+        // Snapshot will update automatically, but we can wait a bit for visual feedback
+        setTimeout(() => setRefreshing(false), 1000);
     };
-
-    useEffect(() => { loadConversations(); }, []);
-
-    const onRefresh = async () => { setRefreshing(true); await loadConversations(); setRefreshing(false); };
 
     return (
         <View style={styles.container}>
@@ -123,7 +151,7 @@ export default function Messages() {
                 keyExtractor={(item) => item.id}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true }
+                    { useNativeDriver: Platform.OS !== 'web' }
                 )}
                 renderItem={({ item }) => (
                     <TouchableOpacity
@@ -147,7 +175,7 @@ export default function Messages() {
                             </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
-                            <Text style={[styles.time, item.unread > 0 && { color: Colors.primary, fontWeight: '700' }]}>{formatTime(item.lastMessageAt)}</Text>
+                            <Text style={[styles.time, item.unread > 0 && { color: Colors.primary, fontWeight: '700' }]}>{formatRelativeTime(item.lastMessageAt)}</Text>
                             {item.unread > 0 && (
                                 <View style={styles.unreadBadge}>
                                     <Text style={styles.unreadBadgeText}>{item.unread}</Text>

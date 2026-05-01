@@ -80,7 +80,7 @@ export default function SupportAndHelp() {
                         style={[styles.btnAction, problemText.trim().length === 0 && { opacity: 0.5 }]} 
                         disabled={problemText.trim().length === 0}
                         onPress={() => {
-                            Linking.openURL(`mailto:hypertechsupport004@gmail.com?subject=Suporte Mão Segura&body=${encodeURIComponent(problemText)}`);
+                            Linking.openURL(`mailto:hypertechsupport004@gmail.com?subject=Suporte Trabalhe já&body=${encodeURIComponent(problemText)}`);
                             setProblemText('');
                         }}
                     >

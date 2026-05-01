@@ -41,7 +41,7 @@ export async function sendConnectionRequest(user, targetId, metadata = {}) {
     
     // Também podemos gravar uma notificação explícita ou usar a query em notifications.js
     // Mas para manter compatibilidade, vamos criar um doc na subcoleção de notifications (se aplicável)
-    // No Mão Segura, as notificações são criadas por triggers ou localmente.
+    // No Trabalhe já, as notificações são criadas por triggers ou localmente.
     
     return docRef.id;
 }

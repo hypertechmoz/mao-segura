@@ -49,10 +49,10 @@ export default function HowItWorks() {
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Segurança em Primeiro Lugar</Text>
+                <Text style={styles.sectionTitle}>Primeiro contacto com bom senso</Text>
                 <Text style={styles.text}>
                     Nunca realize pagamentos antecipados sem confirmar a identidade do profissional. 
-                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Mão Segura.
+                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Trabalhe já.
                 </Text>
             </View>
 

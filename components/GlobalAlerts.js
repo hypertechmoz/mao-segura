@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { useAlertStore } from '../store/alertStore';
 import { Colors } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,7 @@ export function GlobalAlerts() {
     if (alerts.length === 0) return null;
 
     return (
-        <View style={[styles.container, { top: insets.top + 10 }]} pointerEvents="box-none">
+        <View style={[styles.container, { top: insets.top + 10, pointerEvents: 'box-none' }]}>
             {alerts.map((alert) => (
                 <View key={alert.id} style={[styles.card, alert.type === 'error' ? styles.cardError : styles.cardSuccess]}>
                     <Ionicons 
@@ -48,10 +48,17 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.white,
         borderRadius: 16,
         padding: 16,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.15,
-        shadowRadius: 15,
+        ...Platform.select({
+            web: {
+                boxShadow: '0 6px 15px rgba(0,0,0,0.15)',
+            },
+            default: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: 0.15,
+                shadowRadius: 15,
+            }
+        }),
         elevation: 10,
         borderLeftWidth: 5,
         width: '100%',
@@ -61,5 +68,5 @@ const styles = StyleSheet.create({
     cardError: { borderLeftColor: Colors.error },
     textContainer: { flex: 1, marginLeft: 12 },
     title: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 2 },
-    message: { fontSize: 14, color: Colors.textSecondary, fontWeight: '500' }
+    message: { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' }
 });

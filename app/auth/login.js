@@ -38,7 +38,7 @@ export default function Login() {
                         <Ionicons name="lock-closed" size={32} color={Colors.white} />
                     </View>
                     <Text style={styles.title}>Bem-vindo de volta</Text>
-                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Mão Segura.</Text>
+                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Trabalhe já.</Text>
                 </View>
 
                 <View style={styles.form}>
@@ -129,10 +129,14 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: Spacing.md,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 12,
+        ...(Platform.OS === 'ios' ? {
+            shadowColor: Colors.primary,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+        } : Platform.OS === 'web' ? {
+            boxShadow: `0 8px 12px ${Colors.primary}33`
+        } : {}),
         elevation: 8,
     },
     title: { fontSize: Fonts.sizes.xl, fontWeight: '800', color: Colors.text, marginBottom: Spacing.xs },
@@ -181,10 +185,14 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         alignItems: 'center',
         marginTop: Spacing.sm,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
+        ...(Platform.OS === 'ios' ? {
+            shadowColor: Colors.primary,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+        } : Platform.OS === 'web' ? {
+            boxShadow: `0 4px 10px ${Colors.primary}4D`
+        } : {}),
         elevation: 6,
     },
     buttonDisabled: { opacity: 0.7 },

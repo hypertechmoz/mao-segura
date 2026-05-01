@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { db } from '../../services/firebase';
 import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
@@ -419,7 +419,14 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
     content: { paddingBottom: Spacing.xxl },
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    header: { backgroundColor: Colors.white, padding: Spacing.xl, alignItems: 'center', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10 },
+    header: { 
+        backgroundColor: Colors.white, padding: Spacing.xl, alignItems: 'center', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, 
+        elevation: 2, 
+        ...Platform.select({
+            web: { boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
+            default: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10 }
+        })
+    },
     avatarContainer: { position: 'relative', marginBottom: 16 },
     avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.primaryBg, borderWidth: 3, borderColor: Colors.white },
     avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
@@ -440,7 +447,14 @@ const styles = StyleSheet.create({
     infoLabel: { fontSize: 12, color: Colors.textLight, marginBottom: 4 },
     infoValue: { fontSize: 14, color: Colors.text, fontWeight: '600' },
     actions: { padding: Spacing.xl },
-    chatButton: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 8 },
+    chatButton: { 
+        backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
+        elevation: 8,
+        ...Platform.select({
+            web: { boxShadow: '0 6px 12px rgba(46,125,50,0.3)' },
+            default: { shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12 }
+        })
+    },
     chatButtonText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
     emptyText: { fontSize: 14, color: Colors.textLight, fontStyle: 'italic' },
     reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.xl },

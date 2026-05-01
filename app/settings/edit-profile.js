@@ -259,7 +259,7 @@ export default function EditProfile() {
             }
         } catch (err) {
             console.error('Delete error:', err);
-            useAlertStore.getState().showAlert('Erro', 'Por questões de segurança, pode ser necessário voltar a fazer login antes de apagar a conta.', 'error');
+            useAlertStore.getState().showAlert('Erro', 'Por proteção da conta, pode ser necessário voltar a fazer login antes de apagar a conta.', 'error');
             setLoading(false);
         }
     };

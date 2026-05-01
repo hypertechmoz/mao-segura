@@ -97,7 +97,7 @@ export default function Register() {
             <Text style={styles.heading}>
                 {role === 'EMPLOYER' ? 'Criar conta de Empregador' : 'Criar conta de Trabalhador'}
             </Text>
-            <Text style={styles.subheading}>Preencha os dados abaixo. Nome e localização serão definitivos para sua segurança.</Text>
+            <Text style={styles.subheading}>Preencha os dados abaixo. Nome e localização ficam associados ao seu perfil e ajudam clientes e profissionais a encontrá-lo.</Text>
 
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Nome completo *</Text>
@@ -186,7 +186,7 @@ export default function Register() {
                 <View style={styles.recommendations}>
                     <Text style={styles.recText}>• Use pelo menos 6 caracteres</Text>
                     <Text style={styles.recText}>• Inclua letras maiúsculas e números</Text>
-                    <Text style={styles.recText}>• Use símbolos (!@#$) para maior segurança</Text>
+                    <Text style={styles.recText}>• Use símbolos (!@#$) para uma palavra-passe mais forte</Text>
                 </View>
             </View>
 

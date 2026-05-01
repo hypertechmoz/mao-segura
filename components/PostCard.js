@@ -8,6 +8,7 @@ import { doc, updateDoc, arrayUnion, arrayRemove, query, collection, where, getD
 import { useAuthStore } from '../store/authStore';
 import { useAuthGuard } from '../utils/useAuthGuard';
 import { startOrGetConversation } from '../utils/chatHelper';
+import { formatTime } from '../utils/profileUtils';
 
 export default function PostCard({ post }) {
     const router = useRouter();
@@ -98,9 +99,7 @@ export default function PostCard({ post }) {
         router.push(`/post/${post.id}/comments`);
     };
 
-    const postDate = post.created_at?.seconds 
-        ? new Date(post.created_at.seconds * 1000).toLocaleDateString('pt-MZ') 
-        : 'Agora mesmo';
+    const postDate = formatTime(post.created_at);
 
     return (
         <View style={styles.card}>
@@ -216,6 +215,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.md,
         ...(Platform.OS === 'web' ? {
             borderWidth: 1, borderColor: '#E0DFDC',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         } : {
             shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
@@ -227,10 +227,10 @@ const styles = StyleSheet.create({
     headerText: { flex: 1 },
     authorName: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text },
     time: { fontSize: Fonts.sizes.xs, color: Colors.textLight, marginTop: 2 },
-    proximityBadge: { backgroundColor: Colors.primary + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
-    proximityText: { fontSize: 10, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
+    proximityBadge: { backgroundColor: Colors.primary + '25', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 },
+    proximityText: { fontSize: 11, color: Colors.primary, fontWeight: '800', textTransform: 'uppercase' },
     
-    content: { fontSize: Fonts.sizes.md, color: Colors.text, lineHeight: 22, marginTop: Spacing.xs, marginBottom: Spacing.sm },
+    content: { fontSize: Fonts.sizes.md, color: Colors.text, lineHeight: 24, marginTop: Spacing.xs, marginBottom: Spacing.sm },
     tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: Spacing.sm },
     tag: { backgroundColor: Colors.background, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight },
     tagText: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary, fontWeight: '600' },
@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
         opacity: 0.8,
     },
     locationSummaryTextFeed: {
-        fontSize: 12,
+        fontSize: 13,
         color: Colors.textSecondary,
         fontWeight: '500',
     },

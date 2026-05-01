@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Spacing, Fonts } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 
+// Mantido após rebrand para não pedir novamente aceitação dos termos a quem já aceitou.
 const TERMS_ACCEPTED_KEY = 'mao_segura_terms_v1';
 
 export default function TermsModal() {
@@ -52,25 +53,25 @@ export default function TermsModal() {
             <View style={styles.overlay}>
                 <View style={styles.modalCard}>
                     <View style={styles.header}>
-                        <Ionicons name="shield-checkmark" size={36} color={Colors.primary} style={{ marginBottom: 12 }} />
-                        <Text style={styles.title}>Bem-vindo ao Mão Segura</Text>
+                        <Ionicons name="briefcase" size={36} color={Colors.primary} style={{ marginBottom: 12 }} />
+                        <Text style={styles.title}>Bem-vindo ao Trabalhe já</Text>
                         <Text style={styles.subtitle}>Antes de entrar, por favor leia atentamente as nossas regras essenciais de convivência e termos de uso da comunidade.</Text>
                     </View>
 
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true}>
                         <Text style={[styles.sectionTitle, { marginTop: 0 }]}>1. Informação Real e Honesta</Text>
                         <Text style={styles.text}>
-                            Para garantir a segurança de todos, é obrigatório o uso do seu nome real e o fornecimento de contatos válidos. A criação de perfis falsos resultará no banimento imediato da conta.
+                            Para manter a comunidade fiável, é obrigatório o uso do seu nome real e o fornecimento de contatos válidos. A criação de perfis falsos resultará no banimento imediato da conta.
                         </Text>
                         
-                        <Text style={styles.sectionTitle}>2. Respeito e Segurança Mútua</Text>
+                        <Text style={styles.sectionTitle}>2. Respeito mútuo</Text>
                         <Text style={styles.text}>
                             A nossa plataforma baseia-se no respeito entre profissionais e clientes. Qualquer comportamento abusivo, assédio, violência ou linguagem inadequada será motivo de expulsão. Se suspeitar de uma burla, reporte de imediato.
                         </Text>
 
                         <Text style={styles.sectionTitle}>3. Responsabilidade do Serviço</Text>
                         <Text style={styles.text}>
-                            O Mão Segura facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
+                            O Trabalhe já facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
                         </Text>
 
                         <Text style={styles.sectionTitle}>4. Veracidade das Vagas</Text>

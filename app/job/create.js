@@ -339,7 +339,7 @@ export default function CreateJob() {
                         </View>
                     </View>
                     <Text style={{ fontSize: 11, color: Colors.textSecondary, marginTop: 4 }}>
-                        A localização é baseada no seu perfil para garantir a segurança da comunidade.
+                        A localização é baseada no seu perfil para maior transparência e confiança na comunidade.
                     </Text>
                 </View>
 

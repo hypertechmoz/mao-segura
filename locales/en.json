@@ -1,4 +1,6 @@
 {
+  "role_worker": "Worker",
+  "role_employer": "Employer",
   "tabs": {
     "home": "Home",
     "dashboard": "Dashboard",
@@ -32,8 +34,8 @@
     "welcome": "Welcome",
     "find_job": "Find Work",
     "post_job": "Post Job",
-    "hero_title": "Security and expertise for your ",
-    "hero_subtitle": "We connect households and small businesses to specialized and verified professionals."
+    "hero_title": "Work tailored to your ",
+    "hero_subtitle": "We bring clients and professionals together for home services: find who needs help nearby or who can get the job done."
   },
   "auth": {
     "login": "Login",
@@ -61,7 +63,7 @@
       "hire_button": "Hire Professional",
       "work_button": "I Want to Work",
       "trust_profiles": "Verified Profiles",
-      "trust_payments": "Secure Payments",
+      "trust_payments": "Clear agreements",
       "stats_professionals": "Professionals",
       "stats_rating": "Average Rating",
       "stats_hired": "Hires",
@@ -71,12 +73,12 @@
       "worker_card_verified": "VERIFIED PROFILE",
       "worker_heading": "Find work in minutes",
       "worker_body_1": "It's simple and free! Hundreds of families are looking for qualified professionals. Create your profile, set your skills and start receiving proposals.",
-      "worker_body_2": "From domestic workers to nannies and gardeners, Mão Segura helps you get the right opportunity for you.",
+      "worker_body_2": "From domestic workers to nannies and gardeners, Trabalhe Já helps you get the right opportunity for you.",
       "employer_card_title": "New Job Vacancy",
       "employer_card_recommended": "RECOMMENDED",
       "employer_heading": "Post your vacancy in minutes",
       "employer_body_1": "It's simple and free! Thousands of qualified professionals are waiting for opportunities. Describe your needs, set your budget and start receiving proposals in minutes.",
-      "employer_body_2": "From deep cleaning to specialized care for children or the elderly, Mão Segura helps you find the right person for your home.",
+      "employer_body_2": "From deep cleaning to specialized care for children or the elderly, Trabalhe Já helps you find the right person for your home.",
       "employer_action": "Post Free Vacancy",
       "choose_heading": "Choose the ideal professional",
       "choose_body_1": "No job is too small. We have thousands of professionals for services of any size, in more than 10 domestic specialties.",
@@ -86,12 +88,12 @@
       "support_card_text": "We are here to help with any questions or mediation needed.",
       "support_heading": "We are here to help",
       "support_body_1": "Your time is precious. Let our team of mediators and experts help you save time in talent selection.",
-      "support_body_2": "From document verification to support in case of conflicts, Mão Segura is your trusted partner in the informal market.",
+      "support_body_2": "From document verification to support when disagreements arise, Trabalhe Já is your partner connecting supply and demand in informal work.",
       "support_action": "Talk to Support",
-      "about_heading": "The largest trust network in Mozambique",
-      "about_body_1": "Mão Segura was born in 2024 with the mission of formalizing and bringing security to the domestic services market in Mozambique.",
+      "about_heading": "Connecting professionals and clients in Mozambique",
+      "about_body_1": "Trabalhe Já was born in 2024 with the mission of bringing together people looking for home services and skilled workers across Mozambique.",
       "about_body_2": "We believe that every home deserves trusted professionals and that every worker deserves to be valued and respected.",
-      "footer_desc": "The largest trust network for domestic services in Mozambique.",
+      "footer_desc": "Find professionals or work opportunities near you for domestic services in Mozambique.",
       "footer_company": "Company",
       "footer_support": "Support",
       "footer_location": "Location",
@@ -102,7 +104,7 @@
       "footer_privacy": "Privacy",
       "footer_terms": "Terms of Use",
       "how_it_works": "How it works",
-      "security": "Security",
+      "support_nav": "Support",
       "testimonials": "Testimonials",
       "about_us": "About us"
   }

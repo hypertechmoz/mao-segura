@@ -12,6 +12,7 @@ import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, query, whe
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // On mobile/native, we use AsyncStorage instead of window.localStorage
+// Mantido após rebrand para não invalidar sessões guardadas localmente.
 const PERSISTENCE_KEY = 'mao_segura_user_session';
 
 export const useAuthStore = create((set, get) => ({

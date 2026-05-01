@@ -202,7 +202,7 @@ export default function Jobs() {
                 keyExtractor={(item) => item.id}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true }
+                    { useNativeDriver: Platform.OS !== 'web' }
                 )}
                 renderItem={({ item }) => (
                     <View style={styles.card}>

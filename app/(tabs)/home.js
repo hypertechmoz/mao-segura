@@ -57,11 +57,7 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
                     )}
                 </View>
                 <Text style={styles.cardTime}>
-                    {job.created_at?.seconds
-                        ? new Date(job.created_at.seconds * 1000).toLocaleDateString('pt-MZ')
-                        : job.created_at instanceof Date
-                            ? job.created_at.toLocaleDateString('pt-MZ')
-                            : ''}
+                    {formatTime(job.created_at)}
                 </Text>
             </View>
             <Text style={styles.cardTitle}>{job.title}</Text>
@@ -341,7 +337,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                     <TouchableOpacity onPress={() => router.push('/info/privacy')}><Text style={webStyles.footerLink}>Privacidade</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={webStyles.footerLink}>Termos</Text></TouchableOpacity>
                 </View>
-                <Text style={webStyles.footerText}>Mão Segura © 2026</Text>
+                <Text style={webStyles.footerText}>Trabalhe Já © 2026</Text>
                 <Text style={webStyles.footerSub}>A sua rede de confiança</Text>
             </View>
         </View>
@@ -504,16 +500,26 @@ export default function Home() {
             const postsSnap = await getDocs(postsQuery);
             const postsData = [];
 
-            // To ensure compatibility with older posts, we fetch the role if missing
-            for (const d of postsSnap.docs) {
+            const authorPromises = [];
+            postsSnap.forEach(d => {
                 const p = { id: d.id, ...d.data() };
-                if (!p.user_role && p.user_id) {
-                    const authorSnap = await getDoc(doc(db, 'users', p.user_id));
-                    if (authorSnap.exists()) {
-                        p.user_role = authorSnap.data().role;
-                    }
-                }
                 postsData.push(p);
+                if (!p.user_role && p.user_id) {
+                    authorPromises.push({ 
+                        index: postsData.length - 1, 
+                        promise: getDoc(doc(db, 'users', p.user_id)) 
+                    });
+                }
+            });
+
+            if (authorPromises.length > 0) {
+                const authorSnaps = await Promise.all(authorPromises.map(ap => ap.promise));
+                authorPromises.forEach((ap, idx) => {
+                    const snap = authorSnaps[idx];
+                    if (snap.exists()) {
+                        postsData[ap.index].user_role = snap.data().role;
+                    }
+                });
             }
 
             // --- Location-based Sorting for Posts ---
@@ -940,7 +946,7 @@ const styles = StyleSheet.create({
 
 // === Web-Only Styles ===
 const webStyles = StyleSheet.create({
-    webContainer: { flex: 1, backgroundColor: '#F4F2EE' },
+    webContainer: { flex: 1, backgroundColor: Colors.background },
     webContentContainer: { alignItems: 'center', paddingTop: 8, paddingBottom: 40 },
     threeCol: {
         flexDirection: 'row',
@@ -981,8 +987,8 @@ const webStyles = StyleSheet.create({
     },
     profileAvatarText: { fontSize: 20, fontWeight: '700', color: Colors.primary },
     profileName: { fontSize: 15, fontWeight: '700', color: Colors.text, textAlign: 'center' },
-    profileRole: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-    profileLocation: { fontSize: 12, color: Colors.textLight, marginTop: 2 },
+    profileRole: { fontSize: 13, color: Colors.textSecondary, marginTop: 2, fontWeight: '500' },
+    profileLocation: { fontSize: 13, color: Colors.textLight, marginTop: 2 },
     completenessSection: { paddingHorizontal: 16, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.borderLight },
     completenessRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
     completenessLabel: { fontSize: 12, color: Colors.textSecondary },
@@ -1070,10 +1076,17 @@ const webStyles = StyleSheet.create({
         padding: 16,
         borderWidth: 1,
         borderColor: Colors.border,
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
+        ...Platform.select({
+            web: {
+                boxShadow: '0 4px 10px rgba(0,0,0,0.05)',
+            },
+            default: {
+                shadowColor: Colors.primary,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.05,
+                shadowRadius: 10,
+            }
+        }),
     },
     premiumWidgetHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
     bulbIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 10 },

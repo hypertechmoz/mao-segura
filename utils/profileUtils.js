@@ -48,13 +48,26 @@ export function toDate(value) {
  * @param {*} date - Firestore Timestamp ou Date
  * @returns {string} - Texto formatado
  */
-export function formatTime(date) {
+export function formatRelativeTime(date) {
     if (!date) return '';
     const d = toDate(date);
     if (isNaN(d.getTime())) return '...';
+    
     const now = new Date();
-    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return d.toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' });
-    if (diffDays === 1) return 'Ontem';
-    return d.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit' });
+    const diffMs = now - d;
+    const diffSec = Math.floor(diffMs / 1000);
+    const diffMin = Math.floor(diffSec / 60);
+    const diffHr = Math.floor(diffMin / 60);
+    const diffDay = Math.floor(diffHr / 24);
+
+    if (diffSec < 60) return 'Agora';
+    if (diffMin < 60) return `há ${diffMin} ${diffMin === 1 ? 'minuto' : 'minutos'}`;
+    if (diffHr < 24) return `há ${diffHr} ${diffHr === 1 ? 'hora' : 'horas'}`;
+    if (diffDay < 7) return `há ${diffDay} ${diffDay === 1 ? 'dia' : 'dias'}`;
+    
+    return d.toLocaleDateString('pt-MZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+export function formatTime(date) {
+    return formatRelativeTime(date);
 }
