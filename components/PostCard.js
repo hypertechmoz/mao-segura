@@ -83,12 +83,12 @@ export default function PostCard({ post }) {
         if (user.uid === post.user_id || hasActioned) return;
 
         try {
-            const conversationId = await startOrGetConversation(user, post.user_id, {
-                post_id: post.id || null,
-                last_message: post.user_role === 'EMPLOYER' ? 'Candidatou-se à vaga' : 'Interessado no perfil',
+            const { sendConnectionRequest } = await import('../utils/chatSecureHelper');
+            await sendConnectionRequest(user, post.user_id, {
+                type: post.user_role === 'EMPLOYER' ? 'APPLY' : 'CONTACT',
+                job_id: post.id || null
             });
             setHasActioned(true);
-            router.push({ pathname: `/chat/${conversationId}`, params: { name: post.author_name } });
         } catch (error) {
             console.error('Error starting conversation:', error);
         }
@@ -107,7 +107,7 @@ export default function PostCard({ post }) {
             <View style={styles.header}>
                 <TouchableOpacity 
                     style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
-                    onPress={() => router.push(post.user_role === 'WORKER' ? `/worker/${post.user_id}` : `/(tabs)/profile?id=${post.user_id}`)}
+                    onPress={() => router.push(`/user/${post.user_id}`)}
                 >
                     <View style={styles.avatar}>
                         {post.author_photo ? (

@@ -32,8 +32,7 @@ export default function Comments() {
 
         // Listen for comments
         const q = query(
-            collection(db, 'comments'),
-            where('post_id', '==', id),
+            collection(db, 'posts', id, 'comments'),
             orderBy('created_at', 'asc')
         );
 
@@ -54,7 +53,7 @@ export default function Comments() {
         setSubmitting(true);
         
         try {
-            await addDoc(collection(db, 'comments'), {
+            await addDoc(collection(db, 'posts', id, 'comments'), {
                 post_id: id,
                 user_id: user.uid,
                 author_name: user.name || 'Usuário',

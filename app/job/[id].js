@@ -16,6 +16,8 @@ export default function JobDetail() {
     const [job, setJob] = useState(null);
     const [applicants, setApplicants] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [isConnected, setIsConnected] = useState(false);
+    const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
     const loadJob = useCallback(async () => {
         if (!user) return;
@@ -40,7 +42,15 @@ export default function JobDetail() {
             if (user.role === 'WORKER') {
                 const q = query(collection(db, 'applications'), where('job_id', '==', id), where('worker_id', '==', user.uid));
                 const snap = await getDocs(q);
-                if (!snap.empty) hasApplied = true;
+                if (!snap.empty) {
+                    hasApplied = true;
+                    setHasPendingRequest(true);
+                }
+
+                // Also check connection
+                const connQ1 = query(collection(db, 'chat_conversations'), where('employer_id', '==', jobData.employer_id), where('worker_id', '==', user.uid));
+                const connSnap = await getDocs(connQ1);
+                if (!connSnap.empty && connSnap.docs[0].data().is_authorized) setIsConnected(true);
             }
 
             // Map standard format
@@ -79,19 +89,57 @@ export default function JobDetail() {
 
     const handleApply = async () => {
         if (!requireAuth()) return;
-        try {
-            await addDoc(collection(db, 'applications'), {
-                job_id: id,
-                worker_id: user.uid,
-                employer_id: job.employer_id,
-                status: 'PENDING',
-                created_at: serverTimestamp(),
-                updated_at: serverTimestamp()
-            });
-            Alert.alert('Sucesso', 'Candidatura enviada!');
-            loadJob();
-        } catch (err) {
-            Alert.alert('Erro', err.message);
+        
+        if (isConnected) {
+            try {
+                // Open Chat directly
+                const q = query(collection(db, 'chat_conversations'), where('employer_id', '==', job.employer_id), where('worker_id', '==', user.uid));
+                const snap = await getDocs(q);
+
+                let conversationId;
+                if (!snap.empty) {
+                    conversationId = snap.docs[0].id;
+                } else {
+                    const newRef = await addDoc(collection(db, 'chat_conversations'), {
+                        employer_id: job.employer_id,
+                        worker_id: user.uid,
+                        job_id: id,
+                        created_at: serverTimestamp(),
+                        updated_at: serverTimestamp(),
+                        last_message: 'Candidatura iniciada',
+                        is_authorized: true,
+                        initiated_by: user.uid
+                    });
+                    conversationId = newRef.id;
+                }
+                router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name } });
+            } catch (err) {
+                Alert.alert('Erro', err.message);
+            }
+        } else if (hasPendingRequest) {
+            Alert.alert("Aviso", "Já enviou um pedido de candidatura para esta vaga.");
+        } else {
+            try {
+                // Create the application document for employer dashboard compatibility
+                await addDoc(collection(db, 'applications'), {
+                    job_id: id,
+                    worker_id: user.uid,
+                    employer_id: job.employer_id,
+                    status: 'PENDING',
+                    created_at: serverTimestamp(),
+                    updated_at: serverTimestamp()
+                });
+
+                // Send permission to converse request
+                import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
+                    await sendConnectionRequest(user, job.employer_id, { type: 'APPLY', job_id: job.id });
+                    setHasPendingRequest(true);
+                    Alert.alert("Sucesso", "Pedido de permissão para se candidatar enviado. Será notificado quando o empregador aceitar para poderem conversar.");
+                    loadJob();
+                });
+            } catch (err) {
+                Alert.alert('Erro', err.message);
+            }
         }
     };
 
@@ -204,18 +252,18 @@ export default function JobDetail() {
 
             {isWorker && job.status === 'ACTIVE' && (
                 <View style={styles.actions}>
-                    {job.hasApplied ? (
-                        <View style={styles.appliedBanner}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-                                <Text style={styles.appliedText}>Já se candidatou</Text>
-                            </View>
+                    <TouchableOpacity 
+                        style={[styles.applyButton, (!isConnected && hasPendingRequest) && { backgroundColor: Colors.borderLight }]} 
+                        onPress={handleApply} 
+                        activeOpacity={0.8}
+                    >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "document-text")} size={18} color={(!isConnected && hasPendingRequest) ? Colors.textSecondary : Colors.white} />
+                            <Text style={[styles.applyButtonText, (!isConnected && hasPendingRequest) && { color: Colors.textSecondary }]}>
+                                {isConnected ? 'Enviar Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Candidatar-se')}
+                            </Text>
                         </View>
-                    ) : (
-                        <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.8}>
-                            <Text style={styles.applyButtonText}>Candidatar-se</Text>
-                        </TouchableOpacity>
-                    )}
+                    </TouchableOpacity>
                 </View>
             )}
 

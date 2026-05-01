@@ -1,4 +1,5 @@
 import { Tabs, Slot, useRouter, usePathname } from 'expo-router';
+import * as Font from 'expo-font';
 import { View, Text, TextInput, StyleSheet, Platform, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Colors, Fonts, Spacing, PROFESSION_CATEGORIES, JOB_TYPES } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
@@ -292,6 +293,16 @@ export default function TabLayout() {
 
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
+
+    useEffect(() => {
+        // Load fonts for web
+        if (Platform.OS === 'web') {
+            Font.loadAsync({
+                ...Ionicons.font,
+                'Ionicons': '/Ionicons.ttf',
+            });
+        }
+    }, []);
 
     useEffect(() => {
         if (!user) {

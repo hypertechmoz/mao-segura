@@ -85,8 +85,7 @@ export default function ChatScreen() {
 
         // Real-time subscription for messages
         const messagesQuery = query(
-            collection(db, 'messages'),
-            where('conversation_id', '==', id),
+            collection(db, 'chat_conversations', id, 'messages'),
             orderBy('created_at', 'asc')
         );
         const messagesUnsubscribe = onSnapshot(messagesQuery, (snapshot) => {
@@ -107,7 +106,7 @@ export default function ChatScreen() {
         setText('');
 
         try {
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                 conversation_id: id,
                 sender_id: user.uid,
                 receiver_id: receiverId,
@@ -153,7 +152,7 @@ export default function ChatScreen() {
             setContractStatus('hired');
             
             // Send system message in chat
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                 conversation_id: id,
                 sender_id: 'system',
                 receiver_id: 'all',
@@ -194,7 +193,7 @@ export default function ChatScreen() {
             setContractStatus('rejected');
             
             // Send system message
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                 conversation_id: id,
                 sender_id: 'system',
                 receiver_id: 'all',
@@ -262,7 +261,7 @@ export default function ChatScreen() {
             }
 
             // System message
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                 conversation_id: id,
                 sender_id: 'system',
                 receiver_id: 'all',
@@ -294,7 +293,7 @@ export default function ChatScreen() {
             });
 
             // System message
-            await addDoc(collection(db, 'messages'), {
+            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                 conversation_id: id,
                 sender_id: 'system',
                 receiver_id: 'all',
@@ -342,7 +341,7 @@ export default function ChatScreen() {
 
                             const systemMsg = '🚫 Infelizmente, o empregador decidiu não prosseguir com esta candidatura. Contacto encerrado.';
                             
-                            await addDoc(collection(db, 'messages'), {
+                            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
                                 conversation_id: id,
                                 sender_id: 'system',
                                 receiver_id: 'all',

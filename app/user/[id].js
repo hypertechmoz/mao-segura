@@ -8,12 +8,12 @@ import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 
-export default function WorkerDetail() {
+export default function UserDetail() {
     const router = useRouter();
     const { id } = useLocalSearchParams();
     const { user } = useAuthStore();
     const { requireAuth } = useAuthGuard();
-    const [worker, setWorker] = useState(null);
+    const [profileUser, setProfileUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [showReportModal, setShowReportModal] = useState(false);
     const [reportReason, setReportReason] = useState('');
@@ -39,7 +39,7 @@ export default function WorkerDetail() {
         try {
             await addDoc(collection(db, 'reports'), {
                 reporter_id: user.uid,
-                reported_id: worker.id,
+                reported_id: profileUser.id,
                 reason: reportReason,
                 details: reportText,
                 status: 'pending',
@@ -56,20 +56,26 @@ export default function WorkerDetail() {
         }
     };
 
-    const loadWorker = useCallback(async () => {
+    const loadUser = useCallback(async () => {
         try {
             // Fetch User Basic Info
             const userRef = doc(db, 'users', id);
             const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) throw new Error('Profissional não encontrado');
+            if (!userSnap.exists()) throw new Error('Utilizador não encontrado');
             const userData = userSnap.data();
 
-            // Fetch Worker Profile Info
-            const profileRef = doc(db, 'worker_profiles', id);
-            const profileSnap = await getDoc(profileRef);
-            const profileData = profileSnap.exists() ? profileSnap.data() : {};
+            let profileData = {};
+            if (userData.role === 'EMPLOYER') {
+                const profileRef = doc(db, 'employer_profiles', id);
+                const profileSnap = await getDoc(profileRef);
+                profileData = profileSnap.exists() ? profileSnap.data() : {};
+            } else {
+                const profileRef = doc(db, 'worker_profiles', id);
+                const profileSnap = await getDoc(profileRef);
+                profileData = profileSnap.exists() ? profileSnap.data() : {};
+            }
 
-            setWorker({
+            setProfileUser({
                 id: userSnap.id,
                 ...userData,
                 ...profileData
@@ -131,10 +137,10 @@ export default function WorkerDetail() {
     }, [user, id]);
 
     useEffect(() => {
-        loadWorker();
+        loadUser();
         loadReviews();
         checkConnection();
-    }, [loadWorker, loadReviews, checkConnection]);
+    }, [loadUser, loadReviews, checkConnection]);
 
     const handleChat = async () => {
         if (!requireAuth()) return;
@@ -164,18 +170,18 @@ export default function WorkerDetail() {
                     });
                     conversationId = newRef.id;
                 }
-                router.push({ pathname: `/chat/${conversationId}`, params: { name: worker.name } });
+                router.push({ pathname: `/chat/${conversationId}`, params: { name: profileUser.name } });
             } catch (err) {
                 Alert.alert('Erro', err.message);
             }
         } else if (hasPendingRequest) {
-            Alert.alert("Aviso", "Já enviou um pedido de conexão para este utilizador.");
+            Alert.alert("Aviso", "Já enviou um pedido de permissão para este utilizador.");
         } else {
             try {
                 import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
                     await sendConnectionRequest(user, id, { type: 'CONTACT' });
                     setHasPendingRequest(true);
-                    Alert.alert("Pedido Enviado", "Será notificado quando a outra parte aceitar iniciar a conversa.");
+                    Alert.alert("Pedido Enviado", "Será notificado quando o profissional aceitar o seu pedido para iniciar a conversa.");
                 });
             } catch (e) {
                 console.error(e);
@@ -187,32 +193,32 @@ export default function WorkerDetail() {
         return <View style={styles.loading}><ActivityIndicator size="large" color={Colors.primary} /></View>;
     }
 
-    if (!worker) return null;
+    if (!profileUser) return null;
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content}>
             <View style={styles.header}>
                 <View style={styles.avatarContainer}>
-                    {worker.profile_photo ? (
-                        <Image source={{ uri: worker.profile_photo }} style={styles.avatar} />
+                    {profileUser.profile_photo ? (
+                        <Image source={{ uri: profileUser.profile_photo }} style={styles.avatar} />
                     ) : (
                         <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                            <Text style={styles.avatarInitial}>{worker.name?.[0] || '?'}</Text>
+                            <Text style={styles.avatarInitial}>{profileUser.name?.[0] || '?'}</Text>
                         </View>
                     )}
-                    {worker.is_verified && (
+                    {profileUser.is_verified && (
                         <View style={styles.verifiedBadge}>
                             <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
                         </View>
                     )}
                 </View>
 
-                <Text style={styles.name}>{worker.name}</Text>
-                <Text style={styles.role}>{worker.work_types?.join(' & ') || worker.profession_category || 'Profissional em Geral'}</Text>
+                <Text style={styles.name}>{profileUser.name}</Text>
+                <Text style={styles.role}>{profileUser.role === 'EMPLOYER' ? 'Empregador' : (profileUser.work_types?.join(' & ') || profileUser.profession_category || 'Profissional em Geral')}</Text>
                 
                 <View style={styles.locationRow}>
                     <Ionicons name="location" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.locationText}>{worker.city}, {worker.bairro || worker.province}</Text>
+                    <Text style={styles.locationText}>{profileUser.city}, {profileUser.bairro || profileUser.province}</Text>
                 </View>
 
                 {/* Rating Summary */}
@@ -221,46 +227,52 @@ export default function WorkerDetail() {
                         {[1,2,3,4,5].map(s => (
                             <Ionicons 
                                 key={s} 
-                                name={s <= Math.round(worker.rating_avg || 0) ? "star" : "star-outline"} 
+                                name={s <= Math.round(profileUser.rating_avg || 0) ? "star" : "star-outline"} 
                                 size={16} 
                                 color="#FFB800" 
                             />
                         ))}
                     </View>
                     <Text style={styles.ratingText}>
-                        {worker.rating_avg ? worker.rating_avg.toFixed(1) : 'Sem avaliações'} 
-                        {worker.rating_count > 0 && ` (${worker.rating_count})`}
+                        {profileUser.rating_avg ? profileUser.rating_avg.toFixed(1) : 'Sem avaliações'} 
+                        {profileUser.rating_count > 0 && ` (${profileUser.rating_count})`}
                     </Text>
-                    <View style={styles.dotSeparator} />
-                    <Text style={styles.completedText}>
-                        {worker.completed_contracts || 0} trabalhos concluídos
-                    </Text>
+                    {profileUser.role === 'WORKER' && (
+                        <>
+                            <View style={styles.dotSeparator} />
+                            <Text style={styles.completedText}>
+                                {profileUser.completed_contracts || 0} trabalhos concluídos
+                            </Text>
+                        </>
+                    )}
                 </View>
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Sobre</Text>
                 <Text style={styles.description}>
-                    {worker.description || 'Este profissional ainda não adicionou uma descrição ao seu perfil.'}
+                    {profileUser.description || (profileUser.role === 'EMPLOYER' ? 'Este empregador não adicionou uma descrição.' : 'Este profissional ainda não adicionou uma descrição ao seu perfil.')}
                 </Text>
             </View>
 
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Especialidades / Tipos de Trabalho</Text>
-                <View style={styles.chips}>
-                    {worker.work_types?.length > 0 ? worker.work_types.map((type, index) => (
-                        <View key={index} style={styles.chip}>
-                            <Text style={styles.chipText}>{type}</Text>
-                        </View>
-                    )) : <Text style={styles.emptyText}>Nenhuma especialidade listada</Text>}
+            {profileUser.role === 'WORKER' && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Especialidades / Tipos de Trabalho</Text>
+                    <View style={styles.chips}>
+                        {profileUser.work_types?.length > 0 ? profileUser.work_types.map((type, index) => (
+                            <View key={index} style={styles.chip}>
+                                <Text style={styles.chipText}>{type}</Text>
+                            </View>
+                        )) : <Text style={styles.emptyText}>Nenhuma especialidade listada</Text>}
+                    </View>
                 </View>
-            </View>
+            )}
 
-            {worker.skills && worker.skills.length > 0 && (
+            {profileUser.role === 'WORKER' && profileUser.skills && profileUser.skills.length > 0 && (
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Habilidades Adicionais</Text>
                     <View style={styles.chips}>
-                        {worker.skills.map((skill, index) => (
+                        {profileUser.skills.map((skill, index) => (
                             <View key={index} style={[styles.chip, { backgroundColor: Colors.info + '15' }]}>
                                 <Text style={[styles.chipText, { color: Colors.info }]}>{skill}</Text>
                             </View>
@@ -269,59 +281,36 @@ export default function WorkerDetail() {
                 </View>
             )}
 
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Informações Adicionais</Text>
-                <View style={styles.infoGrid}>
-                    <View style={styles.infoItem}>
-                        <Text style={styles.infoLabel}>Disponibilidade</Text>
-                        <Text style={styles.infoValue}>{worker.availability === 'DAILY' ? 'Diarista' : 'Permanente'}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                        <Text style={styles.infoLabel}>Dorme no Local</Text>
-                        <Text style={styles.infoValue}>{worker.can_sleep_onsite ? 'Sim' : 'Não'}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                        <Text style={styles.infoLabel}>Experiência</Text>
-                        <Text style={styles.infoValue}>{worker.has_experience ? 'Com Experiência' : 'Iniciante'}</Text>
-                    </View>
-                    <View style={styles.infoItem}>
-                        <Text style={styles.infoLabel}>Bairro</Text>
-                        <Text style={styles.infoValue}>{worker.bairro || 'Não informado'}</Text>
+            {profileUser.role === 'WORKER' && (
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Informações Adicionais</Text>
+                    <View style={styles.infoGrid}>
+                        <View style={styles.infoItem}>
+                            <Text style={styles.infoLabel}>Disponibilidade</Text>
+                            <Text style={styles.infoValue}>{profileUser.availability === 'DAILY' ? 'Diarista' : 'Permanente'}</Text>
+                        </View>
+                        <View style={styles.infoItem}>
+                            <Text style={styles.infoLabel}>Dorme no Local</Text>
+                            <Text style={styles.infoValue}>{profileUser.can_sleep_onsite ? 'Sim' : 'Não'}</Text>
+                        </View>
+                        <View style={styles.infoItem}>
+                            <Text style={styles.infoLabel}>Experiência</Text>
+                            <Text style={styles.infoValue}>{profileUser.has_experience ? 'Com Experiência' : 'Iniciante'}</Text>
+                        </View>
+                        <View style={styles.infoItem}>
+                            <Text style={styles.infoLabel}>Bairro</Text>
+                            <Text style={styles.infoValue}>{profileUser.bairro || 'Não informado'}</Text>
+                        </View>
                     </View>
                 </View>
-            </View>
+            )}
 
             <View style={styles.actions}>
-                <TouchableOpacity 
-                    style={[styles.chatButton, { backgroundColor: Colors.white, borderWidth: 1, borderColor: Colors.primary, marginBottom: 12 }]} 
-                    onPress={async () => {
-                        if (!requireAuth()) return;
-                        if (isConnected) return;
-                        if (hasPendingRequest) {
-                            Alert.alert("Aviso", "Já enviou um pedido de conexão.");
-                            return;
-                        }
-                        try {
-                            import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
-                                await sendConnectionRequest(user, id, { type: 'CONTACT' });
-                                setHasPendingRequest(true);
-                                Alert.alert("Sucesso", "Pedido de conexão enviado!");
-                            });
-                        } catch (e) {
-                            console.error(e);
-                        }
-                    }}
-                    activeOpacity={0.8}
-                >
-                    <Ionicons name={isConnected ? "checkmark" : (hasPendingRequest ? "time" : "person-add")} size={22} color={Colors.primary} style={{ marginRight: 8 }} />
-                    <Text style={[styles.chatButtonText, { color: Colors.primary }]}>
-                        {isConnected ? 'Conectado' : (hasPendingRequest ? 'Pedido Pendente' : 'Conectar')}
-                    </Text>
-                </TouchableOpacity>
-
                 <TouchableOpacity style={styles.chatButton} onPress={handleChat} activeOpacity={0.8}>
-                    <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} style={{ marginRight: 8 }} />
-                    <Text style={styles.chatButtonText}>Contactar Profissional</Text>
+                    <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "paper-plane")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
+                    <Text style={styles.chatButtonText}>
+                        {isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Contactar')}
+                    </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.reportBtn} onPress={() => setShowReportModal(true)}>
@@ -333,7 +322,7 @@ export default function WorkerDetail() {
             {/* Reviews Section */}
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Avaliações de Clientes</Text>
+                    <Text style={styles.sectionTitle}>Avaliações</Text>
                     <Text style={styles.reviewCount}>{reviews.length}</Text>
                 </View>
                 
@@ -373,7 +362,7 @@ export default function WorkerDetail() {
                         </View>
                     ))
                 ) : (
-                    <Text style={styles.emptyReviews}>Este profissional ainda não recebeu avaliações.</Text>
+                    <Text style={styles.emptyReviews}>Nenhuma avaliação recebida.</Text>
                 )}
             </View>
 
@@ -387,7 +376,7 @@ export default function WorkerDetail() {
                             </TouchableOpacity>
                         </View>
                         
-                        <Text style={styles.modalSubtitle}>Por que motivo deseja denunciar {worker.name}?</Text>
+                        <Text style={styles.modalSubtitle}>Por que motivo deseja denunciar {profileUser.name}?</Text>
                         
                         {REPORT_REASONS.map((r, i) => (
                             <TouchableOpacity 

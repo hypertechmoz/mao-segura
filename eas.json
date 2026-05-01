@@ -14,14 +14,30 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_DOCTOR_SKIP_PEER_DEPENDENCY_CHECK": "1"
+        "EXPO_DOCTOR_SKIP_PEER_DEPENDENCY_CHECK": "1",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBUZb-z_fu__JbDomCE9EtEpDjc8LWPGaw",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "maosegura-2026.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "maosegura-2026",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "maosegura-2026.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "248978366305",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:248978366305:web:faf6acda062c14cbedaf20",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-DYGLVH09VZ"
       },
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBUZb-z_fu__JbDomCE9EtEpDjc8LWPGaw",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "maosegura-2026.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "maosegura-2026",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "maosegura-2026.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "248978366305",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:248978366305:web:faf6acda062c14cbedaf20",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-DYGLVH09VZ"
+      }
     }
   },
   "submit": {

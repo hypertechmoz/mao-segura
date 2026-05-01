@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "248978366305",
+    "project_id": "maosegura-2026",
+    "storage_bucket": "maosegura-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:248978366305:android:f7e09e8770c88411edaf20",
+        "android_client_info": {
+          "package_name": "com.maosegura.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "248978366305-f6puoq4oubkfcushl7uck9nvu894mrvn.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBPHT3nZDmxtz8gbr04QU2vDHw0h-3ubA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "248978366305-f6puoq4oubkfcushl7uck9nvu894mrvn.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

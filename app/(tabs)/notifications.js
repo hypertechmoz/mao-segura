@@ -198,7 +198,7 @@ export default function Notifications() {
 
                             list.push({
                                 id: `app-emp-${data.id}`,
-                                route: `/worker/${data.worker_id}`,
+                                route: `/user/${data.worker_id}`,
                                 icon: 'mail-unread',
                                 iconColor: Colors.info,
                                 title: 'Nova Candidatura',

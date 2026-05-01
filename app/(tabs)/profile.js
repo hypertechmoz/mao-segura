@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, RefreshControl, Platform, Image, ActivityIndicator, Animated } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
@@ -40,7 +40,11 @@ export default function Profile() {
         outputRange: [0, -HEADER_HEIGHT],
     });
 
-    const isOwnProfile = !id || id === user?.uid;
+    const isOwnProfile = useMemo(() => {
+        if (!user) return false;
+        if (!id) return true;
+        return id === user.uid;
+    }, [id, user?.uid]);
 
     const load = useCallback(async () => {
         const targetId = id || user?.uid;
@@ -183,7 +187,7 @@ export default function Profile() {
                 contentContainerStyle={[styles.content, !isWeb && { marginTop: HEADER_HEIGHT }]}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                    { useNativeDriver: true }
+                    { useNativeDriver: Platform.OS !== 'web' }
                 )}
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
             >
@@ -386,7 +390,7 @@ export default function Profile() {
                         <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text style={{fontWeight: '700', color: Colors.primary}}>Studio do Scott</Text></Text>
                     </View>
                 </View>
-            ) : (
+            ) : (!user || p?.id !== user?.uid) && (
                 <View style={styles.actions}>
                     <TouchableOpacity 
                         style={[
@@ -397,6 +401,7 @@ export default function Profile() {
                         onPress={async () => {
                             if (!user) { router.push('/auth/login'); return; }
                             if (isConnected || hasPendingRequest || processing) return;
+                            if (p.id === user.uid) return; // Segurança extra
                             
                             setProcessing(true);
                             try {
@@ -409,7 +414,7 @@ export default function Profile() {
                                 setProcessing(false);
                             }
                         }}
-                        disabled={isConnected || hasPendingRequest || processing}
+                        disabled={isConnected || hasPendingRequest || processing || p.id === user.uid}
                         activeOpacity={0.8}
                     >
                         {processing ? (
@@ -437,33 +442,11 @@ export default function Profile() {
                                 return;
                             }
                             try {
-                                const isWorker = user.role === 'WORKER';
-                                const fieldSelf = isWorker ? 'worker_id' : 'employer_id';
-                                const fieldOther = isWorker ? 'employer_id' : 'worker_id';
-
-                                const q = query(
-                                    collection(db, 'chat_conversations'), 
-                                    where(fieldSelf, '==', user.uid), 
-                                    where(fieldOther, '==', p.id)
-                                );
-                                const snap = await getDocs(q);
-
-                                let conversationId;
-                                if (!snap.empty) {
-                                    conversationId = snap.docs[0].id;
-                                } else {
-                                    const newRef = await addDoc(collection(db, 'chat_conversations'), {
-                                        employer_id: isWorker ? p.id : user.uid,
-                                        worker_id: isWorker ? user.uid : p.id,
-                                        created_at: serverTimestamp(),
-                                        updated_at: serverTimestamp(),
-                                        last_message: 'Pedido de contacto enviado',
-                                        is_authorized: false,
-                                        initiated_by: user.uid
-                                    });
-                                    conversationId = newRef.id;
-                                }
-                                router.push({ pathname: `/chat/${conversationId}`, params: { name: p.name } });
+                                const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
+                                await sendConnectionRequest(user, p.id, {
+                                    type: p.role === 'WORKER' ? 'CONTACT' : 'APPLY'
+                                });
+                                setHasPendingRequest(true);
                             } catch (err) {
                                 console.error('Error starting chat:', err);
                             }

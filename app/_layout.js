@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -27,6 +28,9 @@ export default function RootLayout() {
     
     const [fontsLoaded] = useFonts({
         ...Ionicons.font,
+        ...(Platform.OS === 'web' ? {
+            'Ionicons': '/Ionicons.ttf',
+        } : {}),
     });
 
     useEffect(() => {
@@ -79,7 +83,7 @@ export default function RootLayout() {
                 <Stack.Screen name="job/create" options={{ headerShown: false }} />
                 <Stack.Screen name="post/create" options={{ headerShown: false }} />
                 <Stack.Screen name="post/[id]/comments" options={{ headerShown: false }} />
-                <Stack.Screen name="worker/[id]" options={{ headerShown: false }} />
+                <Stack.Screen name="user/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="auth/success" options={{ headerShown: false }} />
                 <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="settings/edit-profile" options={{ title: 'Editar Perfil' }} />

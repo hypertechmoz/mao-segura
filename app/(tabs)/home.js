@@ -44,7 +44,7 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
     const isNear = userLocation?.city && job.city && userLocation.city.toLowerCase() === job.city.toLowerCase();
 
     return (
-        <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.card} onPress={() => router.push(`/job/${job.id}`)} activeOpacity={0.7}>
             <View style={styles.cardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={styles.cardType}>
@@ -81,7 +81,7 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
             <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                 <TouchableOpacity
                     style={styles.cardEmployer}
-                    onPress={() => router.push(`/(tabs)/profile?id=${job.employer_id}`)}
+                    onPress={() => router.push(`/user/${job.employer_id}`)}
                 >
                     <View style={styles.employerAvatar}>
                         {job.employer?.profile_photo ? (
@@ -102,14 +102,20 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
                 <TouchableOpacity
                     style={[
                         { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
-                        isApplied ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
+                        isApplied === 'PENDING' ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
                     ]}
-                    onPress={() => !isApplied && onPress('APPLY', job)}
-                    disabled={isApplied}
+                    onPress={() => {
+                        if (isApplied && isApplied !== 'PENDING') {
+                            router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name } });
+                        } else if (!isApplied) {
+                            onPress('APPLY', job);
+                        }
+                    }}
+                    disabled={isApplied === 'PENDING'}
                 >
-                    <Ionicons name={isApplied ? "checkmark-circle" : "document-text"} size={14} color={isApplied ? Colors.textSecondary : Colors.white} style={{ marginRight: 6 }} />
-                    <Text style={{ color: isApplied ? Colors.textSecondary : Colors.white, fontWeight: '700', fontSize: 13 }}>
-                        {isApplied ? 'Candidatado' : 'Candidatar'}
+                    <Ionicons name={isApplied === 'PENDING' ? "time" : (isApplied ? "chatbubbles" : "document-text")} size={14} color={isApplied === 'PENDING' ? Colors.textSecondary : Colors.white} style={{ marginRight: 6 }} />
+                    <Text style={{ color: isApplied === 'PENDING' ? Colors.textSecondary : Colors.white, fontWeight: '700', fontSize: 13 }}>
+                        {isApplied === 'PENDING' ? 'Pendente' : (isApplied ? 'Mensagem' : 'Candidatar')}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -121,7 +127,7 @@ function WorkerCard({ worker, onPress, userLocation, isContacted }) {
     const isNear = userLocation?.city && worker.city && userLocation.city.toLowerCase() === worker.city.toLowerCase();
 
     return (
-        <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.card} onPress={() => router.push(`/user/${worker.id}`)} activeOpacity={0.7}>
             <View style={styles.cardHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <View style={styles.cardType}>
@@ -170,14 +176,20 @@ function WorkerCard({ worker, onPress, userLocation, isContacted }) {
                 <TouchableOpacity
                     style={[
                         { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
-                        isContacted ? { backgroundColor: Colors.borderLight } : { borderWidth: 1, borderColor: Colors.primary }
+                        isContacted === 'PENDING' ? { backgroundColor: Colors.borderLight, borderWidth: 0 } : { borderWidth: 1, borderColor: Colors.primary }
                     ]}
-                    onPress={() => !isContacted && onPress('CONTACT', worker)}
-                    disabled={isContacted}
+                    onPress={() => {
+                        if (isContacted && isContacted !== 'PENDING') {
+                            router.push({ pathname: `/chat/${isContacted}`, params: { name: worker.name } });
+                        } else if (!isContacted) {
+                            onPress('CONTACT', worker);
+                        }
+                    }}
+                    disabled={isContacted === 'PENDING'}
                 >
-                    <Ionicons name={isContacted ? "checkmark-circle" : "chatbubble-ellipses"} size={14} color={isContacted ? Colors.textSecondary : Colors.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: isContacted ? Colors.textSecondary : Colors.primary, fontWeight: '700', fontSize: 12 }}>
-                        {isContacted ? 'Contactado' : 'Contactar'}
+                    <Ionicons name={isContacted === 'PENDING' ? "time" : (isContacted ? "chatbubbles" : "chatbubble-ellipses")} size={14} color={isContacted === 'PENDING' ? Colors.textSecondary : Colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={{ color: isContacted === 'PENDING' ? Colors.textSecondary : Colors.primary, fontWeight: '700', fontSize: 12 }}>
+                        {isContacted === 'PENDING' ? 'Pendente' : (isContacted ? 'Mensagem' : 'Contactar')}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -277,7 +289,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                     <Text style={webStyles.widgetTitle}>Recomendado para si</Text>
                     {suggestedUsers.map((sugg, i) => (
                         <View key={`sugg-${i}`} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-                            <TouchableOpacity onPress={() => router.push(`/(tabs)/profile?id=${sugg.id}`)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' }}>
+                            <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' }}>
                                 {sugg.profile_photo ? (
                                     <Image source={{ uri: sugg.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                                 ) : (
@@ -285,7 +297,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                                 )}
                             </TouchableOpacity>
                             <View style={{ flex: 1 }}>
-                                <TouchableOpacity onPress={() => router.push(`/(tabs)/profile?id=${sugg.id}`)}>
+                                <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)}>
                                     <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
@@ -348,7 +360,7 @@ export default function Home() {
     const [feedTab, setFeedTab] = useState('POSTS');
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
-    const [actionedIds, setActionedIds] = useState(new Set());
+    const [actionedIds, setActionedIds] = useState(new Map());
     const [completeness, setCompleteness] = useState(user?.completeness || 0);
     const { width } = useWindowDimensions();
     const isWeb = Platform.OS === 'web';
@@ -382,7 +394,7 @@ export default function Home() {
         if (user.uid === targetId) return;
 
         // Feedback imediato na UI
-        setActionedIds(prev => new Set(prev).add(item.id));
+        setActionedIds(prev => new Map(prev).set(item.id, 'PENDING'));
 
         try {
             const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
@@ -394,7 +406,7 @@ export default function Home() {
             console.error('Error sending request:', err);
             // Reverter em caso de erro
             setActionedIds(prev => {
-                const next = new Set(prev);
+                const next = new Map(prev);
                 next.delete(item.id);
                 return next;
             });
@@ -519,7 +531,7 @@ export default function Home() {
             setPosts(postsData);
 
             // Fetch Actioned IDs (Conversations & Connection Requests) first for filtering
-            let currentActionedIds = new Set();
+            let currentActionedIds = new Map();
             if (user) {
                 // 1. Existing Conversations
                 const fieldSelf = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
@@ -527,9 +539,11 @@ export default function Home() {
                 const convSnap = await getDocs(convQ);
                 convSnap.forEach(d => {
                     const data = d.data();
-                    if (data.job_id) currentActionedIds.add(data.job_id);
-                    const otherId = user.role === 'WORKER' ? data.employer_id : data.worker_id;
-                    if (otherId) currentActionedIds.add(otherId);
+                    if (data.is_authorized) {
+                        if (data.job_id) currentActionedIds.set(data.job_id, d.id);
+                        const otherId = user.role === 'WORKER' ? data.employer_id : data.worker_id;
+                        if (otherId) currentActionedIds.set(otherId, d.id);
+                    }
                 });
 
                 // 2. Sent Connection Requests
@@ -537,8 +551,8 @@ export default function Home() {
                 const sentSnap = await getDocs(sentReqQ);
                 sentSnap.forEach(d => {
                     const data = d.data();
-                    if (data.job_id) currentActionedIds.add(data.job_id);
-                    if (data.receiver_id) currentActionedIds.add(data.receiver_id);
+                    if (data.job_id && !currentActionedIds.has(data.job_id)) currentActionedIds.set(data.job_id, 'PENDING');
+                    if (data.receiver_id && !currentActionedIds.has(data.receiver_id)) currentActionedIds.set(data.receiver_id, 'PENDING');
                 });
 
                 // 3. Received Connection Requests
@@ -546,7 +560,7 @@ export default function Home() {
                 const receivedSnap = await getDocs(receivedReqQ);
                 receivedSnap.forEach(d => {
                     const data = d.data();
-                    if (data.sender_id) currentActionedIds.add(data.sender_id);
+                    if (data.sender_id && !currentActionedIds.has(data.sender_id)) currentActionedIds.set(data.sender_id, 'PENDING');
                 });
 
                 setActionedIds(currentActionedIds);
@@ -699,8 +713,8 @@ export default function Home() {
                                                 return <PostCard key={`post-${item.id}`} post={item} />;
                                             } else {
                                                 return (!user || user.role === 'WORKER')
-                                                    ? <JobCard key={`job-${item.id}`} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />
-                                                    : <WorkerCard key={`worker-${item.id}`} worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.has(item.id)} />;
+                                                    ? <JobCard key={`job-${item.id}`} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />
+                                                    : <WorkerCard key={`worker-${item.id}`} worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.get(item.id)} />;
                                             }
                                         })
                                     )}
@@ -784,7 +798,7 @@ export default function Home() {
                     keyExtractor={(item) => item.id}
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-                        { useNativeDriver: true }
+                        { useNativeDriver: Platform.OS !== 'web' }
                     )}
                     ListHeaderComponent={() => (
                         <View>
@@ -797,8 +811,8 @@ export default function Home() {
                                 return <PostCard post={item} />;
                             } else {
                                 return (!user || user.role === 'WORKER')
-                                    ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.has(item.id)} />
-                                    : <WorkerCard worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.has(item.id)} />;
+                                    ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />
+                                    : <WorkerCard worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.get(item.id)} />;
                             }
                         }
                         return (!user || user.role === 'WORKER')

@@ -156,10 +156,31 @@ export default function Network() {
                             </View>
                             <View style={styles.requestActions}>
                                 <TouchableOpacity 
-                                    style={[styles.btn, styles.btnAccept]}
-                                    onPress={() => acceptConnectionRequest(req.id, user, req.sender_id)}
+                                    style={[styles.btn, styles.btnAccept, processingIds.has(req.id) && { opacity: 0.5 }]}
+                                    onPress={async () => {
+                                        if (processingIds.has(req.id)) return;
+                                        setProcessingIds(prev => new Set(prev).add(req.id));
+                                        try {
+                                            await acceptConnectionRequest(req.id, user, req.sender_id);
+                                            // Remover da lista local para feedback instantâneo
+                                            setPendingRequests(prev => prev.filter(p => p.id !== req.id));
+                                        } catch (e) {
+                                            console.error(e);
+                                        } finally {
+                                            setProcessingIds(prev => {
+                                                const next = new Set(prev);
+                                                next.delete(req.id);
+                                                return next;
+                                            });
+                                        }
+                                    }}
+                                    disabled={processingIds.has(req.id)}
                                 >
-                                    <Text style={styles.btnAcceptText}>Aceitar</Text>
+                                    {processingIds.has(req.id) ? (
+                                        <ActivityIndicator size="small" color={Colors.white} />
+                                    ) : (
+                                        <Text style={styles.btnAcceptText}>Aceitar</Text>
+                                    )}
                                 </TouchableOpacity>
                                 <TouchableOpacity 
                                     style={[styles.btn, styles.btnReject]}
@@ -184,7 +205,7 @@ export default function Network() {
                             <TouchableOpacity 
                                 key={`conn-${conn.id}`} 
                                 style={styles.listCard}
-                                onPress={() => router.push(`/(tabs)/profile?id=${conn.id}`)}
+                                onPress={() => router.push(`/user/${conn.id}`)}
                                 activeOpacity={0.8}
                             >
                                 <View style={styles.listAvatar}>
@@ -220,7 +241,7 @@ export default function Network() {
                         <TouchableOpacity 
                             key={`sugg-${sugg.id}`} 
                             style={styles.listCard}
-                            onPress={() => router.push(`/(tabs)/profile?id=${sugg.id}`)}
+                            onPress={() => router.push(`/user/${sugg.id}`)}
                             activeOpacity={0.8}
                         >
                             <View style={styles.listAvatar}>
