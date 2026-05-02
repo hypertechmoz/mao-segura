@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../components/PostCard';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
-import { calculateCompleteness } from '../../utils/profileUtils';
+import { calculateCompleteness, formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -88,10 +88,10 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
                     </View>
                     <View>
                         <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Text style={styles.employerName}>{job.employer?.name || 'Empregador'}</Text>
+                            <Text style={styles.employerName}>{job.employer?.name || 'Cliente'}</Text>
                             {job.employer?.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 4 }} />}
                         </View>
-                        <Text style={styles.applicants}>{job.applications ? job.applications[0]?.count : 0} candidatos</Text>
+                        <Text style={styles.applicants}>{job.applications_count || 0} candidatos</Text>
                     </View>
                 </TouchableOpacity>
 
@@ -101,8 +101,10 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
                         isApplied === 'PENDING' ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
                     ]}
                     onPress={() => {
-                        if (isApplied && isApplied !== 'PENDING') {
+                        if (isApplied && isApplied !== 'PENDING' && isApplied !== 'AUTHORIZED') {
                             router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name } });
+                        } else if (isApplied === 'AUTHORIZED') {
+                            onPress('MESSAGE', job);
                         } else if (!isApplied) {
                             onPress('APPLY', job);
                         }
@@ -211,7 +213,7 @@ function WebLeftSidebar({ user, completeness, router }) {
                     </TouchableOpacity>
                     <Text style={webStyles.profileName} numberOfLines={1}>{user.name}</Text>
                     <Text style={webStyles.profileRole}>
-                        {user.role === 'WORKER' ? user.profession_category || 'Profissional' : 'Empregador'}
+                        {user.role === 'WORKER' ? user.profession_category || 'Profissional' : 'Cliente'}
                     </Text>
                     {user.city && (
                         <Text style={webStyles.profileLocation}>{user.city}{(user.bairro || user.province) ? `, ${user.bairro || user.province}` : ''}</Text>
@@ -297,7 +299,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                                     <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
                                 </TouchableOpacity>
                                 <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
-                                    {sugg.role === 'EMPLOYER' ? 'Empregador' : (sugg.profession_category || 'Profissional')}
+                                    {sugg.role === 'EMPLOYER' ? 'Cliente' : (sugg.profession_category || 'Profissional')}
                                 </Text>
                                 <TouchableOpacity onPress={() => handleContact('CONTACT', sugg)} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center' }}>
                                     <Ionicons name="add" size={14} color={Colors.primary} />
@@ -337,8 +339,8 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                     <TouchableOpacity onPress={() => router.push('/info/privacy')}><Text style={webStyles.footerLink}>Privacidade</Text></TouchableOpacity>
                     <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={webStyles.footerLink}>Termos</Text></TouchableOpacity>
                 </View>
-                <Text style={webStyles.footerText}>Trabalhe Já © 2026</Text>
-                <Text style={webStyles.footerSub}>A sua rede de confiança</Text>
+                <Text style={webStyles.footerText}>A maior rede de contactos perto de si</Text>
+                <Text style={webStyles.footerSub}>© 2026 Trabalhe Já. Todos os direitos reservados ao Studio do Scott.</Text>
             </View>
         </View>
     );
@@ -393,6 +395,13 @@ export default function Home() {
         setActionedIds(prev => new Map(prev).set(item.id, 'PENDING'));
 
         try {
+            if (type === 'MESSAGE') {
+                const { startOrGetConversation } = await import('../../utils/chatHelper');
+                const convId = await startOrGetConversation(user, targetId);
+                router.push({ pathname: `/chat/${convId}`, params: { name: item.employer?.name || item.name } });
+                return;
+            }
+
             const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
             await sendConnectionRequest(user, targetId, {
                 type: type,
@@ -424,7 +433,6 @@ export default function Home() {
 
                 for (const docSnap of jobsSnap.docs) {
                     const job = { id: docSnap.id, ...docSnap.data() };
-                    job.applications = [{ count: job.applications_count || 0 }];
                     jobsData.push(job);
                     if (job.employer_id) {
                         empPromises.push({ index: jobsData.length - 1, promise: getDoc(doc(db, 'users', job.employer_id)) });
@@ -553,20 +561,23 @@ export default function Home() {
                 });
 
                 // 2. Sent Connection Requests
-                const sentReqQ = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid), where('status', '==', 'PENDING'));
+                const sentReqQ = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid));
                 const sentSnap = await getDocs(sentReqQ);
                 sentSnap.forEach(d => {
                     const data = d.data();
-                    if (data.job_id && !currentActionedIds.has(data.job_id)) currentActionedIds.set(data.job_id, 'PENDING');
-                    if (data.receiver_id && !currentActionedIds.has(data.receiver_id)) currentActionedIds.set(data.receiver_id, 'PENDING');
+                    if (data.job_id && !currentActionedIds.has(data.job_id)) {
+                        currentActionedIds.set(data.job_id, data.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
+                    }
                 });
 
-                // 3. Received Connection Requests
-                const receivedReqQ = query(collection(db, 'connection_requests'), where('receiver_id', '==', user.uid), where('status', '==', 'PENDING'));
-                const receivedSnap = await getDocs(receivedReqQ);
-                receivedSnap.forEach(d => {
+                // 3. Applications (Most reliable for Jobs)
+                const appsQ = query(collection(db, 'applications'), where('worker_id', '==', user.uid));
+                const appsSnap = await getDocs(appsQ);
+                appsSnap.forEach(d => {
                     const data = d.data();
-                    if (data.sender_id && !currentActionedIds.has(data.sender_id)) currentActionedIds.set(data.sender_id, 'PENDING');
+                    if (data.job_id && !currentActionedIds.has(data.job_id)) {
+                        currentActionedIds.set(data.job_id, data.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
+                    }
                 });
 
                 setActionedIds(currentActionedIds);

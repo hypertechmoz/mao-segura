@@ -20,12 +20,18 @@ export default function JobDetail() {
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
     const loadJob = useCallback(async () => {
-        if (!user) return;
+        if (!id) return;
+        setLoading(true);
         try {
             // Fetch job
             const jobRef = doc(db, 'jobs', id);
             const jobSnap = await getDoc(jobRef);
-            if (!jobSnap.exists()) throw new Error('Vaga não encontrada');
+            
+            if (!jobSnap.exists()) {
+                setJob(null);
+                setLoading(false);
+                return;
+            }
             const jobData = { id: jobSnap.id, ...jobSnap.data() };
             
             // fetch Employer
@@ -37,9 +43,19 @@ export default function JobDetail() {
                 }
             }
 
+            // --- Self-healing: Sync application count (Employer only to avoid permission errors) ---
+            if (user?.uid === jobData.employer_id) {
+                const realCountQuery = query(collection(db, 'applications'), where('job_id', '==', id));
+                const realCountSnap = await getDocs(realCountQuery);
+                if (realCountSnap.size !== jobData.applications_count) {
+                    await updateDoc(jobRef, { applications_count: realCountSnap.size });
+                    jobData.applications_count = realCountSnap.size;
+                }
+            }
+
             // Check if current worker has applied
             let hasApplied = false;
-            if (user.role === 'WORKER') {
+            if (user?.role === 'WORKER') {
                 const q = query(collection(db, 'applications'), where('job_id', '==', id), where('worker_id', '==', user.uid));
                 const snap = await getDocs(q);
                 if (!snap.empty) {
@@ -53,16 +69,8 @@ export default function JobDetail() {
                 if (!connSnap.empty && connSnap.docs[0].data().is_authorized) setIsConnected(true);
             }
 
-            // Map standard format
-            const formattedJob = {
-                ...jobData,
-                _count: { applications: jobData.applications_count || 0 },
-                hasApplied,
-            };
-            setJob(formattedJob);
-
             // Fetch applicants if Employer owns the job
-            if (user.role === 'EMPLOYER' && jobData.employer_id === user.uid) {
+            if (user?.role === 'EMPLOYER' && jobData.employer_id === user.uid) {
                 const q = query(collection(db, 'applications'), where('job_id', '==', id), where('employer_id', '==', user.uid), orderBy('created_at', 'desc'));
                 const snap = await getDocs(q);
                 const appsData = [];
@@ -76,8 +84,15 @@ export default function JobDetail() {
                 }
                 setApplicants(appsData);
             }
+            // Map standard format
+            const formattedJob = {
+                ...jobData,
+                _count: { applications: jobData.applications_count || 0 },
+                hasApplied,
+            };
+            setJob(formattedJob);
         } catch (err) {
-            Alert.alert('Erro', err.message);
+            console.error('Load job error:', err);
         } finally {
             setLoading(false);
         }
@@ -130,11 +145,31 @@ export default function JobDetail() {
                     updated_at: serverTimestamp()
                 });
 
+                // Increment applications_count on the job document
+                import('firebase/firestore').then(({ increment }) => {
+                    updateDoc(doc(db, 'jobs', id), {
+                        applications_count: increment(1)
+                    });
+                });
+
                 // Send permission to converse request
                 import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
                     await sendConnectionRequest(user, job.employer_id, { type: 'APPLY', job_id: job.id });
+                    
+                    // Create explicit notification for the employer
+                    await addDoc(collection(db, 'notifications'), {
+                        user_id: job.employer_id,
+                        sender_id: user.uid,
+                        title: 'Nova Candidatura',
+                        description: `${user.name} candidatou-se a "${job.title}".`,
+                        type: 'NEW_APPLICATION',
+                        read: false,
+                        created_at: serverTimestamp(),
+                        route: `/job/${id}`
+                    });
+
                     setHasPendingRequest(true);
-                    Alert.alert("Sucesso", "Pedido de permissão para se candidatar enviado. Será notificado quando o empregador aceitar para poderem conversar.");
+                    Alert.alert("Sucesso", "Pedido de permissão para se candidatar enviado. Será notificado quando o cliente aceitar para poderem conversar.");
                     loadJob();
                 });
             } catch (err) {
@@ -170,12 +205,66 @@ export default function JobDetail() {
         }
     };
 
-    const handleApplicationAction = async (appId, status) => {
+    const handleApplicationAction = async (app, status) => {
         try {
-            await updateDoc(doc(db, 'applications', appId), { 
+            await updateDoc(doc(db, 'applications', app.id), { 
                 status,
                 updated_at: serverTimestamp()
             });
+
+            // Se for aceite, também tentamos autorizar a conversa de chat se existir pedido pendente
+            if (status === 'ACCEPTED') {
+                try {
+                    const { acceptConnectionRequest } = await import('../../utils/chatSecureHelper');
+                    // Procurar o pedido de conexão pendente deste trabalhador para este empregador
+                    const q = query(
+                        collection(db, 'connection_requests'),
+                        where('sender_id', '==', app.worker_id),
+                        where('receiver_id', '==', user.uid),
+                        where('status', '==', 'PENDING')
+                    );
+                    const snap = await getDocs(q);
+                    if (!snap.empty) {
+                        await acceptConnectionRequest(snap.docs[0].id, user, app.worker_id);
+                    }
+                } catch (e) {
+                    console.log('Chat auth error (maybe already done):', e);
+                }
+            }
+
+            // Criar notificação para o trabalhador
+            let notifTitle = '';
+            let notifDesc = '';
+            let notifType = '';
+
+            if (status === 'ACCEPTED') {
+                notifTitle = 'Candidatura Aceite! 🎉';
+                notifDesc = `A sua candidatura para "${job.title}" foi aceite. O cliente já pode entrar em contacto.`;
+                notifType = 'APPLICATION_ACCEPTED';
+            } else if (status === 'REJECTED') {
+                notifTitle = 'Candidatura não selecionada';
+                notifDesc = `Obrigado pelo interesse na vaga "${job.title}", mas o cliente decidiu avançar com outros perfis.`;
+                notifType = 'APPLICATION_REJECTED';
+            } else if (status === 'HIRED') {
+                notifTitle = 'FOI CONTRATADO! 🏆';
+                notifDesc = `Parabéns! Você foi contratado para a vaga "${job.title}". Combine os detalhes no chat.`;
+                notifType = 'USER_HIRED';
+            }
+
+            if (notifTitle) {
+                await addDoc(collection(db, 'notifications'), {
+                    user_id: app.worker_id,
+                    sender_id: user.uid,
+                    title: notifTitle,
+                    description: notifDesc,
+                    type: notifType,
+                    read: false,
+                    created_at: serverTimestamp(),
+                    route: `/job/${id}`
+                });
+            }
+
+            Alert.alert("Sucesso", "Estado da candidatura atualizado e candidato notificado.");
             loadJob();
         } catch (err) {
             Alert.alert('Erro', err.message);
@@ -221,7 +310,7 @@ export default function JobDetail() {
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Empregador</Text>
+                <Text style={styles.sectionTitle}>Cliente</Text>
                 <View style={styles.employerCard}>
                     <View style={styles.empAvatar}>
                         <Text style={styles.empAvatarText}>{job.employer?.name?.[0] || '?'}</Text>
@@ -278,22 +367,30 @@ export default function JobDetail() {
                             <View style={styles.appInfo}>
                                 <Text style={styles.appName}>{app.worker?.name}</Text>
                                 <Text style={styles.appMeta}><Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {app.worker?.city}</Text>
+                                {app.status === 'PENDING' && (
+                                    <View style={styles.appActions}>
+                                        <TouchableOpacity style={styles.acceptBtn} onPress={() => handleApplicationAction(app, 'ACCEPTED')}>
+                                            <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleApplicationAction(app, 'REJECTED')}>
+                                            <Ionicons name="close" size={18} color={Colors.error} />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
                             </View>
-                            {app.status === 'PENDING' && (
-                                <View style={styles.appActions}>
-                                    <TouchableOpacity style={styles.acceptBtn} onPress={() => handleApplicationAction(app.id, 'ACCEPTED')}>
-                                        <Ionicons name="checkmark" size={18} color={Colors.primary} />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity style={styles.rejectBtn} onPress={() => handleApplicationAction(app.id, 'REJECTED')}>
-                                        <Ionicons name="close" size={18} color={Colors.error} />
-                                    </TouchableOpacity>
-                                </View>
+                            {app.status === 'ACCEPTED' && (
+                                <TouchableOpacity 
+                                    style={{ backgroundColor: '#4CAF50', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                                    onPress={() => handleApplicationAction(app, 'HIRED')}
+                                >
+                                    <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Contratar</Text>
+                                </TouchableOpacity>
                             )}
-                            {app.status !== 'PENDING' && (
+                            {(app.status === 'REJECTED' || app.status === 'HIRED') && (
                                 <Ionicons 
-                                    name={app.status === 'ACCEPTED' ? 'checkmark-circle' : app.status === 'REJECTED' ? 'close-circle' : 'remove-circle'} 
+                                    name={app.status === 'HIRED' ? 'checkmark-circle' : 'close-circle'} 
                                     size={22} 
-                                    color={app.status === 'ACCEPTED' ? '#4CAF50' : Colors.error} 
+                                    color={app.status === 'HIRED' ? '#4CAF50' : Colors.error} 
                                 />
                             )}
                         </View>

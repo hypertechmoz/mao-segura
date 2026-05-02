@@ -2,33 +2,37 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
-import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
+import { formatTime, formatRelativeTime, toDate } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 
-function NotificationItem({ icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
+function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
     const router = useRouter();
 
-    const handleAccept = async () => {
+    const handlePress = async () => {
         try {
-            const chatId = await acceptConnectionRequest(reqId, user, senderId);
-            if (chatId) {
-                router.push(`/chat/${chatId}`);
+            // Mark as read in Firestore if it's an explicit notification
+            if (id && id.startsWith('notif-')) {
+                const docId = id.replace('notif-', '');
+                await updateDoc(doc(db, 'notifications', docId), { read: true });
             }
+            if (route) router.push(route);
         } catch (e) {
-            console.error(e);
+            console.warn('Error marking notification as read:', e);
+            if (route) router.push(route);
         }
     };
+
     return (
         <TouchableOpacity 
             style={[nStyles.item, isNew && nStyles.itemNew]}
             activeOpacity={0.7}
-            onPress={() => route && router.push(route)}
+            onPress={handlePress}
         >
             <View style={[nStyles.iconBox, isNew && nStyles.iconBoxNew]}>
                 <Ionicons name={icon} size={22} color={iconColor || Colors.primary} />
@@ -40,16 +44,25 @@ function NotificationItem({ icon, iconColor, title, description, time, isNew, ro
 
                 {requiresAction && (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                        <TouchableOpacity onPress={handleAccept} style={{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
+                        <TouchableOpacity onPress={async (e) => {
+                            e.stopPropagation();
+                            try {
+                                const chatId = await acceptConnectionRequest(reqId, user, senderId);
+                                if (chatId) router.push(`/chat/${chatId}`);
+                            } catch(err) { console.error(err); }
+                        }} style={{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
                             <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => rejectConnectionRequest(reqId)} style={{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
+                        <TouchableOpacity onPress={(e) => {
+                            e.stopPropagation();
+                            rejectConnectionRequest(reqId);
+                        }} style={{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
                             <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>
                         </TouchableOpacity>
                     </View>
                 )}
             </View>
-            {isNew && !requiresAction && <View style={nStyles.dot} />}
+            {isNew && <View style={nStyles.dot} />}
         </TouchableOpacity>
     );
 }
@@ -80,140 +93,84 @@ export default function Notifications() {
             return;
         }
 
+        // Update last viewed timestamp to clear badge
+        updateDoc(doc(db, 'users', user.uid), { 
+            last_notifications_viewed_at: serverTimestamp() 
+        }).catch(err => console.warn('Error updating badge timestamp:', err));
+
         const unsubscribers = [];
-        let aggregatedNotifications = { apps: [], employerApps: [], msgs: [], jobs: [], connectionReqs: [] };
+        let aggregatedNotifications = { apps: [], employerApps: [], msgs: [], jobs: [], connectionReqs: [], explicit: [] };
 
         const updateState = () => {
             const all = [
+                ...aggregatedNotifications.explicit,
                 ...aggregatedNotifications.apps,
                 ...aggregatedNotifications.employerApps,
                 ...aggregatedNotifications.msgs,
                 ...aggregatedNotifications.jobs,
                 ...aggregatedNotifications.connectionReqs
             ];
-            // Sort by isNew priority, then by time (implied by Firestore order usually)
-            // But we'll try to keep them reasonably sorted
-            setNotifications(all.sort((a, b) => (b.isNew ? 1 : -0) - (a.isNew ? 1 : 0)));
+            // Sort by time
+            setNotifications(all.sort((a, b) => {
+                const timeA = toDate(a.time).getTime();
+                const timeB = toDate(b.time).getTime();
+                return timeB - timeA;
+            }));
         };
 
-        // 1. WORKER: Application status changes
+        const lastViewed = user.last_notifications_viewed_at?.seconds || 0;
+
+        // 1. WORKER: Application status changes (handled by explicit system)
         if (user.role === 'WORKER') {
-            const qApps = query(
-                collection(db, 'applications'), 
-                where('worker_id', '==', user.uid || user.id)
-            );
-            unsubscribers.push(onSnapshot(qApps, async (snap) => {
-                let filteredApps = [];
-                snap.forEach(d => {
-                    const data = d.data();
-                    if (data.status === 'ACCEPTED' || data.status === 'REJECTED') {
-                        filteredApps.push({ id: d.id, ...data });
-                    }
-                });
-                filteredApps.sort((a, b) => (b.updated_at?.seconds || 0) - (a.updated_at?.seconds || 0));
-                filteredApps = filteredApps.slice(0, 10);
-
-                const list = [];
-                for (const data of filteredApps) {
-                    let jobTitle = 'vaga';
-                    if (data.job_id) {
-                        const jSnap = await getDoc(doc(db, 'jobs', data.job_id));
-                        if (jSnap.exists()) jobTitle = jSnap.data().title;
-                    }
-                    list.push({
-                        id: `app-${data.id}`,
-                        route: `/job/${data.job_id}`,
-                        icon: data.status === 'ACCEPTED' ? 'checkmark-circle' : 'close-circle',
-                        iconColor: data.status === 'ACCEPTED' ? '#4CAF50' : Colors.error,
-                        title: data.status === 'ACCEPTED' ? 'Candidatura Aceite!' : 'Candidatura Rejeitada',
-                        description: `A sua candidatura para "${jobTitle}" foi ${data.status === 'ACCEPTED' ? 'aceite' : 'rejeitada'}.`,
-                        time: data.updated_at,
-                        isNew: (Date.now() - toDate(data.updated_at).getTime()) < 604800000,
-                    });
-                }
-                aggregatedNotifications.apps = list;
-                updateState();
-            }));
-
-            // 2. WORKER: New Jobs
-            const qJobs = query(collection(db, 'jobs'), orderBy('created_at', 'desc'), limit(15));
-            unsubscribers.push(onSnapshot(qJobs, (snap) => {
-                const activeJobs = [];
-                snap.forEach(d => {
-                    if (d.data().status === 'ACTIVE') {
-                        activeJobs.push({ id: d.id, ...d.data() });
-                    }
-                });
+            // 2. WORKER: New Jobs (Filtered by Connections)
+            const getConnectedJobs = async () => {
+                // First get connected user IDs
+                const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', user.uid));
+                const connQ2 = query(collection(db, 'connections'), where('user2_id', '==', user.uid));
+                const [snap1, snap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
                 
-                const list = activeJobs.slice(0, 5).map(data => {
-                    return {
-                        id: `job-${data.id}`,
-                        route: `/job/${data.id}`,
-                        icon: 'briefcase',
-                        iconColor: '#1976D2',
-                        title: 'Nova Vaga Publicada',
-                        description: `"${data.title}" — ${data.contract_type === 'DAILY' ? 'Diarista' : 'Trabalho'}`,
-                        time: data.created_at,
-                        isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
-                    };
-                });
-                aggregatedNotifications.jobs = list;
-                updateState();
-            }));
+                const connectedIds = new Set();
+                snap1.forEach(d => connectedIds.add(d.data().user2_id));
+                snap2.forEach(d => connectedIds.add(d.data().user1_id));
+
+                if (connectedIds.size === 0) {
+                    aggregatedNotifications.jobs = [];
+                    updateState();
+                    return;
+                }
+
+                // Now listen for jobs from these connections
+                const qJobs = query(collection(db, 'jobs'), orderBy('created_at', 'desc'), limit(20));
+                unsubscribers.push(onSnapshot(qJobs, (snap) => {
+                    const activeJobs = [];
+                    snap.forEach(d => {
+                        const data = d.data();
+                        if (data.status === 'ACTIVE' && connectedIds.has(data.employer_id)) {
+                            activeJobs.push({ id: d.id, ...data });
+                        }
+                    });
+                    
+                    const list = activeJobs.slice(0, 5).map(data => {
+                        return {
+                            id: `job-${data.id}`,
+                            route: `/job/${data.id}`,
+                            icon: 'briefcase',
+                            iconColor: '#1976D2',
+                            title: 'Vaga de uma conexão',
+                            description: `"${data.title}" — Postada por um contacto seu.`,
+                            time: data.created_at,
+                            isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
+                        };
+                    });
+                    aggregatedNotifications.jobs = list;
+                    updateState();
+                }));
+            };
+            getConnectedJobs();
         }
 
         // 3. EMPLOYER: New Applications
-        if (user.role === 'EMPLOYER') {
-            const getEmployerApps = async () => {
-                const jobsQuery = query(collection(db, 'jobs'), where('employer_id', '==', user.uid || user.id));
-                const jobsSnap = await getDocs(jobsQuery);
-                const employerJobIds = jobsSnap.docs.map(d => d.id);
-                
-                if (employerJobIds.length > 0) {
-                    const chunkedIds = employerJobIds.slice(0, 10);
-                    const qEmpApps = query(
-                        collection(db, 'applications'), 
-                        where('job_id', 'in', chunkedIds),
-                        where('employer_id', '==', user.uid || user.id)
-                    );
-                    unsubscribers.push(onSnapshot(qEmpApps, async (snap) => {
-                        let filteredEmpApps = [];
-                        snap.forEach(d => {
-                            if (d.data().status === 'PENDING') {
-                                filteredEmpApps.push({ id: d.id, ...d.data() });
-                            }
-                        });
-                        filteredEmpApps.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
-                        filteredEmpApps = filteredEmpApps.slice(0, 10);
-
-                        const list = [];
-                        for (const data of filteredEmpApps) {
-                            let workerName = 'Alguém';
-                            if (data.worker_id) {
-                                const wSnap = await getDoc(doc(db, 'users', data.worker_id));
-                                if (wSnap.exists()) workerName = wSnap.data().name;
-                            }
-                            const jobDoc = jobsSnap.docs.find(j => j.id === data.job_id);
-                            const jobTitle = jobDoc ? jobDoc.data().title : 'vaga';
-
-                            list.push({
-                                id: `app-emp-${data.id}`,
-                                route: `/user/${data.worker_id}`,
-                                icon: 'mail-unread',
-                                iconColor: Colors.info,
-                                title: 'Nova Candidatura',
-                                description: `${workerName} candidatou-se a "${jobTitle}".`,
-                                time: formatTime(data.created_at),
-                                isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
-                            });
-                        }
-                        aggregatedNotifications.employerApps = list;
-                        updateState();
-                    }));
-                }
-            };
-            getEmployerApps();
-        }
+            // Derived notifications for employers are now handled by the explicit system in job/[id].js
 
         // 4. ALL: Unread Messages from Chat Conversations
         const fieldMatch = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
@@ -285,6 +242,32 @@ export default function Notifications() {
             updateState();
         }));
 
+        // 5. Explicit Notifications (The new system)
+        const qExplicit = query(
+            collection(db, 'notifications'),
+            where('user_id', '==', user.uid || user.id),
+            where('read', '==', false),
+            orderBy('created_at', 'desc'),
+            limit(20)
+        );
+        unsubscribers.push(onSnapshot(qExplicit, (snap) => {
+            const list = snap.docs.map(d => {
+                const data = d.data();
+                return {
+                    id: `notif-${d.id}`,
+                    route: data.route,
+                    icon: data.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (data.type === 'USER_HIRED' ? 'trophy' : (data.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
+                    iconColor: data.type === 'APPLICATION_ACCEPTED' || data.type === 'USER_HIRED' ? '#4CAF50' : (data.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
+                    title: data.title,
+                    description: data.description,
+                    time: data.created_at,
+                    isNew: true,
+                };
+            });
+            aggregatedNotifications.explicit = list;
+            updateState();
+        }));
+
         return () => {
             unsubscribers.forEach(unsub => unsub());
             clearTimeout(loadingTimer);
@@ -293,8 +276,8 @@ export default function Notifications() {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await loadNotifications();
-        setRefreshing(false);
+        // Notifications are real-time, just a delay for UX
+        setTimeout(() => setRefreshing(false), 1000);
     };
 
     return (

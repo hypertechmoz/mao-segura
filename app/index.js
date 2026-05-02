@@ -213,7 +213,6 @@ export default function WebLandingOrSplash() {
                     </View>
                 </View>
             </View>
-
             {/* ====== SECTION 1B: FIND JOB (DARK) ====== */}
             <View ref={howItWorksRef} style={styles.darkSectionFull}>
                 <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
@@ -432,7 +431,7 @@ export default function WebLandingOrSplash() {
                     </View>
                 </View>
                 <View style={styles.footerBottom}>
-                    <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Trabalhe Já. Todos os direitos reservados.</Text>
+                    <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Trabalhe Já. Todos os direitos reservados ao Studio do Scott.</Text>
                 </View>
             </View>
 

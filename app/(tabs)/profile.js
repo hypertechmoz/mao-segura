@@ -213,7 +213,7 @@ export default function Profile() {
                     )}
                 </View>
                 <Text style={styles.role}>
-                    {p?.role === 'WORKER' ? `${p?.workerProfile?.profession_category || 'Trabalhador'}` : p?.role === 'EMPLOYER' ? 'Empregador' : 'Utilizador'}
+                    {p?.role === 'WORKER' ? `${p?.workerProfile?.profession_category || 'Profissional'}` : p?.role === 'EMPLOYER' ? 'Cliente' : 'Utilizador'}
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                     <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
@@ -453,7 +453,7 @@ export default function Profile() {
                         }}
                     >
                         <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} style={{ marginRight: 8 }} />
-                        <Text style={styles.chatButtonText}>Contactar {p?.role === 'WORKER' ? 'Profissional' : 'Empregador'}</Text>
+                        <Text style={styles.chatButtonText}>Contactar {p?.role === 'WORKER' ? 'Profissional' : 'Cliente'}</Text>
                     </TouchableOpacity>
                 </View>
             )}

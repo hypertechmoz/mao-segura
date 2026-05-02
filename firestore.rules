@@ -69,14 +69,11 @@ service cloud.firestore {
                     && request.resource.data.title is string
                     && request.resource.data.created_at is timestamp;
 
-      // Update: only job owner (employer) or admin can update.
-      // Clients are NOT allowed to modify the applications_count directly (must remain equal).
+      // Update: owner/admin full access. Anyone else can only update applications_count.
       allow update: if isAuthenticated() && (
                       isAdmin() ||
-                      (request.auth.uid == resource.data.employer_id &&
-                        request.resource.data.employer_id == resource.data.employer_id &&
-                        request.resource.data.applications_count == resource.data.applications_count
-                      )
+                      (request.auth.uid == resource.data.employer_id) ||
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['applications_count']))
                     );
 
       allow delete: if isAuthenticated() && (request.auth.uid == resource.data.employer_id || isAdmin());

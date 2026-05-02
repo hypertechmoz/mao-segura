@@ -95,7 +95,7 @@ export default function Register() {
         <View style={{ flex: 1 }}>
             <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
             <Text style={styles.heading}>
-                {role === 'EMPLOYER' ? 'Criar conta de Empregador' : 'Criar conta de Trabalhador'}
+                {role === 'EMPLOYER' ? 'Criar conta de Cliente' : 'Criar conta de Profissional'}
             </Text>
             <Text style={styles.subheading}>Preencha os dados abaixo. Nome e localização ficam associados ao seu perfil e ajudam clientes e profissionais a encontrá-lo.</Text>
 

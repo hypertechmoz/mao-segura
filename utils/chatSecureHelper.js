@@ -73,11 +73,28 @@ export async function acceptConnectionRequest(requestId, user, senderId) {
         last_message: 'O seu pedido de contacto foi aceite!'
     });
 
+    // 2.5 Ensure the conversation is authorized
+    await updateDoc(doc(db, 'chat_conversations', conversationId), {
+        is_authorized: true,
+        updated_at: serverTimestamp()
+    });
+
     // 3. Adicional: Criar a conexão mútua (se implementado)
     await addDoc(collection(db, 'connections'), {
         user1_id: user.uid,
         user2_id: senderId,
         created_at: serverTimestamp()
+    });
+
+    // 4. Criar notificação para o trabalhador (quem enviou o pedido)
+    await addDoc(collection(db, 'notifications'), {
+        user_id: senderId,
+        title: 'Ligação Aceite! 🤝',
+        description: `${user.name} aceitou o seu pedido. Já podem conversar no chat.`,
+        type: 'CONNECTION_ACCEPTED',
+        read: false,
+        created_at: serverTimestamp(),
+        route: `/chat/${conversationId}`
     });
 
     return conversationId;

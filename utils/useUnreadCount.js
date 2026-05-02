@@ -39,13 +39,16 @@ export const useUnreadCount = () => {
         let directNotifsCount = 0;
         const updateNotifBadge = () => setUnreadNotifications(appsCount + jobsCount + connReqsCount + directNotifsCount);
 
+        const lastViewed = user.last_notifications_viewed_at?.seconds || 0;
+
         if (user.role === 'WORKER') {
             const qApps = query(collection(db, 'applications'), where('worker_id', '==', user.uid || user.id));
             unsubscribers.push(onSnapshot(qApps, (snap) => {
                 let count = 0;
                 snap.forEach(d => {
                     const data = d.data();
-                    if ((data.status === 'ACCEPTED' || data.status === 'REJECTED') && (Date.now() - (data.updated_at?.seconds * 1000 || 0)) < 604800000) count++;
+                    const updatedAt = data.updated_at?.seconds || 0;
+                    if ((data.status === 'ACCEPTED' || data.status === 'REJECTED') && updatedAt > lastViewed) count++;
                 });
                 appsCount = count;
                 updateNotifBadge();
@@ -56,7 +59,8 @@ export const useUnreadCount = () => {
                 let count = 0;
                 snap.forEach(d => {
                     const data = d.data();
-                    if (data.status === 'ACTIVE' && (Date.now() - (data.created_at?.seconds * 1000 || 0)) < 604800000) count++;
+                    const createdAt = data.created_at?.seconds || 0;
+                    if (data.status === 'ACTIVE' && createdAt > lastViewed && (Date.now() / 1000 - createdAt) < 604800) count++;
                 });
                 jobsCount = count;
                 updateNotifBadge();
@@ -72,7 +76,8 @@ export const useUnreadCount = () => {
                 let count = 0;
                 snap.forEach(d => {
                     const data = d.data();
-                    if ((Date.now() - (data.created_at?.seconds * 1000 || 0)) < 604800000) count++;
+                    const createdAt = data.created_at?.seconds || 0;
+                    if (createdAt > lastViewed) count++;
                 });
                 appsCount = count;
                 updateNotifBadge();
@@ -90,7 +95,7 @@ export const useUnreadCount = () => {
             updateNotifBadge();
         }));
 
-        // 4. Fallback for a potential 'notifications' collection
+        // 4. Direct Notifications
         const qNotif = query(
             collection(db, 'notifications'),
             where('user_id', '==', user.uid || user.id),
@@ -99,7 +104,8 @@ export const useUnreadCount = () => {
         unsubscribers.push(onSnapshot(qNotif, (snap) => {
             directNotifsCount = snap.size;
             updateNotifBadge();
-        }, () => {})); // Ignore errors if collection doesn't exist yet
+        }, () => {}));
+
 
         return () => {
             unsubscribers.forEach(unsub => unsub());

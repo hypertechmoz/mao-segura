@@ -23,10 +23,13 @@ export default function ChooseType() {
                     activeOpacity={0.8}
                 >
                     <Image source={require('../../assets/images/cook.png')} style={styles.cardImage} resizeMode="cover" />
-                    <Text style={styles.cardTitle}>Encontrar Trabalho</Text>
+                    <Text style={styles.cardTitle}>Sou um Profissional</Text>
                     <Text style={styles.cardDescription}>
-                        Quero encontrar vagas de trabalho doméstico na minha zona.
+                        Quero encontrar trabalho, criar o meu perfil profissional e candidatar-me a vagas.
                     </Text>
+                    <View style={styles.noteBox}>
+                        <Text style={styles.noteText}>• Pode candidatar-se a vagas{'\n'}• Não pode publicar vagas</Text>
+                    </View>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -35,10 +38,13 @@ export default function ChooseType() {
                     activeOpacity={0.8}
                 >
                     <Image source={require('../../assets/images/plumber.png')} style={styles.cardImage} resizeMode="cover" />
-                    <Text style={styles.cardTitle}>Encontrar Trabalhador</Text>
+                    <Text style={styles.cardTitle}>Sou um Cliente</Text>
                     <Text style={styles.cardDescription}>
-                        Quero publicar vagas e encontrar profissionais de confiança.
+                        Quero publicar vagas, encontrar profissionais e gerir contratações.
                     </Text>
+                    <View style={styles.noteBox}>
+                        <Text style={styles.noteText}>• Pode publicar vagas e contratar{'\n'}• Não pode candidatar-se</Text>
+                    </View>
                 </TouchableOpacity>
             </View>
 
@@ -107,6 +113,19 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         lineHeight: 20,
         textAlign: 'center',
+        marginBottom: 8,
+    },
+    noteBox: {
+        backgroundColor: Colors.background,
+        padding: 8,
+        borderRadius: 8,
+        width: '100%',
+    },
+    noteText: {
+        fontSize: 10,
+        color: Colors.textSecondary,
+        textAlign: 'left',
+        lineHeight: 14,
     },
     loginLink: {
         alignItems: 'center',

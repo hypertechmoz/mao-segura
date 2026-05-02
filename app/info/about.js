@@ -35,7 +35,7 @@ export default function AboutUs() {
                     Versão 1.0.1
                 </Text>
                 <Text style={{ fontSize: 14, color: Colors.textSecondary }}>
-                    Criado e Desenvolvido pelo <Text style={{fontWeight: 'bold', color: Colors.primary}}>Estúdio do Scott</Text>
+                    Criado e Desenvolvido pelo <Text style={{fontWeight: 'bold', color: Colors.primary}}>Studio do Scott</Text>
                 </Text>
             </View>
         </ScrollView>

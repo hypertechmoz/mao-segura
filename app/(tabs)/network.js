@@ -235,7 +235,7 @@ export default function Network() {
 
             {/* Sugestões */}
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Pessoas que talvez conheça ({user?.province || 'Sua zona'})</Text>
+                <Text style={styles.sectionTitle}>Pessoas que talvez conheça </Text>
                 <View style={styles.listGroup}>
                     {suggestions.map(sugg => (
                         <TouchableOpacity 

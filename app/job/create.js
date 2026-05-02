@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     suggestionText: { fontSize: Fonts.sizes.md, color: Colors.text },
 
     // Chips
-    optionRow: { flexDirection: 'row', gap: 10 },
+    optionRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
     option: { flex: 1, backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, borderWidth: 1, borderColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center' },
     optionActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
     optionText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '600' },

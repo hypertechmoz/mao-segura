@@ -53,21 +53,46 @@ export default function Jobs() {
                     orderBy('created_at', 'desc')
                 );
                 const snap = await getDocs(q);
-                const mappedData = snap.docs.map(d => {
+
+                // --- Efficient Self-healing: Get real counts in one go ---
+                const appsQuery = query(collection(db, 'applications'), where('employer_id', '==', user.uid));
+                const appsSnap = await getDocs(appsQuery);
+                const realCounts = {};
+                appsSnap.forEach(d => {
+                    const jid = d.data().job_id;
+                    if (jid) realCounts[jid] = (realCounts[jid] || 0) + 1;
+                });
+
+                const mappedData = [];
+                for (const d of snap.docs) {
                     const job = d.data();
-                    return {
+                    const actualCount = realCounts[d.id] || 0;
+                    
+                    // Sync if inconsistent (ignore errors to avoid blocking UI)
+                    if (job.applications_count !== actualCount) {
+                        updateDoc(doc(db, 'jobs', d.id), { applications_count: actualCount }).catch(() => {});
+                    }
+
+                    mappedData.push({
                         id: d.id,
                         ...job,
-                        _count: { applications: job.applications_count || 0 }
-                    };
-                });
+                        applications_count: actualCount, // Use the real count for UI
+                        _count: { applications: actualCount }
+                    });
+                }
                 setItems(mappedData);
             } else {
                 // Fetch Worker's Applications
-                let qArgs = [where('worker_id', '==', user.uid), orderBy('created_at', 'desc')];
-                if (tab !== 'active') {
-                    qArgs.push(where('status', '==', tab.toUpperCase()));
+                let qArgs = [where('worker_id', '==', user.uid)];
+                if (tab === 'pending') {
+                    qArgs.push(where('status', '==', 'PENDING'));
+                } else if (tab === 'accepted') {
+                    qArgs.push(where('status', 'in', ['ACCEPTED', 'HIRED']));
                 }
+                
+                // Add sorting if possible, but keep it robust
+                qArgs.push(orderBy('created_at', 'desc'));
+
                 const q = query(collection(db, 'applications'), ...qArgs);
                 const snap = await getDocs(q);
                 
@@ -99,7 +124,7 @@ export default function Jobs() {
                         const jobData = jobMap[app.job_id];
                         const employerName = jobData.employer_id && empMap[jobData.employer_id]
                             ? empMap[jobData.employer_id].name
-                            : 'Empregador';
+                            : 'Cliente';
                         app.job = { id: jobData.id, title: jobData.title, employer: { name: employerName } };
                     }
                     mappedData.push(app);
@@ -137,65 +162,84 @@ export default function Jobs() {
         }
     };
 
+    const renderTabs = () => (
+        <View style={styles.tabs}>
+            {isEmployer ? (
+                <>
+                    <TouchableOpacity style={[styles.tab, tab === 'active' && styles.tabActive]} onPress={() => setTab('active')}>
+                        <Text style={[styles.tabText, tab === 'active' && styles.tabTextActive]}>Ativas</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.tab, tab === 'closed' && styles.tabActive]} onPress={() => setTab('closed')}>
+                        <Text style={[styles.tabText, tab === 'closed' && styles.tabTextActive]}>Encerradas</Text>
+                    </TouchableOpacity>
+                </>
+            ) : (
+                <>
+                    <TouchableOpacity style={[styles.tab, tab === 'active' && styles.tabActive]} onPress={() => setTab('active')}>
+                        <Text style={[styles.tabText, tab === 'active' && styles.tabTextActive]}>Todas</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.tab, tab === 'pending' && styles.tabActive]} onPress={() => setTab('pending')}>
+                        <Text style={[styles.tabText, tab === 'pending' && styles.tabTextActive]}>Pendentes</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.tab, tab === 'accepted' && styles.tabActive]} onPress={() => setTab('accepted')}>
+                        <Text style={[styles.tabText, tab === 'accepted' && styles.tabTextActive]}>Aceites</Text>
+                    </TouchableOpacity>
+                </>
+            )}
+        </View>
+    );
+
     return (
         <View style={styles.container}>
-            {/* Custom Animated Header (Mobile) */}
-            {!isWeb && (
-                <Animated.View style={[
-                    styles.mobileHeader, 
-                    { 
-                        height: HEADER_HEIGHT, 
-                        paddingTop: insets.top,
-                        transform: [{ translateY: headerTranslateY }],
-                    }
-                ]}>
-                    <View style={styles.headerContent}>
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Ionicons name="briefcase-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
-                            <Text style={styles.headerTitle}>{t('tabs.jobs')}</Text>
+            {/* Header Content - Always visible on Web, Animated on Mobile */}
+            <View style={isWeb ? styles.webHeader : styles.mobileHeaderContainer}>
+                {!isWeb ? (
+                    <Animated.View style={[
+                        styles.mobileHeader, 
+                        { 
+                            height: HEADER_HEIGHT, 
+                            paddingTop: insets.top,
+                            transform: [{ translateY: headerTranslateY }],
+                        }
+                    ]}>
+                        <View style={styles.headerContent}>
+                            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                                <Ionicons name="briefcase-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
+                                <Text style={styles.headerTitle}>{isEmployer ? 'Minhas Vagas' : 'Minhas Candidaturas'}</Text>
+                            </View>
+                            <View style={styles.headerActions}>
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/search')}>
+                                    <Ionicons name="search-outline" size={24} color={Colors.primary} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
+                                    <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
+                                    {unreadNotifications > 0 && (
+                                        <View style={styles.headerBadge}>
+                                            <Text style={styles.headerBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <View style={styles.headerActions}>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/search')}>
-                                <Ionicons name="search-outline" size={24} color={Colors.primary} />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
-                                <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
-                                {unreadNotifications > 0 && (
-                                    <View style={styles.headerBadge}>
-                                        <Text style={styles.headerBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
+                        {renderTabs()}
+                    </Animated.View>
+                ) : (
+                    <View style={styles.webHeaderInner}>
+                        <View style={styles.webHeaderTop}>
+                            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                                <Ionicons name="briefcase-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
+                                <Text style={styles.headerTitle}>{isEmployer ? 'Minhas Vagas' : 'Minhas Candidaturas'}</Text>
+                            </View>
+                            {isEmployer && (
+                                <TouchableOpacity style={styles.webCreateBtn} onPress={() => router.push('/job/create')}>
+                                    <Ionicons name="add" size={24} color={Colors.white} />
+                                </TouchableOpacity>
+                            )}
                         </View>
+                        {renderTabs()}
                     </View>
-
-                    {/* Integrated Mobile Tabs */}
-                    <View style={styles.tabs}>
-                        {isEmployer ? (
-                            <>
-                                <TouchableOpacity style={[styles.tab, tab === 'active' && styles.tabActive]} onPress={() => setTab('active')}>
-                                    <Text style={[styles.tabText, tab === 'active' && styles.tabTextActive]}>Ativas</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.tab, tab === 'closed' && styles.tabActive]} onPress={() => setTab('closed')}>
-                                    <Text style={[styles.tabText, tab === 'closed' && styles.tabTextActive]}>Encerradas</Text>
-                                </TouchableOpacity>
-                            </>
-                        ) : (
-                            <>
-                                <TouchableOpacity style={[styles.tab, tab === 'active' && styles.tabActive]} onPress={() => setTab('active')}>
-                                    <Text style={[styles.tabText, tab === 'active' && styles.tabTextActive]}>Todas</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.tab, tab === 'pending' && styles.tabActive]} onPress={() => setTab('pending')}>
-                                    <Text style={[styles.tabText, tab === 'pending' && styles.tabTextActive]}>Pendentes</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.tab, tab === 'accepted' && styles.tabActive]} onPress={() => setTab('accepted')}>
-                                    <Text style={[styles.tabText, tab === 'accepted' && styles.tabTextActive]}>Aceites</Text>
-                                </TouchableOpacity>
-                            </>
-                        )}
-                    </View>
-                </Animated.View>
-            )}
+                )}
+            </View>
 
             <Animated.FlatList
                 data={items}
@@ -305,6 +349,7 @@ const styles = StyleSheet.create({
     },
     
     // Header Mobile (Sync with home.js)
+    mobileHeaderContainer: { zIndex: 1000 },
     mobileHeader: {
         backgroundColor: Colors.white,
         position: 'absolute',
@@ -332,5 +377,37 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
+    },
+    webHeader: {
+        backgroundColor: Colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight,
+        paddingTop: Spacing.md,
+    },
+    webHeaderInner: {
+        maxWidth: 700,
+        alignSelf: 'center',
+        width: '100%',
+        paddingHorizontal: Spacing.md,
+    },
+    webHeaderTop: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: Spacing.md,
+    },
+    webCreateBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        gap: 6,
+    },
+    webCreateBtnText: {
+        color: Colors.white,
+        fontWeight: '700',
+        fontSize: 14,
     },
 });

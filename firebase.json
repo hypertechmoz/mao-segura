@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "trabalheja",
     "public": "dist",
     "ignore": [
       "firebase.json",
@@ -14,6 +15,7 @@
     ]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   }
 }

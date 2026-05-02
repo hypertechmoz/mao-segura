@@ -42,8 +42,13 @@ export default function CreatePost() {
     };
 
     const handleCreatePost = async () => {
-        if (!content.trim() && !imageUri && !workType) {
-            Alert.alert('Aviso', 'Escreva algo, adicione opções ou selecione uma imagem para publicar.');
+        if (!category) {
+            Alert.alert('Aviso', 'Por favor, selecione uma categoria de serviço.');
+            return;
+        }
+
+        if (!content.trim()) {
+            Alert.alert('Aviso', 'Por favor, escreva uma descrição ou detalhes da sua disponibilidade/vaga.');
             return;
         }
 
@@ -114,8 +119,8 @@ export default function CreatePost() {
                     <Text style={styles.headerTitle}>Criar Publicação</Text>
                     <TouchableOpacity 
                         onPress={handleCreatePost} 
-                        disabled={loading || (!content.trim() && !imageUri && !workType && !customWorkType.trim())}
-                        style={[styles.publishBtn, (!content.trim() && !imageUri && !workType && !customWorkType.trim()) && styles.publishBtnDisabled]}
+                        disabled={loading || !content.trim() || !category}
+                        style={[styles.publishBtn, (loading || !content.trim() || !category) && styles.publishBtnDisabled]}
                     >
                         {loading ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.publishBtnText}>Publicar</Text>}
                     </TouchableOpacity>
@@ -157,7 +162,12 @@ export default function CreatePost() {
                     </View>
 
                     <Text style={styles.sectionLabel}>Categoria do Serviço</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                    <ScrollView 
+                        horizontal={Platform.OS !== 'web'} 
+                        showsHorizontalScrollIndicator={Platform.OS === 'web'} 
+                        style={styles.chipsScroll}
+                        contentContainerStyle={Platform.OS === 'web' && { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                    >
                         {PROFESSION_CATEGORIES.map(cat => (
                             <TouchableOpacity
                                 key={cat}
@@ -172,7 +182,12 @@ export default function CreatePost() {
                     {category && category !== 'Outro' && (
                         <>
                             <Text style={styles.sectionLabel}>Tipo de Trabalho / Especialização</Text>
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll}>
+                            <ScrollView 
+                                horizontal={Platform.OS !== 'web'} 
+                                showsHorizontalScrollIndicator={Platform.OS === 'web'} 
+                                style={styles.chipsScroll}
+                                contentContainerStyle={Platform.OS === 'web' && { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                            >
                                 {JOBS_CATEGORIES_MAP[category]?.map(type => (
                                     <TouchableOpacity
                                         key={type}
@@ -200,7 +215,12 @@ export default function CreatePost() {
                     )}
 
                     <Text style={styles.sectionLabel}>Disponibilidade ou Turno</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsScroll} contentContainerStyle={{ paddingRight: 20 }}>
+                    <ScrollView 
+                        horizontal={Platform.OS !== 'web'} 
+                        showsHorizontalScrollIndicator={Platform.OS === 'web'} 
+                        style={styles.chipsScroll} 
+                        contentContainerStyle={Platform.OS === 'web' ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } : { paddingRight: 20 }}
+                    >
                         {['Imediato', 'Integral', 'Meio-período', 'Permanente', 'Diarista', 'Temporário'].map(type => (
                             <TouchableOpacity
                                 key={type}
@@ -263,7 +283,7 @@ const styles = StyleSheet.create({
     input: { fontSize: Fonts.sizes.md, color: Colors.text, minHeight: 120, textAlignVertical: 'top', padding: 0, marginBottom: Spacing.sm },
     
     sectionLabel: { fontSize: Fonts.sizes.sm, fontWeight: '700', color: Colors.textSecondary, marginTop: Spacing.sm, marginBottom: 8 },
-    chipsScroll: { flexDirection: 'row', marginBottom: Spacing.md },
+    chipsScroll: { marginBottom: Spacing.md },
     chip: { backgroundColor: Colors.background, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, marginRight: 8, borderWidth: 1, borderColor: Colors.borderLight },
     chipActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
     chipText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '500' },
