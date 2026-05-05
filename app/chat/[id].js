@@ -598,7 +598,7 @@ export default function ChatScreen() {
                 </View>
             </Modal>
 
-            <View style={[styles.inputBar, !isAuthorized && styles.inputDisabled]}>
+            <View style={[styles.inputBar, !isAuthorized && styles.inputDisabled, { paddingBottom: Math.max(insets.bottom, 8) }]}>
                 <TextInput
                     style={[styles.textInput, !isAuthorized && {backgroundColor: '#f1f1f1'}]}
                     placeholder={isAuthorized ? "Mensagem..." : "Chat bloqueado..."}
