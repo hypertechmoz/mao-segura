@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
@@ -13,6 +13,19 @@ export default function Login() {
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
+
+    useState(() => {
+        const backAction = () => {
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace('/');
+            }
+            return true;
+        };
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+        return () => backHandler.remove();
+    }, []);
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -32,6 +45,11 @@ export default function Login() {
 
     return (
         <View style={styles.container}>
+            <View style={styles.topNav}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
+                </TouchableOpacity>
+            </View>
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
                     <View style={styles.logoBox}>
@@ -119,6 +137,19 @@ export default function Login() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.white },
+    topNav: {
+        paddingTop: Platform.OS === 'ios' ? 50 : 20,
+        paddingHorizontal: Spacing.md,
+        paddingBottom: 10,
+    },
+    backBtn: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+    },
     content: { padding: Spacing.lg, flexGrow: 1, justifyContent: 'center', ...(Platform.OS === 'web' ? { maxWidth: 450, alignSelf: 'center', width: '100%' } : {}) },
     header: { alignItems: 'center', marginBottom: Spacing.xl },
     logoBox: {

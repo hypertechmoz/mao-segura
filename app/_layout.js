@@ -44,16 +44,17 @@ export default function RootLayout() {
     }, [isLoading, fontsLoaded]);
 
     useEffect(() => {
-        if (user && expoPushToken && user.pushToken !== expoPushToken) {
+        const userId = user?.uid || user?.id;
+        if (userId && expoPushToken && user.pushToken !== expoPushToken) {
             // Save valid token to Firestore if different
-            updateDoc(doc(db, 'users', user.uid), {
+            updateDoc(doc(db, 'users', userId), {
                 pushToken: expoPushToken
             }).catch(e => console.error('Erro ao guardar pushToken:', e));
             
             // Minimal optimistic update to avoid loop
             useAuthStore.setState({ user: { ...user, pushToken: expoPushToken }});
         }
-    }, [user?.uid, expoPushToken]);
+    }, [user?.uid, user?.id, expoPushToken]);
 
     return (
         <>

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../../components/PostCard';
+import { sendPushNotification } from '../../../services/notificationService';
 
 export default function Comments() {
     const { id } = useLocalSearchParams();
@@ -67,6 +68,59 @@ export default function Comments() {
             await updateDoc(doc(db, 'posts', id), {
                 comments_count: increment(1)
             });
+
+            // Enviar notificações
+            try {
+                // 1. Notificar autor do post (se não for o próprio user)
+                if (post && post.user_id !== user.uid) {
+                    await addDoc(collection(db, 'notifications'), {
+                        user_id: post.user_id,
+                        sender_id: user.uid,
+                        title: 'Novo Comentário! 💬',
+                        description: `${user.name || 'Alguém'} comentou na sua publicação.`,
+                        type: 'POST_COMMENT',
+                        read: false,
+                        created_at: serverTimestamp(),
+                        route: `/post/${id}/comments`
+                    });
+
+                    // Push
+                    const authorSnap = await getDoc(doc(db, 'users', post.user_id));
+                    if (authorSnap.exists() && authorSnap.data().pushToken) {
+                        await sendPushNotification(
+                            authorSnap.data().pushToken,
+                            'Novo Comentário! 💬',
+                            `${user.name || 'Alguém'} comentou na sua publicação.`
+                        );
+                    }
+                }
+
+                // 2. Notificar quem está a ser respondido (se houver e não for o autor do post nem o próprio user)
+                if (replyingTo && replyingTo.user_id !== user.uid && replyingTo.user_id !== post?.user_id) {
+                    await addDoc(collection(db, 'notifications'), {
+                        user_id: replyingTo.user_id,
+                        sender_id: user.uid,
+                        title: 'Responderam ao seu comentário! ↩️',
+                        description: `${user.name || 'Alguém'} respondeu ao seu comentário.`,
+                        type: 'COMMENT_REPLY',
+                        read: false,
+                        created_at: serverTimestamp(),
+                        route: `/post/${id}/comments`
+                    });
+
+                    // Push
+                    const replierSnap = await getDoc(doc(db, 'users', replyingTo.user_id));
+                    if (replierSnap.exists() && replierSnap.data().pushToken) {
+                        await sendPushNotification(
+                            replierSnap.data().pushToken,
+                            'Responderam ao seu comentário! ↩️',
+                            `${user.name || 'Alguém'} respondeu ao seu comentário.`
+                        );
+                    }
+                }
+            } catch (err) {
+                console.warn('Erro ao notificar comentário:', err);
+            }
 
             setNewComment('');
             setReplyingTo(null);

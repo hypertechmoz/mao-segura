@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, TextInput } from 'react-native';
 import { db } from '../../services/firebase';
 import { collection, query, orderBy, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { Colors, Spacing, Fonts } from '../../constants';
@@ -9,13 +9,14 @@ export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState('ALL'); // ALL, WORKER, EMPLOYER
 
   const loadUsers = async () => {
     try {
       const q = query(collection(db, 'users'), orderBy('created_at', 'desc'));
       const snap = await getDocs(q);
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
       setUsers(data);
     } catch (err) {
       console.error(err);
@@ -27,23 +28,44 @@ export default function AdminUsers() {
 
   useEffect(() => { loadUsers(); }, []);
 
+  const filteredUsers = useMemo(() => {
+    return users.filter(u => {
+      const matchesTab = activeTab === 'ALL' || u.role === activeTab;
+      const matchesSearch = searchQuery === '' || 
+        u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        u.phone?.includes(searchQuery) ||
+        u.city?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesTab && matchesSearch;
+    });
+  }, [users, activeTab, searchQuery]);
+
   const handleBan = async (id, currentStatus) => {
-    try {
-      await updateDoc(doc(db, 'users', id), { is_active: !currentStatus });
-      loadUsers();
-    } catch (err) {
-      Alert.alert('Erro', err.message);
-    }
+    Alert.alert(
+      currentStatus ? 'Banir Utilizador' : 'Desbanir Utilizador',
+      `Tem a certeza que deseja ${currentStatus ? 'banir' : 'desbanir'} este utilizador?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Confirmar', 
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, 'users', id), { isActive: !currentStatus });
+              setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: !currentStatus } : u));
+            } catch (err) {
+              Alert.alert('Erro', err.message);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleVerify = async (id) => {
     try {
-      await updateDoc(doc(db, 'users', id), { is_verified: true });
-      
-      // Also update verification_status on worker profile if it exists
+      await updateDoc(doc(db, 'users', id), { isVerified: true });
       await setDoc(doc(db, 'worker_profiles', id), { verification_status: 'APPROVED' }, { merge: true });
-      
-      loadUsers();
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, isVerified: true } : u));
+      Alert.alert('Sucesso', 'Utilizador verificado com sucesso.');
     } catch (err) {
       Alert.alert('Erro', err.message);
     }
@@ -53,43 +75,97 @@ export default function AdminUsers() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={20} color={Colors.textLight} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Pesquisar por nome, telefone ou cidade..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor={Colors.textLight}
+          />
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={Colors.textLight} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.tabs}>
+          {['ALL', 'WORKER', 'EMPLOYER'].map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.activeTab]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                {tab === 'ALL' ? 'Todos' : tab === 'WORKER' ? 'Profissionais' : 'Clientes'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
       <FlatList
-        data={users}
+        data={filteredUsers}
         keyExtractor={item => item.id}
         refreshing={refreshing}
         onRefresh={() => { setRefreshing(true); loadUsers(); }}
         contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="people-outline" size={48} color={Colors.border} />
+            <Text style={styles.emptyText}>Nenhum utilizador encontrado.</Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={styles.info}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={styles.name}>{item.name}</Text>
-                {item.isVerified && <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />}
+            <View style={styles.cardHeader}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase()}</Text>
               </View>
-              <Text style={styles.meta}>{item.role} · {item.phone}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
-                <Text style={styles.meta}>{item.city}, {item.province}</Text>
+              <View style={styles.info}>
+                <View style={styles.nameRow}>
+                  <Text style={styles.name}>{item.name}</Text>
+                  {item.isVerified && <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />}
+                </View>
+                <Text style={styles.meta}>{item.phone || 'Sem telefone'}</Text>
               </View>
-              <Text style={styles.status}>
-                Estado: <Text style={{ color: item.isActive ? Colors.success : Colors.error }}>{item.isActive ? 'Ativo' : 'Banido'}</Text>
-              </Text>
+              <View style={[styles.roleBadge, { backgroundColor: item.role === 'WORKER' ? '#4CAF5015' : '#2196F315' }]}>
+                <Text style={[styles.roleText, { color: item.role === 'WORKER' ? '#4CAF50' : '#2196F3' }]}>
+                  {item.role === 'WORKER' ? 'Profissional' : 'Cliente'}
+                </Text>
+              </View>
             </View>
+
+            <View style={styles.cardBody}>
+              <View style={styles.detailRow}>
+                <Ionicons name="location-outline" size={14} color={Colors.textLight} />
+                <Text style={styles.detailText}>{item.city || 'Desconhecido'}, {item.province || '??'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Ionicons name="shield-checkmark-outline" size={14} color={item.isActive !== false ? Colors.success : Colors.error} />
+                <Text style={[styles.detailText, { color: item.isActive !== false ? Colors.success : Colors.error, fontWeight: '600' }]}>
+                  {item.isActive !== false ? 'Conta Ativa' : 'Conta Banida'}
+                </Text>
+              </View>
+            </View>
+
             <View style={styles.actions}>
-              {!item.isVerified && (
-                <TouchableOpacity style={[styles.btn, styles.btnVerify]} onPress={() => handleVerify(item.id)}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Ionicons name="checkmark" size={14} color={Colors.primary} />
-                    <Text style={styles.btnVerifyText}>Aprovar</Text>
-                  </View>
+              {!item.isVerified && item.role === 'WORKER' && (
+                <TouchableOpacity style={[styles.actionBtn, styles.btnVerify]} onPress={() => handleVerify(item.id)}>
+                  <Ionicons name="checkmark" size={16} color={Colors.white} />
+                  <Text style={styles.btnTextWhite}>Verificar</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity
-                style={[styles.btn, item.isActive ? styles.btnBan : styles.btnUnban]}
-                onPress={() => handleBan(item.id, item.isActive)}
+                style={[styles.actionBtn, item.isActive !== false ? styles.btnBan : styles.btnUnban]}
+                onPress={() => handleBan(item.id, item.isActive !== false)}
               >
-                <Text style={item.isActive ? styles.btnBanText : styles.btnUnbanText}>
-                  {item.isActive ? 'Banir' : 'Desbanir'}
+                <Ionicons name={item.isActive !== false ? "ban" : "refresh"} size={14} color={item.isActive !== false ? Colors.error : Colors.info} />
+                <Text style={[styles.btnText, { color: item.isActive !== false ? Colors.error : Colors.info }]}>
+                  {item.isActive !== false ? 'Banir' : 'Reativar'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -103,18 +179,51 @@ export default function AdminUsers() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { padding: Spacing.md },
-  card: { backgroundColor: Colors.white, padding: Spacing.md, borderRadius: 12, marginBottom: Spacing.sm, borderWidth: 1, borderColor: Colors.borderLight },
-  info: { marginBottom: Spacing.sm },
+  
+  header: { backgroundColor: Colors.white, padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  searchContainer: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: Colors.background, 
+    borderRadius: 12, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8,
+    marginBottom: Spacing.md
+  },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 14, color: Colors.text, padding: 0 },
+  
+  tabs: { flexDirection: 'row', gap: 8 },
+  tab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: Colors.background },
+  activeTab: { backgroundColor: Colors.primary },
+  tabText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  activeTabText: { color: Colors.white },
+
+  list: { padding: Spacing.md, paddingBottom: 40 },
+  card: { backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, marginBottom: Spacing.md, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  
+  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.md },
+  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  avatarText: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+  info: { flex: 1 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   name: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text },
-  meta: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 2 },
-  status: { fontSize: Fonts.sizes.xs, fontWeight: '600', marginTop: 6 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  btn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  btnVerify: { backgroundColor: Colors.success + '20' },
-  btnVerifyText: { color: Colors.success, fontWeight: '600' },
-  btnBan: { backgroundColor: Colors.error + '20' },
-  btnBanText: { color: Colors.error, fontWeight: '600' },
-  btnUnban: { backgroundColor: Colors.info + '20' },
-  btnUnbanText: { color: Colors.info, fontWeight: '600' },
+  meta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  
+  roleBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  roleText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+
+  cardBody: { flexDirection: 'row', gap: 16, marginBottom: Spacing.md, paddingBottom: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  detailText: { fontSize: 12, color: Colors.textSecondary },
+
+  actions: { flexDirection: 'row', gap: 10 },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
+  btnVerify: { backgroundColor: Colors.primary },
+  btnTextWhite: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+  btnBan: { backgroundColor: Colors.error + '10' },
+  btnUnban: { backgroundColor: Colors.info + '10' },
+  btnText: { fontSize: 12, fontWeight: '700' },
+
+  emptyContainer: { alignItems: 'center', marginTop: 100 },
+  emptyText: { color: Colors.textLight, marginTop: 12, fontSize: Fonts.sizes.md }
 });

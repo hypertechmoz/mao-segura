@@ -7,10 +7,13 @@ import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { sendConnectionRequest, acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackHandler } from 'react-native';
 
 export default function Network() {
     const { user } = useAuthStore();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const [suggestions, setSuggestions] = useState([]);
     const [pendingRequests, setPendingRequests] = useState([]);
     const [sentRequestIds, setSentRequestIds] = useState(new Set());
@@ -101,7 +104,18 @@ export default function Network() {
 
         loadNetwork();
 
-        return () => unsub();
+        // Handle back button to prevent app closing
+        const backAction = () => {
+            router.replace('/(tabs)/home');
+            return true;
+        };
+
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+        return () => {
+            unsub();
+            backHandler.remove();
+        };
     }, [user]);
 
     const handleConnect = async (targetId) => {
@@ -136,8 +150,14 @@ export default function Network() {
     }
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-            <Text style={styles.pageTitle}>Minha Rede</Text>
+        <View style={[styles.container, { paddingTop: insets.top }]}>
+            <View style={styles.header}>
+                <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
+                </TouchableOpacity>
+                <Text style={styles.headerTitle}>Minha Rede</Text>
+            </View>
+            <ScrollView contentContainerStyle={styles.content}>
 
             {/* Pedidos Pendentes */}
             <View style={styles.section}>
@@ -287,13 +307,24 @@ export default function Network() {
                 )}
             </View>
         </ScrollView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
+    header: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: Spacing.md, 
+        paddingVertical: 12, 
+        backgroundColor: Colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight
+    },
+    backBtn: { marginRight: 12 },
+    headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.text },
     content: { padding: Spacing.md, paddingBottom: 100, maxWidth: 800, alignSelf: 'center', width: '100%' },
-    pageTitle: { fontSize: 24, fontWeight: '800', color: Colors.text, marginBottom: 20 },
     section: { marginBottom: 30, backgroundColor: Colors.white, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E0DFDC' },
     sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 16 },
     

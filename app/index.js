@@ -91,7 +91,7 @@ export default function WebLandingOrSplash() {
                 } else if (!isOnboarded && Platform.OS !== 'web') {
                     router.replace('/onboarding');
                 }
-            }, 1000);
+            }, 50); // Small delay to ensure root layout is ready
             return () => clearTimeout(timer);
         }
     }, [user, isOnboarded, isLoading]);
@@ -109,12 +109,7 @@ export default function WebLandingOrSplash() {
     if (Platform.OS !== 'web' || user) {
         return (
             <View style={styles.splashContainer}>
-                <Image 
-                    source={require('../assets/splash-icon.png')} 
-                    style={styles.splashLogo} 
-                    resizeMode="contain" 
-                />
-                <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 20 }} />
+                <ActivityIndicator size="large" color={Colors.primary} />
             </View>
         );
     }

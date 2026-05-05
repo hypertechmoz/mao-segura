@@ -4,11 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Fonts } from '../constants';
 import { useRouter } from 'expo-router';
 import { db } from '../services/firebase';
-import { doc, updateDoc, arrayUnion, arrayRemove, query, collection, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, query, collection, where, getDocs, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { useAuthStore } from '../store/authStore';
 import { useAuthGuard } from '../utils/useAuthGuard';
 import { startOrGetConversation } from '../utils/chatHelper';
 import { formatTime } from '../utils/profileUtils';
+import { sendPushNotification } from '../services/notificationService';
 
 export default function PostCard({ post }) {
     const router = useRouter();
@@ -21,7 +22,8 @@ export default function PostCard({ post }) {
     
     const [isLiked, setIsLiked] = useState(initialLiked);
     const [likesCount, setLikesCount] = useState(initialLikesCount);
-    const [hasActioned, setHasActioned] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState(null); // null, 'PENDING', or 'CONNECTED'
+    const [conversationId, setConversationId] = useState(null);
     const [checkingAction, setCheckingAction] = useState(false);
 
     useEffect(() => {
@@ -33,16 +35,35 @@ export default function PostCard({ post }) {
                 const fieldSelf = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
                 const fieldOther = user.role === 'WORKER' ? 'employer_id' : 'worker_id';
                 
-                // For Posts, we check if there's any conversation between these two
-                // Optional: strictly check post_id, but usually one contact per user/post pair is enough
-                const q = query(
+                // 1. Verificar conversa ativa
+                const qConv = query(
                     collection(db, 'chat_conversations'),
                     where(fieldSelf, '==', user.uid),
                     where(fieldOther, '==', post.user_id)
                 );
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    setHasActioned(true);
+                const snapConv = await getDocs(qConv);
+                
+                if (!snapConv.empty) {
+                    const conv = snapConv.docs[0].data();
+                    setConversationId(snapConv.docs[0].id);
+                    if (conv.is_authorized) {
+                        setConnectionStatus('CONNECTED');
+                    } else {
+                        setConnectionStatus('PENDING');
+                    }
+                    return;
+                }
+
+                // 2. Verificar se há pedido pendente (caso a conversa ainda não tenha sido criada)
+                const qReq = query(
+                    collection(db, 'connection_requests'),
+                    where('sender_id', '==', user.uid),
+                    where('receiver_id', '==', post.user_id),
+                    where('status', '==', 'PENDING')
+                );
+                const snapReq = await getDocs(qReq);
+                if (!snapReq.empty) {
+                    setConnectionStatus('PENDING');
                 }
             } catch (err) {
                 console.warn('Check action error:', err);
@@ -70,6 +91,34 @@ export default function PostCard({ post }) {
                 await updateDoc(postRef, {
                     liked_by: arrayUnion(user.uid)
                 });
+
+                // Enviar notificação se não for o próprio autor
+                if (user.uid !== post.user_id) {
+                    try {
+                        await addDoc(collection(db, 'notifications'), {
+                            user_id: post.user_id,
+                            sender_id: user.uid,
+                            title: 'Novo Gosto! 👍',
+                            description: `${user.name || 'Alguém'} gostou da sua publicação.`,
+                            type: 'POST_LIKE',
+                            read: false,
+                            created_at: serverTimestamp(),
+                            route: `/post/${post.id}/comments`
+                        });
+
+                        // Tentar Push Notification
+                        const authorSnap = await getDoc(doc(db, 'users', post.user_id));
+                        if (authorSnap.exists() && authorSnap.data().pushToken) {
+                            await sendPushNotification(
+                                authorSnap.data().pushToken,
+                                'Novo Gosto! 👍',
+                                `${user.name || 'Alguém'} gostou da sua publicação.`
+                            );
+                        }
+                    } catch (err) {
+                        console.warn('Erro ao notificar gosto:', err);
+                    }
+                }
             }
         } catch (error) {
             console.error('Error toggling like:', error);
@@ -81,7 +130,14 @@ export default function PostCard({ post }) {
 
     const handleContact = async () => {
         if (!requireAuth()) return;
-        if (user.uid === post.user_id || hasActioned) return;
+        if (user.uid === post.user_id) return;
+
+        if (connectionStatus === 'CONNECTED' && conversationId) {
+            router.push(`/chat/${conversationId}`);
+            return;
+        }
+
+        if (connectionStatus === 'PENDING') return;
 
         try {
             const { sendConnectionRequest } = await import('../utils/chatSecureHelper');
@@ -89,7 +145,7 @@ export default function PostCard({ post }) {
                 type: post.user_role === 'EMPLOYER' ? 'APPLY' : 'CONTACT',
                 job_id: post.id || null
             });
-            setHasActioned(true);
+            setConnectionStatus('PENDING');
         } catch (error) {
             console.error('Error starting conversation:', error);
         }
@@ -180,24 +236,28 @@ export default function PostCard({ post }) {
                     <TouchableOpacity 
                         style={[
                             styles.miniActionBtn,
-                            hasActioned && styles.actionedBtn
+                            connectionStatus === 'PENDING' && styles.actionedBtn,
+                            connectionStatus === 'CONNECTED' && { backgroundColor: Colors.primary, borderColor: Colors.primary }
                         ]} 
                         onPress={handleContact}
-                        disabled={hasActioned}
+                        disabled={connectionStatus === 'PENDING'}
                     >
                         <Ionicons 
-                            name={hasActioned ? "checkmark-circle" : (post.user_role === 'EMPLOYER' ? "document-text" : "chatbubble-ellipses")} 
+                            name={connectionStatus === 'CONNECTED' ? "chatbubble-ellipses" : (connectionStatus === 'PENDING' ? "time" : (post.user_role === 'EMPLOYER' ? "document-text" : "chatbubble-ellipses"))} 
                             size={16} 
-                            color={hasActioned ? Colors.textLight : (post.user_role === 'EMPLOYER' ? Colors.primary : Colors.primary)} 
+                            color={connectionStatus === 'CONNECTED' ? Colors.white : (connectionStatus === 'PENDING' ? Colors.textLight : Colors.primary)} 
                             style={{ marginRight: 6 }} 
                         />
                         <Text style={[
                             styles.miniActionText,
-                            hasActioned && { color: Colors.textLight }
+                            connectionStatus === 'PENDING' && { color: Colors.textLight },
+                            connectionStatus === 'CONNECTED' && { color: Colors.white }
                         ]}>
-                            {hasActioned 
-                                ? (post.user_role === 'EMPLOYER' ? 'Candidatado' : 'Contactado')
-                                : (post.user_role === 'EMPLOYER' ? 'Candidatar' : 'Contactar')
+                            {connectionStatus === 'CONNECTED' 
+                                ? 'Mensagem'
+                                : (connectionStatus === 'PENDING' 
+                                    ? 'Pendente' 
+                                    : (post.user_role === 'EMPLOYER' ? 'Candidatar' : 'Contactar'))
                             }
                         </Text>
                     </TouchableOpacity>

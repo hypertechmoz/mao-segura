@@ -10,9 +10,12 @@ import { formatTime as formatTimeUtil } from '../../utils/profileUtils';
 
 import { sendPushNotification } from '../../services/notificationService';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function ChatScreen() {
     const { id, name } = useLocalSearchParams();
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { user } = useAuthStore();
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState('');
@@ -401,13 +404,13 @@ export default function ChatScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={90}
         >
-            <View style={styles.headerBar}>
+            <View style={[styles.headerBar, { paddingTop: insets.top + 10 }]}>
                 <TouchableOpacity 
                     onPress={() => {
                         if (router.canGoBack()) {
                             router.back();
                         } else {
-                            router.replace('/(tabs)/messages');
+                            router.replace('/(tabs)/home');
                         }
                     }} 
                     style={{ marginRight: 12 }}

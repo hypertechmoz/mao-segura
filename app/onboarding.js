@@ -14,7 +14,7 @@ export default function Onboarding() {
 
     const handleStart = () => {
         setOnboarded();
-        router.replace('/auth/choose-type');
+        router.push('/auth/choose-type');
     };
 
     const handleExplore = () => {
@@ -26,28 +26,24 @@ export default function Onboarding() {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
-            {/* Background Image */}
-            <Image 
-                source={require('../assets/images/workers-onboarding.png')} 
-                style={styles.backgroundImage}
-                resizeMode="cover"
-            />
-            
-            {/* Dark Overlay for readability */}
-            <View style={styles.darkOverlay} />
-
-            <View style={[styles.contentContainer, { paddingBottom: Math.max(insets.bottom + 20, Spacing.xxl + 20) }]}>
+            {/* Background removed as requested */}
+            <View style={styles.contentContainer}>
                 <View style={styles.topSpacer} />
                 
                 <View style={styles.textSection}>
-                    <BrandWordmark variant="onDarkLarge" style={{ marginBottom: 12 }} />
+                    <Image 
+                        source={require('../assets/splash-icon.png')} 
+                        style={styles.appIcon} 
+                        resizeMode="contain" 
+                    />
+                    <BrandWordmark style={{ marginBottom: 12 }} />
                     <Text style={styles.subtitle}>
                         Clientes e profissionais mais perto, para serviços{'\n'}
                         domésticos e comerciais em Moçambique.
                     </Text>
                     <View style={styles.divider} />
                     <Text style={styles.tagline}>
-                        A oportunidade certa para si!
+                        A oportunidade certa perto de si!
                     </Text>
                 </View>
 
@@ -60,16 +56,8 @@ export default function Onboarding() {
                         <Text style={styles.primaryButtonText}>Começar</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity onPress={() => router.replace('/auth/login')} style={styles.loginContainer}>
+                    <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.loginContainer}>
                         <Text style={styles.loginLink}>Já tenho uma conta</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity 
-                        style={styles.tertiaryButton} 
-                        onPress={handleExplore} 
-                        activeOpacity={0.8}
-                    >
-                        <Text style={styles.tertiaryButtonText}>Explorar a plataforma livremente</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -80,17 +68,7 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#000',
-    },
-    backgroundImage: {
-        ...StyleSheet.absoluteFillObject,
-        opacity: 0.65,
-    },
-    darkOverlay: {
-        position: 'absolute',
-        width: width,
-        height: height,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)', // further darken for contrast
+        backgroundColor: Colors.white,
     },
     contentContainer: {
         flex: 1,
@@ -98,14 +76,19 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     topSpacer: {
-        height: 80,
+        height: 0,
     },
     textSection: {
         alignItems: 'center',
     },
+    appIcon: {
+        width: 90,
+        height: 90,
+        marginBottom: 16,
+    },
     subtitle: {
         fontSize: Fonts.sizes.md,
-        color: 'rgba(255, 255, 255, 0.9)',
+        color: Colors.textSecondary,
         textAlign: 'center',
         lineHeight: 24,
         marginBottom: Spacing.lg,
@@ -120,7 +103,7 @@ const styles = StyleSheet.create({
     tagline: {
         fontSize: 22,
         fontWeight: '700',
-        color: Colors.white,
+        color: Colors.text,
         textAlign: 'center',
     },
     buttonSection: {
@@ -142,23 +125,14 @@ const styles = StyleSheet.create({
         fontWeight: '700',
     },
     secondaryButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        backgroundColor: 'rgba(0, 0, 0, 0.05)',
         borderWidth: 1.5,
-        borderColor: 'rgba(255, 255, 255, 0.5)',
+        borderColor: 'rgba(0, 0, 0, 0.1)',
     },
     secondaryButtonText: {
-        color: Colors.white,
+        color: Colors.text,
         fontSize: 16,
         fontWeight: '700',
-    },
-    tertiaryButton: {
-        paddingVertical: 12,
-        alignItems: 'center',
-    },
-    tertiaryButtonText: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: Fonts.sizes.sm,
-        fontWeight: '600',
     },
     loginContainer: {
         marginTop: Spacing.sm,
@@ -166,7 +140,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     loginLink: {
-        color: Colors.white,
+        color: Colors.text,
         fontSize: Fonts.sizes.md,
         fontWeight: '600',
         textDecorationLine: 'underline',

@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { formatTime, formatRelativeTime, toDate } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
+import { BackHandler } from 'react-native';
 
 function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
     const router = useRouter();
@@ -164,7 +165,7 @@ export default function Notifications() {
                     });
                     aggregatedNotifications.jobs = list;
                     updateState();
-                }));
+                }, (err) => console.log('Notifications qJobs error:', err)));
             };
             getConnectedJobs();
         }
@@ -204,7 +205,7 @@ export default function Notifications() {
             }
             aggregatedNotifications.msgs = list;
             updateState();
-        }));
+        }, (err) => console.log('Notifications qMsgs error:', err)));
 
         // Set a timeout to clear the loading state, allowing the async snapshots above to fully resolve
         const loadingTimer = setTimeout(() => {
@@ -240,7 +241,7 @@ export default function Notifications() {
             });
             aggregatedNotifications.connectionReqs = list;
             updateState();
-        }));
+        }, (err) => console.log('Notifications qReqs error:', err)));
 
         // 5. Explicit Notifications (The new system)
         const qExplicit = query(
@@ -266,11 +267,18 @@ export default function Notifications() {
             });
             aggregatedNotifications.explicit = list;
             updateState();
-        }));
+        }, (err) => console.error('Snapshot notifications error:', err)));
+
+        const backAction = () => {
+            router.replace('/(tabs)/home');
+            return true;
+        };
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
         return () => {
             unsubscribers.forEach(unsub => unsub());
             clearTimeout(loadingTimer);
+            backHandler.remove();
         };
     }, [user, user?.role]);
 
@@ -294,14 +302,9 @@ export default function Notifications() {
                 ]}>
                     <View style={nStyles.headerContent}>
                         <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <View style={nStyles.headerIconBtn}>
-                                <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
-                                {unreadNotifications > 0 && (
-                                    <View style={nStyles.headerBadge}>
-                                        <Text style={nStyles.headerBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
-                                    </View>
-                                )}
-                            </View>
+                            <TouchableOpacity onPress={() => router.replace('/(tabs)/home')} style={nStyles.headerIconBtn}>
+                                <Ionicons name="arrow-back" size={24} color={Colors.primary} />
+                            </TouchableOpacity>
                             <Text style={nStyles.headerTitle}>Notificações</Text>
                         </View>
                         <View style={nStyles.headerActions}>

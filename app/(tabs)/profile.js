@@ -119,8 +119,15 @@ export default function Profile() {
 
     const handleLogout = () => {
         const performLogout = async () => {
-            await logout();
-            router.replace('/auth/login');
+            try {
+                await logout();
+                // Use a small timeout to ensure state is updated before navigation
+                setTimeout(() => {
+                    router.replace('/auth/login');
+                }, 100);
+            } catch (err) {
+                console.error('Logout error:', err);
+            }
         };
 
         if (Platform.OS === 'web') {
@@ -399,9 +406,9 @@ export default function Profile() {
                             (isConnected || hasPendingRequest) && { borderColor: Colors.border, backgroundColor: Colors.borderLight }
                         ]} 
                         onPress={async () => {
-                            if (!user) { router.push('/auth/login'); return; }
+                            if (!user || !p?.id) { router.push('/auth/login'); return; }
                             if (isConnected || hasPendingRequest || processing) return;
-                            if (p.id === user.uid) return; // Segurança extra
+                            if (p?.id === user?.uid || p?.id === user?.id) return; // Segurança extra
                             
                             setProcessing(true);
                             try {
@@ -414,7 +421,7 @@ export default function Profile() {
                                 setProcessing(false);
                             }
                         }}
-                        disabled={isConnected || hasPendingRequest || processing || p.id === user.uid}
+                        disabled={isConnected || hasPendingRequest || processing || !p?.id || p?.id === (user?.uid || user?.id)}
                         activeOpacity={0.8}
                     >
                         {processing ? (
@@ -442,6 +449,7 @@ export default function Profile() {
                                 return;
                             }
                             try {
+                                if (!user || !p?.id) return;
                                 const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
                                 await sendConnectionRequest(user, p.id, {
                                     type: p.role === 'WORKER' ? 'CONTACT' : 'APPLY'

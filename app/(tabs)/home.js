@@ -13,6 +13,7 @@ import { calculateCompleteness, formatTime, formatRelativeTime } from '../../uti
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { BackHandler } from 'react-native';
 
 // === Shared Components ===
 function ProfileBanner({ completeness }) {
@@ -122,6 +123,7 @@ function JobCard({ job, onPress, userLocation, isApplied }) {
 }
 
 function WorkerCard({ worker, onPress, userLocation, isContacted }) {
+    const router = useRouter();
     const isNear = userLocation?.city && worker.city && userLocation.city.toLowerCase() === worker.city.toLowerCase();
 
     return (
@@ -625,6 +627,20 @@ export default function Home() {
 
     useEffect(() => { loadData(); }, [loadData]);
 
+    useEffect(() => {
+        // Handle back button on home to prevent app closing if user is on other tabs or nested
+        const backAction = () => {
+            if (feedTab !== 'POSTS') {
+                setFeedTab('POSTS');
+                return true;
+            }
+            return false; // Let default behavior happen (close app) if already on Home/POSTS
+        };
+
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+        return () => backHandler.remove();
+    }, [feedTab]);
+
     const onRefresh = async () => {
         setRefreshing(true);
         await loadData();
@@ -774,11 +790,19 @@ export default function Home() {
                 ]}>
                     <View style={styles.headerContent}>
                         <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Text style={styles.headerTitle}>{t('tabs.home')}</Text>
+                            <Text style={styles.headerTitle}>Trabalhe Já</Text>
                         </View>
                         <View style={styles.headerActions}>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/search')}>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
                                 <Ionicons name="search-outline" size={24} color={Colors.primary} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.headerIconBtn}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors.primary} />
+                                {unreadMessages > 0 && (
+                                    <View style={styles.headerBadge}>
+                                        <Text style={styles.headerBadgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
+                                    </View>
+                                )}
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
                                 <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
@@ -791,16 +815,24 @@ export default function Home() {
                         </View>
                     </View>
 
-                    {/* Integrated Mobile Tabs */}
-                    <View style={styles.tabContainer}>
-                        <TouchableOpacity style={[styles.tabBtn, feedTab === 'POSTS' && styles.tabBtnActive]} onPress={() => setFeedTab('POSTS')}>
-                            <Text style={[styles.tabBtnText, feedTab === 'POSTS' && styles.tabBtnTextActive]}>Atualizações</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tabBtn, feedTab === 'OPORTUNIDADES' && styles.tabBtnActive]} onPress={() => setFeedTab('OPORTUNIDADES')}>
-                            <Text style={[styles.tabBtnText, feedTab === 'OPORTUNIDADES' && styles.tabBtnTextActive]}>
-                                {user?.role === 'WORKER' ? 'Vagas' : 'Profissionais'}
-                            </Text>
-                        </TouchableOpacity>
+                    {/* Integrated Mobile Switch Tabs */}
+                    <View style={styles.switchWrapper}>
+                        <View style={styles.switchBackground}>
+                            <TouchableOpacity 
+                                style={[styles.switchBtn, feedTab === 'POSTS' && styles.switchBtnActive]} 
+                                onPress={() => setFeedTab('POSTS')}
+                            >
+                                <Text style={[styles.switchBtnText, feedTab === 'POSTS' && styles.switchBtnTextActive]}>Atualizações</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity 
+                                style={[styles.switchBtn, feedTab === 'OPORTUNIDADES' && styles.switchBtnActive]} 
+                                onPress={() => setFeedTab('OPORTUNIDADES')}
+                            >
+                                <Text style={[styles.switchBtnText, feedTab === 'OPORTUNIDADES' && styles.switchBtnTextActive]}>
+                                    {user?.role === 'WORKER' ? 'Vagas' : 'Profissionais'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </Animated.View>
             )}
@@ -843,7 +875,7 @@ export default function Home() {
                             <Text style={styles.emptySubtext}>Volte mais tarde para ver atualizações</Text>
                         </View>
                     )}
-                    contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT }]}
+                    contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT + 16, paddingBottom: insets.bottom + 100 }]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
                     showsVerticalScrollIndicator={false}
                 />
@@ -915,11 +947,45 @@ const styles = StyleSheet.create({
     emptyText: { fontSize: Fonts.sizes.lg, fontWeight: '600', color: Colors.text },
     emptySubtext: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 4 },
     workerMain: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-    tabContainer: { flexDirection: 'row', paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: 8, backgroundColor: Colors.background, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
-    tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-    tabBtnActive: { borderBottomColor: Colors.primary },
-    tabBtnText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '600' },
-    tabBtnTextActive: { color: Colors.primary },
+    
+    // Switch Styles
+    switchWrapper: {
+        paddingHorizontal: Spacing.md,
+        paddingTop: 12,
+        paddingBottom: 12,
+        backgroundColor: Colors.white,
+    },
+    switchBackground: {
+        flexDirection: 'row',
+        backgroundColor: Colors.background,
+        borderRadius: 25,
+        padding: 4,
+        borderWidth: 1,
+        borderColor: Colors.borderLight,
+    },
+    switchBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 22,
+    },
+    switchBtnActive: {
+        backgroundColor: Colors.white,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    switchBtnText: {
+        fontSize: 13,
+        color: Colors.textSecondary,
+        fontWeight: '600',
+    },
+    switchBtnTextActive: {
+        color: Colors.primary,
+        fontWeight: '700',
+    },
     cardRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
     cardRatingText: { fontSize: 12, fontWeight: '700', color: Colors.text },
     cardCompletedText: { fontSize: 11, color: Colors.textLight },
@@ -952,6 +1018,24 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         position: 'relative',
+    },
+    headerBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: Colors.error,
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 2,
+        zIndex: 10,
+    },
+    headerBadgeText: {
+        color: Colors.white,
+        fontSize: 10,
+        fontWeight: 'bold',
     },
 });
 

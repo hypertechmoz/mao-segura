@@ -7,11 +7,13 @@ export const useUnreadCount = () => {
     const { user } = useAuthStore();
     const [unreadMessages, setUnreadMessages] = useState(0);
     const [unreadNotifications, setUnreadNotifications] = useState(0);
+    const [unreadConnectionRequests, setUnreadConnectionRequests] = useState(0);
 
     useEffect(() => {
         if (!user?.uid) {
             setUnreadMessages(0);
             setUnreadNotifications(0);
+            setUnreadConnectionRequests(0);
             return;
         }
 
@@ -30,7 +32,7 @@ export const useUnreadCount = () => {
                 }
             });
             setUnreadMessages(total);
-        }));
+        }, (err) => console.log('useUnreadCount qMsg error:', err)));
 
         // 2. Apps & Jobs (Simulated count for red badge)
         let appsCount = 0;
@@ -52,7 +54,7 @@ export const useUnreadCount = () => {
                 });
                 appsCount = count;
                 updateNotifBadge();
-            }));
+            }, (err) => console.log('useUnreadCount qApps error:', err)));
 
             const qJobs = query(collection(db, 'jobs'), orderBy('created_at', 'desc'), limit(15));
             unsubscribers.push(onSnapshot(qJobs, (snap) => {
@@ -64,7 +66,7 @@ export const useUnreadCount = () => {
                 });
                 jobsCount = count;
                 updateNotifBadge();
-            }));
+            }, (err) => console.log('useUnreadCount qJobs error:', err)));
 
         } else if (user.role === 'EMPLOYER') {
             const qEmpApps = query(
@@ -81,7 +83,7 @@ export const useUnreadCount = () => {
                 });
                 appsCount = count;
                 updateNotifBadge();
-            }));
+            }, (err) => console.log('useUnreadCount qEmpApps error:', err)));
         }
 
         // 3. Connection Requests
@@ -92,8 +94,9 @@ export const useUnreadCount = () => {
         );
         unsubscribers.push(onSnapshot(qReqs, (snap) => {
             connReqsCount = snap.size;
+            setUnreadConnectionRequests(snap.size);
             updateNotifBadge();
-        }));
+        }, (err) => console.log('useUnreadCount qReqs error:', err)));
 
         // 4. Direct Notifications
         const qNotif = query(
@@ -112,5 +115,5 @@ export const useUnreadCount = () => {
         };
     }, [user?.uid, user?.role]);
 
-    return { unreadMessages, unreadNotifications };
+    return { unreadMessages, unreadNotifications, unreadConnectionRequests };
 };

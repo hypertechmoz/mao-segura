@@ -14,7 +14,7 @@ import { Colors } from '../constants';
  */
 export default function BrandWordmark({
     variant = 'default',
-    layout = 'stack',
+    layout = 'inline',
     showIcon = false,
     iconOnly = false,
     style,

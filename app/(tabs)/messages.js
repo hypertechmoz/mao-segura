@@ -9,6 +9,7 @@ import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BackHandler } from 'react-native';
 
 export default function Messages() {
     const router = useRouter();
@@ -103,7 +104,17 @@ export default function Messages() {
             setInitialLoading(false);
         });
 
-        return () => unsubscribe();
+
+        const backAction = () => {
+            router.replace('/(tabs)/home');
+            return true;
+        };
+        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+
+        return () => {
+            unsubscribe();
+            backHandler.remove();
+        };
     }, [user?.uid]);
 
     const onRefresh = async () => { 

@@ -47,7 +47,7 @@ function WebNavIcon({ icon, label, route, isActive, onPress, badge, isSmall }) {
     );
 }
 
-function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
+function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unreadConnectionRequests }) {
     const { user, logout } = useAuthStore();
     const { requireAuth } = useAuthGuard();
     const router = useRouter();
@@ -161,7 +161,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications }) {
                                     label={item.label}
                                     isSmall={isSmall}
                                     isActive={pathname?.endsWith(item.route)}
-                                    badge={item.route === '/messages' ? unreadMessages : (item.route === '/notifications' ? unreadNotifications : 0)}
+                                    badge={item.route === '/messages' ? unreadMessages : (item.route === '/notifications' ? unreadNotifications : (item.route === '/network' ? unreadConnectionRequests : 0))}
                                     onPress={() => {
                                         if (['/messages', '/notifications'].includes(item.route)) {
                                             if (!requireAuth()) {
@@ -297,7 +297,7 @@ export default function TabLayout() {
     const isSmallScreen = width < 768;
     const isMobileWeb = width < 480;
 
-    const { unreadMessages, unreadNotifications } = useUnreadCount();
+    const { unreadMessages, unreadNotifications, unreadConnectionRequests } = useUnreadCount();
 
     useEffect(() => {
         // Load fonts for web
@@ -312,7 +312,7 @@ export default function TabLayout() {
     if (Platform.OS === 'web') {
         return (
             <View style={styles.webLayout}>
-                <WebNavbar isSmall={isSmallScreen} isMobile={isMobileWeb} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} />
+                <WebNavbar isSmall={isSmallScreen} isMobile={isMobileWeb} unreadMessages={unreadMessages} unreadNotifications={unreadNotifications} unreadConnectionRequests={unreadConnectionRequests} />
                 <View style={styles.webContent}>
                     <Slot />
                 </View>
@@ -350,7 +350,7 @@ export default function TabLayout() {
                 options={{
                     title: 'Minha Rede',
                     headerShown: Platform.OS === 'web',
-                    tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} />,
+                    tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} badge={unreadConnectionRequests} />,
                 }}
             />
 
@@ -360,14 +360,6 @@ export default function TabLayout() {
                     title: t('tabs.search'),
                     href: null, // Hide from bottom tabs
                     tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.search')} icon="search" focused={focused} />,
-                }}
-            />
-            <Tabs.Screen
-                name="jobs"
-                options={{
-                    title: t('tabs.jobs'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.jobs')} icon="briefcase" focused={focused} />,
                 }}
             />
             <Tabs.Screen
@@ -399,11 +391,21 @@ export default function TabLayout() {
                     },
                 }}
             />
+
+            <Tabs.Screen
+                name="jobs"
+                options={{
+                    title: t('tabs.jobs'),
+                    headerShown: Platform.OS === 'web', // Hide on mobile
+                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.jobs')} icon="briefcase" focused={focused} />,
+                }}
+            />
             <Tabs.Screen
                 name="messages"
                 options={{
                     title: t('tabs.messages'),
                     headerShown: Platform.OS === 'web', // Hide on mobile
+                    href: null, // Hidden from bottom tabs
                     tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.messages')} icon="chatbubble-ellipses" focused={focused} badge={unreadMessages} />,
                 }}
                 listeners={{

@@ -86,16 +86,35 @@ export async function acceptConnectionRequest(requestId, user, senderId) {
         created_at: serverTimestamp()
     });
 
-    // 4. Criar notificação para o trabalhador (quem enviou o pedido)
-    await addDoc(collection(db, 'notifications'), {
-        user_id: senderId,
-        title: 'Ligação Aceite! 🤝',
-        description: `${user.name} aceitou o seu pedido. Já podem conversar no chat.`,
-        type: 'CONNECTION_ACCEPTED',
-        read: false,
-        created_at: serverTimestamp(),
-        route: `/chat/${conversationId}`
-    });
+    // 4. Criar notificação para quem enviou o pedido
+    try {
+        await addDoc(collection(db, 'notifications'), {
+            user_id: senderId,
+            sender_id: user.uid, // Required by Firestore rules
+            title: 'Ligação Aceite! 🤝',
+            description: `${user.name || 'Alguém'} aceitou o seu pedido de contacto. Já podem conversar no chat.`,
+            type: 'CONNECTION_ACCEPTED',
+            read: false,
+            created_at: serverTimestamp(),
+            route: `/chat/${conversationId}`
+        });
+    } catch (e) {
+        console.warn('Erro ao criar notificação de conexão aceite:', e);
+    }
+
+    // 5. Enviar push notification ao remetente (se tiver token)
+    try {
+        if (senderSnap.exists() && senderSnap.data().pushToken) {
+            const { sendPushNotification } = await import('../services/notificationService');
+            await sendPushNotification(
+                senderSnap.data().pushToken,
+                'Ligação Aceite! 🤝',
+                `${user.name || 'Alguém'} aceitou o seu pedido de contacto.`
+            );
+        }
+    } catch (e) {
+        console.warn('Erro ao enviar push notification:', e);
+    }
 
     return conversationId;
 }

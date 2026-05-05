@@ -13,6 +13,7 @@ export default function ManageTestimonials() {
     const [testimonials, setTestimonials] = useState([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('PENDING'); // PENDING, APPROVED, REJECTED
+    const [refreshing, setRefreshing] = useState(false);
 
     const loadTestimonials = async () => {
         try {
@@ -26,7 +27,6 @@ export default function ManageTestimonials() {
             const data = [];
             for (const d of snap.docs) {
                 const item = { id: d.id, ...d.data() };
-                // Fetch user photo if missing
                 if (item.user_id) {
                    const uSnap = await getDoc(doc(db, 'users', item.user_id));
                    if (uSnap.exists()) {
@@ -41,6 +41,7 @@ export default function ManageTestimonials() {
             Alert.alert('Erro', 'Não foi possível carregar os depoimentos.');
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -60,7 +61,7 @@ export default function ManageTestimonials() {
                 approved_by: user.uid
             });
             Alert.alert('Sucesso', `Depoimento ${newStatus === 'APPROVED' ? 'aprovado' : 'rejeitado'} com sucesso.`);
-            loadTestimonials();
+            setTestimonials(prev => prev.filter(t => t.id !== id));
         } catch (err) {
             console.error('Error updating testimonial:', err);
             Alert.alert('Erro', 'Não foi possível atualizar o depoimento.');
@@ -75,12 +76,15 @@ export default function ManageTestimonials() {
                         {item.user_photo ? (
                             <Image source={{ uri: item.user_photo }} style={styles.avatarImage} />
                         ) : (
-                            <Text style={styles.avatarText}>{item.name?.[0] || '?'}</Text>
+                            <Text style={styles.avatarText}>{item.name?.[0]?.toUpperCase() || '?'}</Text>
                         )}
                     </View>
                     <View>
                         <Text style={styles.userName}>{item.name}</Text>
-                        <Text style={styles.userRole}>{item.role === 'WORKER' ? 'Trabalhador' : 'Empregador'}</Text>
+                        <View style={styles.roleRow}>
+                            <Ionicons name={item.role === 'WORKER' ? 'hammer' : 'business'} size={10} color={Colors.textLight} />
+                            <Text style={styles.userRole}>{item.role === 'WORKER' ? 'Profissional' : 'Cliente'}</Text>
+                        </View>
                     </View>
                 </View>
                 <View style={styles.ratingRow}>
@@ -89,8 +93,15 @@ export default function ManageTestimonials() {
                     ))}
                 </View>
             </View>
-            <Text style={styles.text}>"{item.text}"</Text>
-            <Text style={styles.date}>{item.created_at?.toDate().toLocaleDateString('pt-MZ')}</Text>
+
+            <View style={styles.contentBox}>
+                <Ionicons name="quote" size={20} color={Colors.primary + '20'} style={styles.quoteIcon} />
+                <Text style={styles.text}>{item.text}</Text>
+            </View>
+
+            <View style={styles.cardFooter}>
+                <Text style={styles.date}>{item.created_at?.toDate ? new Date(item.created_at.toDate()).toLocaleDateString() : 'Recent'}</Text>
+            </View>
 
             {filter === 'PENDING' && (
                 <View style={styles.actions}>
@@ -105,8 +116,8 @@ export default function ManageTestimonials() {
                         style={[styles.actionButton, styles.rejectButton]} 
                         onPress={() => handleAction(item.id, 'REJECTED')}
                     >
-                        <Ionicons name="close" size={18} color={Colors.white} />
-                        <Text style={styles.actionButtonText}>Rejeitar</Text>
+                        <Ionicons name="close" size={18} color={Colors.error} />
+                        <Text style={[styles.actionButtonText, { color: Colors.error }]}>Rejeitar</Text>
                     </TouchableOpacity>
                 </View>
             )}
@@ -115,28 +126,40 @@ export default function ManageTestimonials() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.tabs}>
-                {['PENDING', 'APPROVED', 'REJECTED'].map((t) => (
-                    <TouchableOpacity 
-                        key={t} 
-                        style={[styles.tab, filter === t && styles.activeTab]}
-                        onPress={() => setFilter(t)}
-                    >
-                        <Text style={[styles.tabText, filter === t && styles.activeTabText]}>
-                            {t === 'PENDING' ? 'Pendentes' : t === 'APPROVED' ? 'Aprovados' : 'Rejeitados'}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+            <View style={styles.tabsHeader}>
+                <View style={styles.tabs}>
+                    {['PENDING', 'APPROVED', 'REJECTED'].map((t) => (
+                        <TouchableOpacity 
+                            key={t} 
+                            style={[styles.tab, filter === t && styles.activeTab]}
+                            onPress={() => setFilter(t)}
+                        >
+                            <Text style={[styles.tabText, filter === t && styles.activeTabText]}>
+                                {t === 'PENDING' ? 'Pendentes' : t === 'APPROVED' ? 'Aprovados' : 'Rejeitados'}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
             </View>
 
-            {loading ? (
+            {loading && testimonials.length === 0 ? (
                 <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>
             ) : (
-                <ScrollView contentContainerStyle={styles.scrollContent}>
+                <ScrollView 
+                    contentContainerStyle={styles.scrollContent}
+                    refreshControl={
+                        <TextInput 
+                            refreshing={refreshing}
+                            onRefresh={() => { setRefreshing(true); loadTestimonials(); }}
+                        />
+                    }
+                >
                     {testimonials.length === 0 ? (
                         <View style={styles.empty}>
-                            <Ionicons name="chatbox-outline" size={48} color={Colors.textLight} />
-                            <Text style={styles.emptyText}>Nenhum depoimento nesta categoria.</Text>
+                            <View style={styles.emptyIconCircle}>
+                                <Ionicons name="chatbox-ellipses-outline" size={48} color={Colors.border} />
+                            </View>
+                            <Text style={styles.emptyText}>Nenhum depoimento encontrado.</Text>
                         </View>
                     ) : (
                         testimonials.map(renderItem)
@@ -149,29 +172,47 @@ export default function ManageTestimonials() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    tabs: { flexDirection: 'row', backgroundColor: Colors.white, padding: 8, gap: 8 },
-    tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 8 },
-    activeTab: { backgroundColor: Colors.primaryBg },
-    tabText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-    activeTabText: { color: Colors.primary },
-    scrollContent: { padding: Spacing.md },
+    tabsHeader: { backgroundColor: Colors.white, padding: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
+    tabs: { flexDirection: 'row', backgroundColor: Colors.background, padding: 4, borderRadius: 12, gap: 4 },
+    tab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 10 },
+    activeTab: { backgroundColor: Colors.primary, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+    tabText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+    activeTabText: { color: Colors.white },
+    
+    scrollContent: { padding: Spacing.md, paddingBottom: 40 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    card: { backgroundColor: Colors.white, borderRadius: 12, padding: Spacing.md, marginBottom: Spacing.md, shadowColor: Colors.shadow, shadowOpacity: 0.5, shadowRadius: 5, elevation: 2 },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-    userInfo: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-    avatarImage: { width: 36, height: 36 },
-    avatarText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
-    userName: { fontSize: 15, fontWeight: '700', color: Colors.text },
-    userRole: { fontSize: 11, color: Colors.textSecondary },
-    ratingRow: { flexDirection: 'row', gap: 2 },
-    text: { fontSize: 14, color: Colors.text, lineHeight: 20, fontStyle: 'italic', marginBottom: 10 },
+    
+    card: { 
+        backgroundColor: Colors.white, 
+        borderRadius: 18, 
+        padding: Spacing.md, 
+        marginBottom: Spacing.md, 
+        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 
+    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+    userInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    avatarImage: { width: 44, height: 44 },
+    avatarText: { fontSize: 18, fontWeight: '800', color: Colors.primary },
+    userName: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text },
+    roleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+    userRole: { fontSize: 11, color: Colors.textSecondary, fontWeight: '500' },
+    ratingRow: { flexDirection: 'row', gap: 2, backgroundColor: '#FFD70015', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
+    
+    contentBox: { position: 'relative', paddingVertical: 10 },
+    quoteIcon: { position: 'absolute', top: -5, left: -5 },
+    text: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22, fontWeight: '500' },
+    
+    cardFooter: { marginTop: 12, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 10 },
     date: { fontSize: 11, color: Colors.textLight, textAlign: 'right' },
-    actions: { flexDirection: 'row', gap: 10, marginTop: 15, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 15 },
-    actionButton: { flex: 1, flexDirection: 'row', paddingVertical: 10, borderRadius: 8, justifyContent: 'center', alignItems: 'center', gap: 6 },
-    approveButton: { backgroundColor: Colors.success },
-    rejectButton: { backgroundColor: Colors.error },
+    
+    actions: { flexDirection: 'row', gap: 12, marginTop: 16 },
+    actionButton: { flex: 1, flexDirection: 'row', paddingVertical: 12, borderRadius: 12, justifyContent: 'center', alignItems: 'center', gap: 8 },
+    approveButton: { backgroundColor: Colors.primary },
+    rejectButton: { backgroundColor: Colors.error + '10' },
     actionButtonText: { color: Colors.white, fontSize: 13, fontWeight: '700' },
+    
     empty: { alignItems: 'center', marginTop: 100 },
-    emptyText: { marginTop: 10, color: Colors.textLight, fontSize: 14 },
+    emptyIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+    emptyText: { color: Colors.textLight, fontSize: Fonts.sizes.md, fontWeight: '600' }
 });
