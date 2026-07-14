@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Image } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthGuard } from '../../utils/useAuthGuard';
+import { startOrGetConversation } from '../../utils/chatHelper';
 
 export default function JobDetail() {
     const router = useRouter();
@@ -18,79 +18,81 @@ export default function JobDetail() {
     const [loading, setLoading] = useState(true);
     const [isConnected, setIsConnected] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
+    const [applicationStatus, setApplicationStatus] = useState(null);
 
     const loadJob = useCallback(async () => {
         if (!id) return;
+        const uid = user?.uid || user?.id;
         setLoading(true);
         try {
             // Fetch job
-            const jobRef = doc(db, 'jobs', id);
-            const jobSnap = await getDoc(jobRef);
+            const { data: jobData, error: jobError } = await supabase
+                .from('jobs')
+                .select('*, employer:employer_id(*)')
+                .eq('id', id)
+                .single();
             
-            if (!jobSnap.exists()) {
+            if (jobError || !jobData) {
                 setJob(null);
                 setLoading(false);
                 return;
             }
-            const jobData = { id: jobSnap.id, ...jobSnap.data() };
-            
-            // fetch Employer
-            if (jobData.employer_id) {
-                const empRef = doc(db, 'users', jobData.employer_id);
-                const empSnap = await getDoc(empRef);
-                if (empSnap.exists()) {
-                    jobData.employer = { id: empSnap.id, ...empSnap.data() };
-                }
-            }
 
-            // --- Self-healing: Sync application count (Employer only to avoid permission errors) ---
-            if (user?.uid === jobData.employer_id) {
-                const realCountQuery = query(collection(db, 'applications'), where('job_id', '==', id));
-                const realCountSnap = await getDocs(realCountQuery);
-                if (realCountSnap.size !== jobData.applications_count) {
-                    await updateDoc(jobRef, { applications_count: realCountSnap.size });
-                    jobData.applications_count = realCountSnap.size;
+            // Sync application count (Employer only)
+            if (uid === jobData.employer_id) {
+                const { count } = await supabase
+                    .from('applications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('job_id', id);
+                
+                if (count !== jobData.applications_count) {
+                    await supabase.from('jobs').update({ applications_count: count }).eq('id', id);
+                    jobData.applications_count = count;
                 }
             }
 
             // Check if current worker has applied
             let hasApplied = false;
             if (user?.role === 'WORKER') {
-                const q = query(collection(db, 'applications'), where('job_id', '==', id), where('worker_id', '==', user.uid));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
+                const { data: appData } = await supabase
+                    .from('applications')
+                    .select('id, status')
+                    .eq('job_id', id)
+                    .eq('worker_id', uid)
+                    .maybeSingle();
+                
+                if (appData) {
                     hasApplied = true;
+                    setApplicationStatus(appData.status);
                     setHasPendingRequest(true);
                 }
 
-                // Also check connection
-                const connQ1 = query(collection(db, 'chat_conversations'), where('employer_id', '==', jobData.employer_id), where('worker_id', '==', user.uid));
-                const connSnap = await getDocs(connQ1);
-                if (!connSnap.empty && connSnap.docs[0].data().is_authorized) setIsConnected(true);
+                // Check connection
+                const { data: convData } = await supabase
+                    .from('chat_conversations')
+                    .select('is_authorized')
+                    .eq('employer_id', jobData.employer_id)
+                    .eq('worker_id', uid)
+                    .maybeSingle();
+                
+                if (convData?.is_authorized) setIsConnected(true);
             }
 
             // Fetch applicants if Employer owns the job
-            if (user?.role === 'EMPLOYER' && jobData.employer_id === user.uid) {
-                const q = query(collection(db, 'applications'), where('job_id', '==', id), where('employer_id', '==', user.uid), orderBy('created_at', 'desc'));
-                const snap = await getDocs(q);
-                const appsData = [];
-                for (const d of snap.docs) {
-                    const app = { id: d.id, ...d.data() };
-                    if (app.worker_id) {
-                        const wSnap = await getDoc(doc(db, 'users', app.worker_id));
-                        if(wSnap.exists()) app.worker = { id: wSnap.id, ...wSnap.data() };
-                    }
-                    appsData.push(app);
-                }
-                setApplicants(appsData);
+            if (user?.role === 'EMPLOYER' && jobData.employer_id === uid) {
+                const { data: apps } = await supabase
+                    .from('applications')
+                    .select('*, worker:worker_id(*)')
+                    .eq('job_id', id)
+                    .order('created_at', { ascending: false });
+                setApplicants(apps || []);
             }
-            // Map standard format
-            const formattedJob = {
+
+            setJob({
                 ...jobData,
                 _count: { applications: jobData.applications_count || 0 },
                 hasApplied,
-            };
-            setJob(formattedJob);
+            });
         } catch (err) {
             console.error('Load job error:', err);
         } finally {
@@ -104,28 +106,36 @@ export default function JobDetail() {
 
     const handleApply = async () => {
         if (!requireAuth()) return;
+        const uid = user?.uid || user?.id;
         
         if (isConnected) {
             try {
-                // Open Chat directly
-                const q = query(collection(db, 'chat_conversations'), where('employer_id', '==', job.employer_id), where('worker_id', '==', user.uid));
-                const snap = await getDocs(q);
+                const { data: existing } = await supabase
+                    .from('chat_conversations')
+                    .select('id')
+                    .eq('employer_id', job.employer_id)
+                    .eq('worker_id', uid)
+                    .maybeSingle();
 
                 let conversationId;
-                if (!snap.empty) {
-                    conversationId = snap.docs[0].id;
+                if (existing) {
+                    conversationId = existing.id;
                 } else {
-                    const newRef = await addDoc(collection(db, 'chat_conversations'), {
-                        employer_id: job.employer_id,
-                        worker_id: user.uid,
-                        job_id: id,
-                        created_at: serverTimestamp(),
-                        updated_at: serverTimestamp(),
-                        last_message: 'Candidatura iniciada',
-                        is_authorized: true,
-                        initiated_by: user.uid
-                    });
-                    conversationId = newRef.id;
+                    const { data: newConv, error } = await supabase
+                        .from('chat_conversations')
+                        .insert({
+                            employer_id: job.employer_id,
+                            worker_id: uid,
+                            job_id: id,
+                            last_message: 'Candidatura iniciada',
+                            is_authorized: true,
+                            initiated_by: uid,
+                            participants: [uid, job.employer_id]
+                        })
+                        .select()
+                        .single();
+                    if (error) throw error;
+                    conversationId = newConv.id;
                 }
                 router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name } });
             } catch (err) {
@@ -135,43 +145,37 @@ export default function JobDetail() {
             Alert.alert("Aviso", "Já enviou um pedido de candidatura para esta vaga.");
         } else {
             try {
-                // Create the application document for employer dashboard compatibility
-                await addDoc(collection(db, 'applications'), {
+                await supabase.from('applications').insert({
                     job_id: id,
-                    worker_id: user.uid,
+                    worker_id: uid,
                     employer_id: job.employer_id,
-                    status: 'PENDING',
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
+                    status: 'PENDING'
                 });
 
-                // Increment applications_count on the job document
-                import('firebase/firestore').then(({ increment }) => {
-                    updateDoc(doc(db, 'jobs', id), {
-                        applications_count: increment(1)
-                    });
-                });
+                // Update count via RPC or manual increment (manual for simplicity here)
+                await supabase.rpc('increment_applications_count', { row_id: id });
 
-                // Send permission to converse request
-                import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
-                    await sendConnectionRequest(user, job.employer_id, { type: 'APPLY', job_id: job.id });
-                    
-                    // Create explicit notification for the employer
-                    await addDoc(collection(db, 'notifications'), {
-                        user_id: job.employer_id,
-                        sender_id: user.uid,
-                        title: 'Nova Candidatura',
-                        description: `${user.name} candidatou-se a "${job.title}".`,
-                        type: 'NEW_APPLICATION',
-                        read: false,
-                        created_at: serverTimestamp(),
-                        route: `/job/${id}`
-                    });
+                const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
+                await sendConnectionRequest(user, job.employer_id, { type: 'APPLY', job_id: job.id });
+                
+                const { error: notifErr } = await supabase.from('notifications').insert({
+                    user_id: job.employer_id,
+                    sender_id: uid,
+                    title: 'Nova Candidatura',
+                    content: `${user.name} candidatou-se a "${job.title}".`,
+                    type: 'NEW_APPLICATION',
+                    is_read: false,
+                    route: `/job/${id}`
+                }).select();
 
-                    setHasPendingRequest(true);
-                    Alert.alert("Sucesso", "Pedido de permissão para se candidatar enviado. Será notificado quando o cliente aceitar para poderem conversar.");
-                    loadJob();
-                });
+                if (notifErr) {
+                    console.log('Erro ao gravar notificação (Possível bloqueio RLS ou Trigger):', notifErr);
+                    // Não vamos parar o fluxo principal, mas avisamos o dev
+                }
+
+                setHasPendingRequest(true);
+                Alert.alert("Sucesso", "Pedido de permissão para se candidatar enviado. Será notificado quando o cliente aceitar para poderem conversar.");
+                loadJob();
             } catch (err) {
                 Alert.alert('Erro', err.message);
             }
@@ -181,24 +185,10 @@ export default function JobDetail() {
     const handleChat = async () => {
         if (!requireAuth()) return;
         try {
-            // Create or get chat conversation
-            const q = query(collection(db, 'chat_conversations'), where('job_id', '==', id), where('worker_id', '==', user.uid));
-            const snap = await getDocs(q);
-
-            let conversationId;
-            if (!snap.empty) {
-                conversationId = snap.docs[0].id;
-            } else {
-                // Not found, create one
-                const newRef = await addDoc(collection(db, 'chat_conversations'), {
-                    job_id: id,
-                    employer_id: job.employer_id,
-                    worker_id: user.uid,
-                    created_at: serverTimestamp(),
-                    updated_at: serverTimestamp()
-                });
-                conversationId = newRef.id;
-            }
+            const conversationId = await startOrGetConversation(user, job.employer_id, {
+                job_id: id,
+                last_message: `Olá, tenho interesse na sua vaga de "${job.title}"`
+            });
             router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name } });
         } catch (err) {
             Alert.alert('Erro', err.message);
@@ -206,33 +196,33 @@ export default function JobDetail() {
     };
 
     const handleApplicationAction = async (app, status) => {
+        const uid = user?.uid || user?.id;
         try {
-            await updateDoc(doc(db, 'applications', app.id), { 
+            await supabase.from('applications').update({ 
                 status,
-                updated_at: serverTimestamp()
-            });
+                updated_at: new Date().toISOString()
+            }).eq('id', app.id);
 
-            // Se for aceite, também tentamos autorizar a conversa de chat se existir pedido pendente
             if (status === 'ACCEPTED') {
                 try {
                     const { acceptConnectionRequest } = await import('../../utils/chatSecureHelper');
-                    // Procurar o pedido de conexão pendente deste trabalhador para este empregador
-                    const q = query(
-                        collection(db, 'connection_requests'),
-                        where('sender_id', '==', app.worker_id),
-                        where('receiver_id', '==', user.uid),
-                        where('status', '==', 'PENDING')
-                    );
-                    const snap = await getDocs(q);
-                    if (!snap.empty) {
-                        await acceptConnectionRequest(snap.docs[0].id, user, app.worker_id);
+                    const { data: existingReq } = await supabase
+                        .from('connection_requests')
+                        .select('id')
+                        .eq('sender_id', app.worker_id)
+                        .eq('receiver_id', uid)
+                        .eq('status', 'PENDING')
+                        .maybeSingle();
+                    
+                    if (existingReq) {
+                        await acceptConnectionRequest(existingReq.id, user, app.worker_id);
                     }
                 } catch (e) {
-                    console.log('Chat auth error (maybe already done):', e);
+                    console.log('Chat auth error:', e);
                 }
             }
 
-            // Criar notificação para o trabalhador
+            // Notifications
             let notifTitle = '';
             let notifDesc = '';
             let notifType = '';
@@ -252,14 +242,13 @@ export default function JobDetail() {
             }
 
             if (notifTitle) {
-                await addDoc(collection(db, 'notifications'), {
+                await supabase.from('notifications').insert({
                     user_id: app.worker_id,
-                    sender_id: user.uid,
+                    sender_id: uid,
                     title: notifTitle,
                     description: notifDesc,
                     type: notifType,
-                    read: false,
-                    created_at: serverTimestamp(),
+                    is_read: false,
                     route: `/job/${id}`
                 });
             }
@@ -279,11 +268,11 @@ export default function JobDetail() {
         return <View style={styles.loading}><Text>Vaga não encontrada</Text></View>;
     }
 
-    const isOwner = user?.uid === job.employer_id;
+    const isOwner = (user?.uid || user?.id) === job.employer_id;
     const isWorker = user?.role === 'WORKER';
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.header}>
                 <View style={styles.typeTag}>
                     <Text style={styles.typeTagText}>{job.type}</Text>
@@ -296,10 +285,9 @@ export default function JobDetail() {
                 <View style={styles.metaRow}>
                     <Text style={styles.meta}>
                         <Ionicons name="document-text-outline" size={14} color={Colors.textSecondary} />
-                        {' '}{job.contract_type === 'DAILY' ? 'Diarista' : job.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}
-                        {'  ·  '}
+                        <Text>{` ${job.contract_type === 'DAILY' ? 'Diarista' : job.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'} · `}</Text>
                         <Ionicons name={job.forResidence ? 'home-outline' : 'business-outline'} size={14} color={Colors.textSecondary} />
-                        {' '}{job.forResidence ? 'Residência' : 'Mini-empresa'}
+                        <Text>{` ${job.forResidence ? 'Residência' : 'Mini-empresa'}`}</Text>
                     </Text>
                 </View>
             </View>
@@ -307,6 +295,13 @@ export default function JobDetail() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Descrição</Text>
                 <Text style={styles.description}>{job.description}</Text>
+                {job.image_url && (
+                    <Image 
+                        source={{ uri: job.image_url }} 
+                        style={[styles.detailImage, Platform.OS === 'web' && { objectFit: 'cover' }]} 
+                        resizeMode="cover" 
+                    />
+                )}
             </View>
 
             <View style={styles.section}>
@@ -341,18 +336,45 @@ export default function JobDetail() {
 
             {isWorker && job.status === 'ACTIVE' && (
                 <View style={styles.actions}>
-                    <TouchableOpacity 
-                        style={[styles.applyButton, (!isConnected && hasPendingRequest) && { backgroundColor: Colors.borderLight }]} 
-                        onPress={handleApply} 
-                        activeOpacity={0.8}
-                    >
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "document-text")} size={18} color={(!isConnected && hasPendingRequest) ? Colors.textSecondary : Colors.white} />
-                            <Text style={[styles.applyButtonText, (!isConnected && hasPendingRequest) && { color: Colors.textSecondary }]}>
-                                {isConnected ? 'Enviar Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Candidatar-se')}
-                            </Text>
+                    {applicationStatus === 'HIRED' ? (
+                        <View style={[styles.applyButton, { backgroundColor: '#4CAF50', elevation: 0, shadowOpacity: 0 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="trophy" size={18} color={Colors.white} />
+                                <Text style={[styles.applyButtonText, { color: Colors.white }]}>Contratado para a vaga!</Text>
+                            </View>
                         </View>
-                    </TouchableOpacity>
+                    ) : applicationStatus === 'REJECTED' ? (
+                        <View style={[styles.applyButton, { backgroundColor: Colors.borderLight, elevation: 0, shadowOpacity: 0 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+                                <Text style={[styles.applyButtonText, { color: Colors.textSecondary }]}>Candidatura não selecionada</Text>
+                            </View>
+                        </View>
+                    ) : applicationStatus === 'ACCEPTED' ? (
+                        <TouchableOpacity 
+                            style={styles.applyButton} 
+                            onPress={handleApply} 
+                            activeOpacity={0.8}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="chatbubble-ellipses" size={18} color={Colors.white} />
+                                <Text style={styles.applyButtonText}>Candidatura Aceite - Enviar Mensagem</Text>
+                            </View>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity 
+                            style={[styles.applyButton, (!isConnected && hasPendingRequest) && { backgroundColor: Colors.borderLight, elevation: 0, shadowOpacity: 0 }]} 
+                            onPress={handleApply} 
+                            activeOpacity={0.8}
+                        >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "document-text")} size={18} color={(!isConnected && hasPendingRequest) ? Colors.textSecondary : Colors.white} />
+                                <Text style={[styles.applyButtonText, (!isConnected && hasPendingRequest) && { color: Colors.textSecondary }]}>
+                                    {isConnected ? 'Enviar Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Candidatar-se')}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
 
@@ -379,12 +401,20 @@ export default function JobDetail() {
                                 )}
                             </View>
                             {app.status === 'ACCEPTED' && (
-                                <TouchableOpacity 
-                                    style={{ backgroundColor: '#4CAF50', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
-                                    onPress={() => handleApplicationAction(app, 'HIRED')}
-                                >
-                                    <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Contratar</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                    <TouchableOpacity 
+                                        style={{ backgroundColor: Colors.error, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                                        onPress={() => handleApplicationAction(app, 'REJECTED')}
+                                    >
+                                        <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Rejeitar</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity 
+                                        style={{ backgroundColor: '#4CAF50', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                                        onPress={() => handleApplicationAction(app, 'HIRED')}
+                                    >
+                                        <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Contratar</Text>
+                                    </TouchableOpacity>
+                                </View>
                             )}
                             {(app.status === 'REJECTED' || app.status === 'HIRED') && (
                                 <Ionicons 
@@ -412,9 +442,10 @@ const styles = StyleSheet.create({
     metaRow: { marginBottom: 4 },
     meta: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary },
     section: { backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, margin: Spacing.md, marginBottom: 0 },
-    sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: 8 },
+    sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
     description: { fontSize: Fonts.sizes.md, color: Colors.textSecondary, lineHeight: 24 },
-    employerCard: { flexDirection: 'row', alignItems: 'center' },
+    detailImage: { width: '100%', height: 300, borderRadius: 12, marginTop: Spacing.md },
+    employerCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, padding: Spacing.md, borderRadius: 12 },
     empAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     empAvatarText: { fontSize: 18, fontWeight: '700', color: Colors.primary },
     empInfo: { flex: 1 },

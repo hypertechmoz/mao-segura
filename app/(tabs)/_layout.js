@@ -9,8 +9,6 @@ import { useTranslation } from 'react-i18next';
 import BrandWordmark from '../../components/BrandWordmark';
 
 import { Ionicons } from '@expo/vector-icons';
-import { db } from '../../services/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 
 function TabIcon({ icon, focused, badge }) {
@@ -176,111 +174,111 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
                             ))}
                         </View>
 
-                    <View style={styles.navDivider} />
+                        <View style={styles.navDivider} />
 
-                    {/* Right: Profile Button */}
-                    <View style={[styles.webNavRight, { overflow: 'visible' }]}>
-                        <TouchableOpacity
-                            onPress={() => {
-                                if (!requireAuth()) {
-                                    closeAllMenus();
-                                    return;
-                                }
-                                const next = !showProfileMenu;
-                                closeAllMenus();
-                                setShowProfileMenu(next);
-                            }}
-                            style={styles.webProfileBtn}
-                        >
-                            <View style={styles.webProfileAvatar}>
-                                {user?.profile_photo ? (
-                                    <Image source={{ uri: user.profile_photo }} style={styles.webProfileAvatarImage} />
-                                ) : (
-                                    <Text style={styles.webProfileAvatarText}>{user?.name?.[0] || '?'}</Text>
-                                )}
-                            </View>
-                        </TouchableOpacity>
-
-                        {showProfileMenu && (
-                            <View style={styles.webProfileDropdown}>
-                                <View style={styles.profileDropdownHeader}>
-                                    <View style={styles.dropdownAvatar}>
-                                        {user?.profile_photo ? (
-                                            <Image source={{ uri: user.profile_photo }} style={styles.dropdownAvatarImage} />
-                                        ) : (
-                                            <Text style={styles.dropdownAvatarText}>{user?.name?.[0] || '?'}</Text>
-                                        )}
-                                    </View>
-                                    <View>
-                                        <Text style={styles.dropdownName}>{user?.name}</Text>
-                                        <Text style={styles.dropdownRole}>
-                                            {user?.role === 'WORKER'
-                                                ? `${user?.profession_category || 'Trabalhador'}`
-                                                : 'Empregador'}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity
-                                    style={styles.dropdownViewProfile}
-                                    onPress={() => { closeAllMenus(); router.push('/(tabs)/profile'); }}
-                                >
-                                    <Text style={styles.dropdownViewProfileText}>{t('common.view_profile')}</Text>
-                                </TouchableOpacity>
-                                <View style={styles.dropdownDivider} />
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => { closeAllMenus(); router.push('/settings/edit-profile'); }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="create-outline" size={16} color={Colors.text} />
-                                        <Text style={styles.dropdownItemText}>{t('common.edit_profile')}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => { closeAllMenus(); router.push('/settings/premium'); }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="star" size={16} color={Colors.premium} />
-                                        <Text style={styles.dropdownItemText}>{t('common.premium')}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => { closeAllMenus(); router.push('/info/help'); }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="help-circle-outline" size={16} color={Colors.text} />
-                                        <Text style={styles.dropdownItemText}>{t('common.help')}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => { closeAllMenus(); router.push('/info/terms'); }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="document-text-outline" size={16} color={Colors.text} />
-                                        <Text style={styles.dropdownItemText}>{t('common.terms')}</Text>
-                                    </View>
-                                </TouchableOpacity>
-                                <View style={styles.dropdownDivider} />
-                                <TouchableOpacity
-                                    style={styles.dropdownItem}
-                                    onPress={() => {
+                        {/* Right: Profile Button */}
+                        <View style={[styles.webNavRight, { overflow: 'visible' }]}>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (!requireAuth()) {
                                         closeAllMenus();
-                                        logout();
-                                        router.replace('/');
-                                    }}
-                                >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="log-out-outline" size={16} color={Colors.error} />
-                                        <Text style={[styles.dropdownItemText, { color: Colors.error }]}>{t('common.logout')}</Text>
+                                        return;
+                                    }
+                                    const next = !showProfileMenu;
+                                    closeAllMenus();
+                                    setShowProfileMenu(next);
+                                }}
+                                style={styles.webProfileBtn}
+                            >
+                                <View style={styles.webProfileAvatar}>
+                                    {user?.profile_photo ? (
+                                        <Image source={{ uri: user.profile_photo }} style={styles.webProfileAvatarImage} />
+                                    ) : (
+                                        <Text style={styles.webProfileAvatarText}>{user?.name?.[0] || '?'}</Text>
+                                    )}
+                                </View>
+                            </TouchableOpacity>
+
+                            {showProfileMenu && (
+                                <View style={styles.webProfileDropdown}>
+                                    <View style={styles.profileDropdownHeader}>
+                                        <View style={styles.dropdownAvatar}>
+                                            {user?.profile_photo ? (
+                                                <Image source={{ uri: user.profile_photo }} style={styles.dropdownAvatarImage} />
+                                            ) : (
+                                                <Text style={styles.dropdownAvatarText}>{user?.name?.[0] || '?'}</Text>
+                                            )}
+                                        </View>
+                                        <View>
+                                            <Text style={styles.dropdownName}>{user?.name}</Text>
+                                            <Text style={styles.dropdownRole}>
+                                                {user?.role === 'WORKER'
+                                                    ? `${user?.profession_category || 'Trabalhador'}`
+                                                    : 'Empregador'}
+                                            </Text>
+                                        </View>
                                     </View>
-                                </TouchableOpacity>
-                            </View>
-                        )}
+                                    <TouchableOpacity
+                                        style={styles.dropdownViewProfile}
+                                        onPress={() => { closeAllMenus(); router.push('/(tabs)/profile'); }}
+                                    >
+                                        <Text style={styles.dropdownViewProfileText}>{t('common.view_profile')}</Text>
+                                    </TouchableOpacity>
+                                    <View style={styles.dropdownDivider} />
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => { closeAllMenus(); router.push('/settings/edit-profile'); }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="create-outline" size={16} color={Colors.text} />
+                                            <Text style={styles.dropdownItemText}>{t('common.edit_profile')}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => { closeAllMenus(); router.push('/settings/premium'); }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="star" size={16} color={Colors.premium} />
+                                            <Text style={styles.dropdownItemText}>{t('common.premium')}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => { closeAllMenus(); router.push('/info/help'); }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="help-circle-outline" size={16} color={Colors.text} />
+                                            <Text style={styles.dropdownItemText}>{t('common.help')}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={() => { closeAllMenus(); router.push('/info/terms'); }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="document-text-outline" size={16} color={Colors.text} />
+                                            <Text style={styles.dropdownItemText}>{t('common.terms')}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                    <View style={styles.dropdownDivider} />
+                                    <TouchableOpacity
+                                        style={styles.dropdownItem}
+                                        onPress={async () => {
+                                            closeAllMenus();
+                                            router.replace('/auth/login');
+                                            logout();
+                                        }}
+                                    >
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                            <Ionicons name="log-out-outline" size={16} color={Colors.error} />
+                                            <Text style={[styles.dropdownItemText, { color: Colors.error }]}>{t('common.logout')}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </View>
                     </View>
-                </View>
                 </View>
             </View>
         </View>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
-import { db } from '../../services/firebase';
-import { collection, query, where, getDocs, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,15 +11,17 @@ export default function Premium() {
     const [loading, setLoading] = useState(false);
 
     const fetchSubscription = async () => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
         try {
-            const q = query(collection(db, 'subscriptions'), where('user_id', '==', user.uid));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                setSubscription({ id: snap.docs[0].id, ...snap.docs[0].data() });
-            } else {
-                setSubscription(null);
-            }
+            const { data, error } = await supabase
+                .from('subscriptions')
+                .select('*')
+                .eq('user_id', uid)
+                .maybeSingle();
+            
+            if (error) throw error;
+            setSubscription(data);
         } catch (err) {
             console.error('Fetch sub error:', err);
         }
@@ -31,24 +32,21 @@ export default function Premium() {
     }, [user]);
 
     const handleSubscribe = async (method) => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
         setLoading(true);
         try {
             const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
             
-            // Check if exists
-            const q = query(collection(db, 'subscriptions'), where('user_id', '==', user.uid));
-            const snap = await getDocs(q);
-            
-            if (!snap.empty) {
-                const subId = snap.docs[0].id;
-                await updateDoc(doc(db, 'subscriptions', subId), { plan: 'PREMIUM', payment_method: method, expires_at: expiresAt });
-            } else {
-                await setDoc(doc(collection(db, 'subscriptions')), { user_id: user.uid, plan: 'PREMIUM', payment_method: method, expires_at: expiresAt });
-            }
+            await supabase.from('subscriptions').upsert({
+                user_id: uid,
+                plan: 'PREMIUM',
+                payment_method: method,
+                expires_at: expiresAt
+            });
 
             // Sync user premium status
-            await updateDoc(doc(db, 'users', user.uid), { is_premium: true });
+            await supabase.from('users').update({ is_premium: true }).eq('id', uid);
 
             const { refreshUser } = useAuthStore.getState();
             await refreshUser();
@@ -62,7 +60,8 @@ export default function Premium() {
     };
 
     const handleCancel = async () => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
         Alert.alert('Cancelar Premium', 'Tem certeza que deseja cancelar?', [
             { text: 'Não', style: 'cancel' },
             {
@@ -70,12 +69,9 @@ export default function Premium() {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        const q = query(collection(db, 'subscriptions'), where('user_id', '==', user.uid));
-                        const snap = await getDocs(q);
-                        if (!snap.empty) {
-                            await updateDoc(doc(db, 'subscriptions', snap.docs[0].id), { plan: 'FREE' });
-                        }
-                        await updateDoc(doc(db, 'users', user.uid), { is_premium: false });
+                        await supabase.from('subscriptions').update({ plan: 'FREE' }).eq('user_id', uid);
+                        await supabase.from('users').update({ is_premium: false }).eq('id', uid);
+                        
                         const { refreshUser } = useAuthStore.getState();
                         await refreshUser();
                         await fetchSubscription();
@@ -95,7 +91,7 @@ export default function Premium() {
                 <View style={styles.crown}>
                     <Ionicons name="trophy" size={32} color={Colors.premium} />
                 </View>
-                <Text style={styles.title}>Trabalhe já Premium</Text>
+                <Text style={styles.title}>Konekta Premium</Text>
                 <Text style={styles.subtitle}>
                     Destaque o seu perfil e tenha acesso a funcionalidades exclusivas
                 </Text>

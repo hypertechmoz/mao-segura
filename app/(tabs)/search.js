@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES, PROVINCES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../components/PostCard';
@@ -36,42 +35,27 @@ export default function Search() {
             setLoading(true);
             setSearched(true);
             
-            let q;
-            const collectionName = activeTab === 'VAGAS' ? 'jobs' : 'posts';
+            let query;
+            const table = activeTab === 'VAGAS' ? 'jobs' : 'posts';
 
-            if (isType && activeTab === 'VAGAS') {
-                q = query(collection(db, collectionName), where('status', '==', 'ACTIVE'), where('type', '==', searchTerm));
-            } else if (activeTab === 'VAGAS') {
-                q = query(collection(db, collectionName), where('status', '==', 'ACTIVE'));
+            if (activeTab === 'VAGAS') {
+                query = supabase.from('jobs').select('*').eq('status', 'ACTIVE');
+                if (isType) {
+                    query = query.eq('type', searchTerm);
+                } else if (searchTerm) {
+                    query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+                }
             } else {
-                q = query(collection(db, collectionName));
-            }
-            
-            const snap = await getDocs(q);
-            let data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-            // Sort by created_at descending in memory
-            data.sort((a, b) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0));
-
-            if (!isType && searchTerm) {
-                const termLower = searchTerm.toLowerCase();
-                if (activeTab === 'VAGAS') {
-                    data = data.filter(job => 
-                        (job.title?.toLowerCase().includes(termLower)) ||
-                        (job.type?.toLowerCase().includes(termLower)) ||
-                        (job.description?.toLowerCase().includes(termLower))
-                    );
-                } else {
-                    data = data.filter(post => 
-                        (post.content?.toLowerCase().includes(termLower)) ||
-                        (post.work_type?.toLowerCase().includes(termLower)) ||
-                        (post.author_name?.toLowerCase().includes(termLower)) ||
-                        (post.availability?.toLowerCase().includes(termLower))
-                    );
+                query = supabase.from('posts').select('*, user:user_id(*)');
+                if (searchTerm) {
+                    query = query.ilike('content', `%${searchTerm}%`);
                 }
             }
             
-            setResults(data);
+            const { data, error } = await query.order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setResults(data || []);
         } catch (err) {
             console.error('Search error:', err);
         } finally {
@@ -153,7 +137,8 @@ export default function Search() {
                             >
                                 <Text style={styles.resultTitle}>{item.title}</Text>
                                 <Text style={styles.resultMeta}>
-                                    <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {item.city} · {item.contract_type === 'DAILY' ? 'Diarista' : item.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}
+                                    <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
+                                    <Text>{` ${item.city} · ${item.contract_type === 'DAILY' ? 'Diarista' : item.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}`}</Text>
                                 </Text>
                             </TouchableOpacity>
                         ) : (

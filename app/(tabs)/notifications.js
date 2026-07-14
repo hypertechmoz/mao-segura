@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
@@ -17,10 +16,11 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
 
     const handlePress = async () => {
         try {
-            // Mark as read in Firestore if it's an explicit notification
-            if (id && id.startsWith('notif-')) {
-                const docId = id.replace('notif-', '');
-                await updateDoc(doc(db, 'notifications', docId), { read: true });
+            if (id) {
+                const docId = String(id).startsWith('notif-') ? id.replace('notif-', '') : id;
+                if (String(id).startsWith('notif-')) {
+                    await supabase.from('notifications').update({ is_read: true }).eq('id', docId);
+                } 
             }
             if (route) router.push(route);
         } catch (e) {
@@ -54,9 +54,11 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                         }} style={{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
                             <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={(e) => {
+                        <TouchableOpacity onPress={async (e) => {
                             e.stopPropagation();
-                            rejectConnectionRequest(reqId);
+                            try {
+                                await rejectConnectionRequest(reqId);
+                            } catch(err) { console.error(err); }
                         }} style={{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
                             <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>
                         </TouchableOpacity>
@@ -71,9 +73,18 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
 export default function Notifications() {
     const { user } = useAuthStore();
     const router = useRouter();
+    
+    // State
     const [notifications, setNotifications] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
+    
+    // Pagination State
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const PAGE_SIZE = 20;
+
     const { unreadMessages, unreadNotifications } = useUnreadCount();
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
@@ -88,186 +99,142 @@ export default function Notifications() {
         outputRange: [0, -HEADER_HEIGHT],
     });
 
+    const loadData = async (isLoadMore = false) => {
+        if (!user) return;
+        const uid = user.uid || user.id;
+
+        const currentPage = isLoadMore ? page + 1 : 0;
+        const from = currentPage * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        if (isLoadMore) setLoadingMore(true);
+        else {
+            setPage(0);
+            setHasMore(true);
+            if (!refreshing) setInitialLoading(true);
+        }
+
+        try {
+            // 1. Explicit Notifications
+            const { data: explicit } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', uid)
+                .order('created_at', { ascending: false })
+                .range(from, to);
+
+            const explicitFormatted = explicit?.map(d => ({
+                id: `notif-${d.id}`,
+                route: d.route,
+                icon: d.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (d.type === 'USER_HIRED' ? 'trophy' : (d.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
+                iconColor: d.type === 'APPLICATION_ACCEPTED' || d.type === 'USER_HIRED' ? '#4CAF50' : (d.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
+                title: d.title || 'Notificação',
+                description: d.description || d.content,
+                time: d.created_at,
+                isNew: !d.is_read,
+            })) || [];
+
+            let connectionReqsFormatted = [];
+            // Fetch connection requests only on the first page
+            if (currentPage === 0) {
+                const { data: reqs } = await supabase
+                    .from('connection_requests')
+                    .select('*')
+                    .eq('receiver_id', uid)
+                    .eq('status', 'PENDING')
+                    .order('created_at', { ascending: false });
+
+                connectionReqsFormatted = reqs?.map(d => ({
+                    id: d.id,
+                    reqId: d.id,
+                    type: 'CONNECTION_REQUEST',
+                    senderId: d.sender_id,
+                    icon: 'person-add',
+                    iconColor: Colors.primary,
+                    title: d.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
+                    description: `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
+                    time: d.created_at,
+                    isNew: true,
+                    requiresAction: true,
+                    user: user,
+                    route: d.job_id ? `/job/${d.job_id}` : `/user/${d.sender_id}`
+                })) || [];
+            }
+
+            if (!explicit || explicit.length < PAGE_SIZE) {
+                setHasMore(false);
+            }
+
+            setNotifications(prev => {
+                let newNotifs = isLoadMore ? [...prev] : [];
+                if (!isLoadMore) {
+                    newNotifs = [...connectionReqsFormatted, ...explicitFormatted];
+                } else {
+                    const existingIds = new Set(prev.map(n => n.id));
+                    const uniqueExplicit = explicitFormatted.filter(n => !existingIds.has(n.id));
+                    newNotifs = [...prev, ...uniqueExplicit];
+                }
+                return newNotifs.sort((a, b) => new Date(b.time) - new Date(a.time));
+            });
+
+            if (isLoadMore) setPage(currentPage);
+
+        } catch (err) {
+            console.error('Error loading notifications', err);
+        } finally {
+            setInitialLoading(false);
+            setLoadingMore(false);
+            setRefreshing(false);
+        }
+    };
+
     useEffect(() => {
         if (!user) {
             setNotifications([]);
             return;
         }
 
-        // Update last viewed timestamp to clear badge
-        updateDoc(doc(db, 'users', user.uid), { 
-            last_notifications_viewed_at: serverTimestamp() 
-        }).catch(err => console.warn('Error updating badge timestamp:', err));
+        const uid = user.uid || user.id;
 
-        const unsubscribers = [];
-        let aggregatedNotifications = { apps: [], employerApps: [], msgs: [], jobs: [], connectionReqs: [], explicit: [] };
+        loadData();
 
-        const updateState = () => {
-            const all = [
-                ...aggregatedNotifications.explicit,
-                ...aggregatedNotifications.apps,
-                ...aggregatedNotifications.employerApps,
-                ...aggregatedNotifications.msgs,
-                ...aggregatedNotifications.jobs,
-                ...aggregatedNotifications.connectionReqs
-            ];
-            // Sort by time
-            setNotifications(all.sort((a, b) => {
-                const timeA = toDate(a.time).getTime();
-                const timeB = toDate(b.time).getTime();
-                return timeB - timeA;
-            }));
-        };
-
-        const lastViewed = user.last_notifications_viewed_at?.seconds || 0;
-
-        // 1. WORKER: Application status changes (handled by explicit system)
-        if (user.role === 'WORKER') {
-            // 2. WORKER: New Jobs (Filtered by Connections)
-            const getConnectedJobs = async () => {
-                // First get connected user IDs
-                const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', user.uid));
-                const connQ2 = query(collection(db, 'connections'), where('user2_id', '==', user.uid));
-                const [snap1, snap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
-                
-                const connectedIds = new Set();
-                snap1.forEach(d => connectedIds.add(d.data().user2_id));
-                snap2.forEach(d => connectedIds.add(d.data().user1_id));
-
-                if (connectedIds.size === 0) {
-                    aggregatedNotifications.jobs = [];
-                    updateState();
-                    return;
-                }
-
-                // Now listen for jobs from these connections
-                const qJobs = query(collection(db, 'jobs'), orderBy('created_at', 'desc'), limit(20));
-                unsubscribers.push(onSnapshot(qJobs, (snap) => {
-                    const activeJobs = [];
-                    snap.forEach(d => {
-                        const data = d.data();
-                        if (data.status === 'ACTIVE' && connectedIds.has(data.employer_id)) {
-                            activeJobs.push({ id: d.id, ...data });
-                        }
-                    });
-                    
-                    const list = activeJobs.slice(0, 5).map(data => {
-                        return {
-                            id: `job-${data.id}`,
-                            route: `/job/${data.id}`,
-                            icon: 'briefcase',
-                            iconColor: '#1976D2',
-                            title: 'Vaga de uma conexão',
-                            description: `"${data.title}" — Postada por um contacto seu.`,
-                            time: data.created_at,
-                            isNew: (Date.now() - toDate(data.created_at).getTime()) < 604800000,
-                        };
-                    });
-                    aggregatedNotifications.jobs = list;
-                    updateState();
-                }, (err) => console.log('Notifications qJobs error:', err)));
-            };
-            getConnectedJobs();
-        }
-
-        // 3. EMPLOYER: New Applications
-            // Derived notifications for employers are now handled by the explicit system in job/[id].js
-
-        // 4. ALL: Unread Messages from Chat Conversations
-        const fieldMatch = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
-        const qMsgs = query(
-            collection(db, 'chat_conversations'), 
-            where(fieldMatch, '==', user.uid || user.id)
-        );
-        unsubscribers.push(onSnapshot(qMsgs, async (snap) => {
-            const list = [];
-            for (const d of snap.docs) {
-                const data = d.data();
-                if (data.unread_count && data.unread_count[user.uid || user.id] > 0) {
-                    const otherUid = user.role === 'WORKER' ? data.employer_id : data.worker_id;
-                    let senderName = 'Alguém';
-                    if (otherUid) {
-                        const sSnap = await getDoc(doc(db, 'users', otherUid));
-                        if (sSnap.exists()) senderName = sSnap.data().name;
-                    }
-
-                    list.push({
-                        id: `msg-${d.id}`,
-                        route: `/(tabs)/messages`,
-                        icon: 'chatbubble-ellipses',
-                        iconColor: Colors.primary,
-                        title: 'Novas Mensagens',
-                        description: `Você tem ${data.unread_count[user.uid || user.id]} mensagem(ns) não lida(s) de ${senderName}.`,
-                        time: data.updated_at || data.created_at,
-                        isNew: true,
-                    });
-                }
-            }
-            aggregatedNotifications.msgs = list;
-            updateState();
-        }, (err) => console.log('Notifications qMsgs error:', err)));
-
-        // Set a timeout to clear the loading state, allowing the async snapshots above to fully resolve
-        const loadingTimer = setTimeout(() => {
-            setInitialLoading(false);
-        }, 1200);
-
-        const qReqs = query(
-            collection(db, 'connection_requests'),
-            where('receiver_id', '==', user.uid || user.id),
-            where('status', '==', 'PENDING')
-        );
-        unsubscribers.push(onSnapshot(qReqs, (snap) => {
-            const list = snap.docs.map(d => {
-                const data = d.data();
-                return {
+        // Subscribe to real-time changes
+        const channel = supabase
+            .channel('notifications-changes')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, payload => {
+                const d = payload.new;
+                const newNotif = {
+                    id: `notif-${d.id}`,
+                    route: d.route,
+                    icon: d.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (d.type === 'USER_HIRED' ? 'trophy' : (d.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
+                    iconColor: d.type === 'APPLICATION_ACCEPTED' || d.type === 'USER_HIRED' ? '#4CAF50' : (d.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
+                    title: d.title || 'Notificação',
+                    description: d.description || d.content,
+                    time: d.created_at,
+                    isNew: true,
+                };
+                setNotifications(prev => [newNotif, ...prev].sort((a, b) => new Date(b.time) - new Date(a.time)));
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'connection_requests', filter: `receiver_id=eq.${uid}` }, payload => {
+                const d = payload.new;
+                const newReq = {
                     id: d.id,
-                    reqId: d.id, // For actions
+                    reqId: d.id,
                     type: 'CONNECTION_REQUEST',
-                    senderId: data.sender_id,
+                    senderId: d.sender_id,
                     icon: 'person-add',
                     iconColor: Colors.primary,
-                    title: data.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
-                    description: `${data.sender_name} enviou um pedido de contacto${data.job_id ? ' para uma vaga' : ''}.`,
-                    time: data.created_at,
+                    title: d.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
+                    description: `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
+                    time: d.created_at,
                     isNew: true,
                     requiresAction: true,
-                    user: user
+                    user: user,
+                    route: d.job_id ? `/job/${d.job_id}` : `/user/${d.sender_id}`
                 };
-            }).sort((a, b) => {
-                const timeA = toDate(a.time).getTime();
-                const timeB = toDate(b.time).getTime();
-                return timeB - timeA;
-            });
-            aggregatedNotifications.connectionReqs = list;
-            updateState();
-        }, (err) => console.log('Notifications qReqs error:', err)));
-
-        // 5. Explicit Notifications (The new system)
-        const qExplicit = query(
-            collection(db, 'notifications'),
-            where('user_id', '==', user.uid || user.id),
-            where('read', '==', false),
-            orderBy('created_at', 'desc'),
-            limit(20)
-        );
-        unsubscribers.push(onSnapshot(qExplicit, (snap) => {
-            const list = snap.docs.map(d => {
-                const data = d.data();
-                return {
-                    id: `notif-${d.id}`,
-                    route: data.route,
-                    icon: data.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (data.type === 'USER_HIRED' ? 'trophy' : (data.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
-                    iconColor: data.type === 'APPLICATION_ACCEPTED' || data.type === 'USER_HIRED' ? '#4CAF50' : (data.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
-                    title: data.title,
-                    description: data.description,
-                    time: data.created_at,
-                    isNew: true,
-                };
-            });
-            aggregatedNotifications.explicit = list;
-            updateState();
-        }, (err) => console.error('Snapshot notifications error:', err)));
+                setNotifications(prev => [newReq, ...prev].sort((a, b) => new Date(b.time) - new Date(a.time)));
+            })
+            .subscribe();
 
         const backAction = () => {
             router.replace('/(tabs)/home');
@@ -276,16 +243,20 @@ export default function Notifications() {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
         return () => {
-            unsubscribers.forEach(unsub => unsub());
-            clearTimeout(loadingTimer);
+            supabase.removeChannel(channel);
             backHandler.remove();
         };
-    }, [user, user?.role]);
+    }, [user?.uid, user?.id]);
 
-    const onRefresh = async () => {
-        setRefreshing(true);
-        // Notifications are real-time, just a delay for UX
-        setTimeout(() => setRefreshing(false), 1000);
+    const markAllAsRead = async () => {
+        if (!user) return;
+        const uid = user.uid || user.id;
+        try {
+            await supabase.from('notifications').update({ is_read: true }).eq('user_id', uid).eq('is_read', false);
+            setNotifications(prev => prev.map(n => n.id.toString().startsWith('notif-') ? { ...n, isNew: false } : n));
+        } catch (e) {
+            console.error('Error marking all as read', e);
+        }
     };
 
     return (
@@ -308,6 +279,9 @@ export default function Notifications() {
                             <Text style={nStyles.headerTitle}>Notificações</Text>
                         </View>
                         <View style={nStyles.headerActions}>
+                            <TouchableOpacity onPress={markAllAsRead} style={nStyles.headerIconBtn}>
+                                <Ionicons name="checkmark-done-circle-outline" size={24} color={Colors.primary} />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={nStyles.headerIconBtn}>
                                 <Ionicons name="chatbubble-outline" size={24} color={Colors.primary} />
                                 {unreadMessages > 0 && (
@@ -321,31 +295,43 @@ export default function Notifications() {
                 </Animated.View>
             )}
 
-            <Animated.ScrollView
+            <Animated.FlatList
                 style={nStyles.container}
-                contentContainerStyle={[nStyles.content, !isWeb && { marginTop: HEADER_HEIGHT }]}
+                contentContainerStyle={[nStyles.content, !isWeb && { paddingTop: HEADER_HEIGHT + 16 }]}
                 onScroll={Animated.event(
                     [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                     { useNativeDriver: Platform.OS !== 'web' }
                 )}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
-            >
-                {initialLoading ? (
-                    <View style={[nStyles.empty, { marginTop: 40 }]}>
-                        <ActivityIndicator size="large" color={Colors.primary} />
+                data={notifications}
+                keyExtractor={(item) => item.id.toString()}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadData(false); }} colors={[Colors.primary]} />}
+                ListHeaderComponent={isWeb ? (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md, paddingHorizontal: 4 }}>
+                        <Text style={{ fontSize: 24, fontWeight: '800', color: Colors.text }}>Notificações</Text>
+                        <TouchableOpacity onPress={markAllAsRead} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 }}>
+                            <Ionicons name="checkmark-done" size={16} color={Colors.primary} style={{ marginRight: 4 }} />
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary }}>Marcar lido</Text>
+                        </TouchableOpacity>
                     </View>
-                ) : notifications.length === 0 ? (
-                    <View style={nStyles.empty}>
-                        <Ionicons name="notifications-off-outline" size={56} color={Colors.textLight} style={{ marginBottom: Spacing.md, opacity: 0.4 }} />
-                        <Text style={nStyles.emptyTitle}>Sem notificações</Text>
-                        <Text style={nStyles.emptyDesc}>Quando houver atualizações sobre as suas candidaturas, mensagens ou novas vagas, elas aparecerão aqui.</Text>
-                    </View>
-                ) : (
-                    notifications.map(n => (
-                        <NotificationItem key={n.id} {...n} />
-                    ))
+                ) : null}
+                ListEmptyComponent={() => (
+                    initialLoading ? (
+                        <View style={[nStyles.empty, { marginTop: 40 }]}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                        </View>
+                    ) : (
+                        <View style={nStyles.empty}>
+                            <Ionicons name="notifications-off-outline" size={56} color={Colors.textLight} style={{ marginBottom: Spacing.md, opacity: 0.4 }} />
+                            <Text style={nStyles.emptyTitle}>Sem notificações</Text>
+                            <Text style={nStyles.emptyDesc}>Quando houver atualizações sobre as suas candidaturas, mensagens ou novas vagas, elas aparecerão aqui.</Text>
+                        </View>
+                    )
                 )}
-            </Animated.ScrollView>
+                renderItem={({ item }) => <NotificationItem {...item} />}
+                onEndReached={() => { if (hasMore && !loadingMore && !initialLoading) loadData(true); }}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={() => loadingMore ? <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} /> : null}
+            />
         </View>
     );
 }

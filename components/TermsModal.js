@@ -54,7 +54,7 @@ export default function TermsModal() {
                 <View style={styles.modalCard}>
                     <View style={styles.header}>
                         <Ionicons name="briefcase" size={36} color={Colors.primary} style={{ marginBottom: 12 }} />
-                        <Text style={styles.title}>Bem-vindo ao Trabalhe já</Text>
+                        <Text style={styles.title}>Bem-vindo ao Konekta</Text>
                         <Text style={styles.subtitle}>Antes de entrar, por favor leia atentamente as nossas regras essenciais de convivência e termos de uso da comunidade.</Text>
                     </View>
 
@@ -71,7 +71,7 @@ export default function TermsModal() {
 
                         <Text style={styles.sectionTitle}>3. Responsabilidade do Serviço</Text>
                         <Text style={styles.text}>
-                            O Trabalhe já facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
+                            O Konekta facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
                         </Text>
 
                         <Text style={styles.sectionTitle}>4. Veracidade das Vagas</Text>
@@ -116,10 +116,19 @@ const styles = StyleSheet.create({
         maxHeight: '90%', 
         flexShrink: 1, 
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.25,
-        shadowRadius: 20,
+        ...Platform.select({
+            web: {
+                boxShadow: '0 10px 20px rgba(0,0,0,0.25)',
+                borderWidth: 1,
+                borderColor: Colors.borderLight,
+            },
+            default: {
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.25,
+                shadowRadius: 20,
+            }
+        }),
         elevation: 10,
     },
     header: {

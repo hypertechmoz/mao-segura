@@ -11,8 +11,8 @@ export function calculateCompleteness(userData = {}, profileData = {}, role = 'W
     const mergedData = { ...userData, ...profileData };
 
     const requiredFields = role === 'EMPLOYER'
-        ? ['name', 'phone', 'province', 'city', 'bairro', 'description', 'contact_preference', 'profile_photo']
-        : ['name', 'phone', 'province', 'city', 'bairro', 'description', 'contact_preference', 'profile_photo', 'work_types'];
+        ? ['name', 'phone', 'province', 'city', 'bairro', 'description', 'profile_photo']
+        : ['name', 'phone', 'province', 'city', 'bairro', 'description', 'profile_photo', 'profession_category', 'work_types'];
 
     let filled = 0;
     requiredFields.forEach(field => {

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, Modal } from 'react-native';
+import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform, KeyboardAvoidingView, Modal, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, addDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '../../services/supabase';
+import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
 import { sendPushNotification } from '../../services/notificationService';
 import { Colors, Spacing, Fonts, JOB_TYPES, CONTRACT_TYPES, PROFESSION_CATEGORIES } from '../../constants';
@@ -10,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function CreateJob() {
     const router = useRouter();
-    const { user } = useAuthStore();
+    const { user, isLoading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [showSuccessCard, setShowSuccessCard] = useState(false);
     
@@ -26,10 +27,24 @@ export default function CreateJob() {
     const [form, setForm] = useState({
         title: '',
         type: '',
-        contractType: 'TEMPORARY',
-        forResidence: true,
+        contractType: null,
+        forResidence: null,
         description: '',
     });
+    const [imageUri, setImageUri] = useState(null);
+
+    const pickImage = async () => {
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 0.8,
+        });
+
+        if (!result.canceled) {
+            setImageUri(result.assets[0].uri);
+        }
+    };
 
     const update = (field, value) => setForm({ ...form, [field]: value });
 
@@ -76,7 +91,22 @@ export default function CreateJob() {
     };
 
     const handleCreate = async () => {
-        if (!user) return;
+        if (authLoading) {
+            Alert.alert('Aguarde', 'Ainda estamos a carregar a sua sessão.');
+            return;
+        }
+
+        if (!user) {
+            Alert.alert('Sessão inválida', 'Entre novamente para publicar a vaga.');
+            router.replace('/auth/login');
+            return;
+        }
+
+        if (user.role !== 'EMPLOYER') {
+            Alert.alert('Acesso bloqueado', 'Apenas clientes/empregadores podem publicar vagas.');
+            return;
+        }
+
         const { title, type, contractType, description, forResidence } = form;
         const { province, city, bairro } = user;
         console.log('Validating job creation form:', { title, type, contractType, description, province, city });
@@ -94,6 +124,10 @@ export default function CreateJob() {
             Alert.alert('Atenção', 'Selecione o tipo de contrato.');
             return;
         }
+        if (forResidence === null) {
+            Alert.alert('Atenção', 'Indique se a vaga é para Residência ou Mini-empresa.');
+            return;
+        }
         if (!description.trim()) {
             Alert.alert('Atenção', 'A descrição da vaga é obrigatória.');
             return;
@@ -105,10 +139,18 @@ export default function CreateJob() {
 
         setLoading(true);
         try {
-            // We don't await the addDoc so that UI does not hang on slow networks 
-            // causing ERR_QUIC_PROTOCOL_ERROR. Firebase handles the sync in the background.
-            const jobPromise = addDoc(collection(db, 'jobs'), {
-                employer_id: user.uid,
+            console.log('Creating job...');
+            
+            let imageUrl = null;
+            if (imageUri) {
+                const fileName = `${Date.now()}.jpg`;
+                const uploadPromise = uploadImage(imageUri, `jobs/${user.uid || user.id}/${fileName}`);
+                const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout ao carregar imagem.')), 20000));
+                imageUrl = await Promise.race([uploadPromise, timeoutPromise]);
+            }
+
+            const jobPayload = {
+                employer_id: user.uid || user.id,
                 title: title.trim(),
                 type: type.trim(),
                 description: description.trim(),
@@ -118,38 +160,54 @@ export default function CreateJob() {
                 city: city,
                 bairro: bairro || '',
                 status: 'ACTIVE',
-                applications_count: 0,
-                created_at: serverTimestamp(),
-                updated_at: serverTimestamp()
-            });
+                image_url: imageUrl || null,
+            };
 
-            // Disparar Notificação Background no fututo (não atrasa a UI)
-            jobPromise.then(() => {
-                const qWorkers = query(collection(db, 'users'), where('role', '==', 'WORKER'));
-                getDocs(qWorkers).then(snap => {
-                    snap.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data.pushToken && data.city === city) {
-                            sendPushNotification(
-                                data.pushToken, 
-                                'Nova Vaga na sua Cidade!', 
-                                `${title.trim()}`, 
-                                { type: 'job' }
-                            );
-                        }
-                    });
-                }).catch(e => console.warn('Background workers query error:', e));
-            }).catch(e => console.warn('Background job publish error:', e));
+            console.log('Sending payload:', jobPayload);
 
-            setLoading(false);
+            const dbPromise = supabase.from('jobs').insert(jobPayload).select();
+            const dbTimeout = new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo de espera esgotado na comunicação com o servidor (Timeout).')), 15000));
+            
+            const { data, error: jobError } = await Promise.race([dbPromise, dbTimeout]);
+
+            if (jobError) throw jobError;
+            console.log('Job created successfully');
+
+            // Background notification logic
+            const notifyWorkers = async () => {
+                try {
+                    const { data: workers } = await supabase
+                        .from('users')
+                        .select('city') // Removed pushToken until implemented
+                        .eq('role', 'WORKER')
+                        .eq('city', city);
+                    
+                    // workers?.forEach(worker => {
+                    //     if (worker.pushToken) {
+                    //         sendPushNotification(
+                    //             worker.pushToken, 
+                    //             'Nova Vaga na sua Cidade!', 
+                    //             `${title.trim()}`, 
+                    //             { type: 'job' }
+                    //         );
+                    //     }
+                    // });
+                } catch (e) {
+                    console.warn('Background workers query error:', e);
+                }
+            };
+            notifyWorkers();
+
             setShowSuccessCard(true);
         } catch (err) {
-            setLoading(false);
+            console.error('Job creation error:', err);
             if (Platform.OS === 'web') {
                 window.alert('Erro: ' + err.message);
             } else {
                 Alert.alert('Erro', err.message);
             }
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -159,6 +217,16 @@ export default function CreateJob() {
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
+            <Modal visible={loading} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.loadingCard}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.loadingTitle}>A publicar vaga...</Text>
+                        <Text style={styles.loadingDesc}>Estamos a guardar os dados e preparar a publicação.</Text>
+                    </View>
+                </View>
+            </Modal>
+
             <Modal visible={showSuccessCard} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={styles.successCard}>
@@ -187,7 +255,10 @@ export default function CreateJob() {
                 showsVerticalScrollIndicator={false}
             >
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                    <TouchableOpacity onPress={() => {
+                        if (router.canGoBack()) router.back();
+                        else router.replace('/(tabs)/home');
+                    }} style={styles.backButton}>
                         <Ionicons name="arrow-back" size={24} color={Colors.text} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Publicar Vaga</Text>
@@ -343,10 +414,26 @@ export default function CreateJob() {
                     </Text>
                 </View>
 
+                {imageUri && (
+                    <View style={styles.imagePreviewContainer}>
+                        <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+                        <TouchableOpacity style={styles.removeImageBtn} onPress={() => setImageUri(null)}>
+                            <Ionicons name="close-circle" size={24} color={Colors.white} />
+                        </TouchableOpacity>
+                    </View>
+                )}
+
                 <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleCreate} disabled={loading} activeOpacity={0.8}>
                     {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.buttonText}>Publicar Vaga</Text>}
                 </TouchableOpacity>
             </ScrollView>
+
+            <View style={styles.toolbar}>
+                <TouchableOpacity style={styles.toolbarBtn} onPress={pickImage}>
+                    <Ionicons name="image-outline" size={24} color={Colors.primary} />
+                    <Text style={styles.toolbarBtnText}>Adicionar Imagem</Text>
+                </TouchableOpacity>
+            </View>
         </KeyboardAvoidingView>
     );
 }
@@ -365,7 +452,27 @@ const styles = StyleSheet.create({
     
     // Suggestions
     suggestionContainer: { position: 'relative' },
-    suggestionsList: { position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: Colors.white, borderRadius: 12, borderWidth: 1, borderColor: Colors.borderLight, marginTop: 4, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, zIndex: 1000 },
+    suggestionsList: { 
+        position: 'absolute', 
+        top: '100%', 
+        left: 0, 
+        right: 0, 
+        backgroundColor: Colors.white, 
+        borderRadius: 12, 
+        borderWidth: 1, 
+        borderColor: Colors.borderLight, 
+        marginTop: 4, 
+        zIndex: 1000,
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 2 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 4, 
+            elevation: 5 
+        })
+    },
     suggestionItem: { paddingHorizontal: Spacing.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: Colors.borderLight },
     suggestionText: { fontSize: Fonts.sizes.md, color: Colors.text },
 
@@ -385,8 +492,29 @@ const styles = StyleSheet.create({
     selectChipText: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary, fontWeight: '600' },
     selectChipTextActive: { color: Colors.primary },
 
-    button: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: Spacing.xl },
-    buttonDisabled: { opacity: 0.7 },
+    imagePreviewContainer: { marginTop: Spacing.md, position: 'relative', marginBottom: Spacing.md },
+    imagePreview: { width: '100%', height: 250, borderRadius: 12, backgroundColor: Colors.background },
+    removeImageBtn: { 
+        position: 'absolute', 
+        top: 10, 
+        right: 10, 
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 2 }, 
+            shadowOpacity: 0.3, 
+            shadowRadius: 3, 
+            elevation: 5 
+        })
+    },
+    
+    toolbar: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingBottom: Platform.OS === 'ios' ? 30 : Spacing.md },
+    toolbarBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: Colors.primaryBg, borderRadius: 8 },
+    toolbarBtnText: { marginLeft: 8, color: Colors.primary, fontWeight: '600', fontSize: Fonts.sizes.sm },
+
+    button: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: Spacing.sm },
+    buttonDisabled: { backgroundColor: Colors.borderLight },
     buttonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: '800' },
     tipsCard: { backgroundColor: Colors.warning + '15', borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.warning + '30' },
     tipsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 6 },
@@ -399,7 +527,42 @@ const styles = StyleSheet.create({
     lockText: { fontSize: 10, color: Colors.textLight, fontWeight: '800', textTransform: 'uppercase' },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xl },
-    successCard: { backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, width: '100%', maxWidth: 400, alignItems: 'center', elevation: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.1, shadowRadius: 20 },
+    successCard: { 
+        backgroundColor: Colors.white, 
+        borderRadius: 24, 
+        padding: Spacing.xl, 
+        width: '100%', 
+        maxWidth: 400, 
+        alignItems: 'center', 
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 10 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 20,
+            elevation: 10, 
+        })
+    },
+    loadingCard: { 
+        backgroundColor: Colors.white, 
+        borderRadius: 24, 
+        padding: Spacing.xl, 
+        width: '100%', 
+        maxWidth: 360, 
+        alignItems: 'center', 
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 10 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 20,
+            elevation: 10, 
+        })
+    },
+    loadingTitle: { fontSize: Fonts.sizes.xl, fontWeight: '800', color: Colors.text, marginTop: Spacing.md, marginBottom: Spacing.xs, textAlign: 'center' },
+    loadingDesc: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 },
     successIconBox: { backgroundColor: '#E8F5E9', borderRadius: 100, padding: 16, marginBottom: Spacing.lg },
     successTitle: { fontSize: Fonts.sizes.xxl, fontWeight: '800', color: Colors.text, marginBottom: Spacing.sm, textAlign: 'center' },
     successDesc: { fontSize: Fonts.sizes.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: Spacing.sm, marginBottom: Spacing.xl },

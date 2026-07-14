@@ -52,7 +52,7 @@ export default function HowItWorks() {
                 <Text style={styles.sectionTitle}>Primeiro contacto com bom senso</Text>
                 <Text style={styles.text}>
                     Nunca realize pagamentos antecipados sem confirmar a identidade do profissional. 
-                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Trabalhe já.
+                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Konekta.
                 </Text>
             </View>
 

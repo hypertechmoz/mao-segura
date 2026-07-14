@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Trabalhe Já",
+    "name": "Konekta",
     "slug": "mao-segura",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#2E7D32"
+      "backgroundColor": "#002800"
     },
     "ios": {
       "supportsTablet": true,
@@ -25,11 +25,10 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#2E7D32"
+        "backgroundColor": "#002800"
       },
       "package": "com.maosegura.app",
       "versionCode": 1,
-      "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.CAMERA",
@@ -52,7 +51,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Trabalhe Já.",
+          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Konekta.",
           "cameraPermission": "Permite tirar uma nova fotografia com a câmera para atribuir ao seu perfil.",
           "microphonePermission": "Permite o acesso ao microfone ao gravar imagens em movimento."
         }
@@ -61,6 +60,7 @@
     ],
     "extra": {
       "router": {},
+      "extra": {},
       "eas": {
         "projectId": "a0db921b-0188-490f-93b7-561e98a16fb1"
       }

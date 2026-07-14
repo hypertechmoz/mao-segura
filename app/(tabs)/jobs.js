@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,13 +25,13 @@ export default function Jobs() {
     const scrollY = useRef(new Animated.Value(0)).current;
     const TAB_BAR_HEIGHT = 48;
     const HEADER_HEIGHT = 64 + insets.top + TAB_BAR_HEIGHT;
-    
+
     const scrollYClamped = Animated.diffClamp(scrollY, 0, HEADER_HEIGHT);
     const headerTranslateY = scrollYClamped.interpolate({
         inputRange: [0, HEADER_HEIGHT],
         outputRange: [0, -HEADER_HEIGHT],
     });
-    
+
     const headerOpacity = scrollYClamped.interpolate({
         inputRange: [0, (HEADER_HEIGHT - TAB_BAR_HEIGHT) * 0.5],
         outputRange: [1, 0],
@@ -42,93 +41,45 @@ export default function Jobs() {
     const isEmployer = user?.role === 'EMPLOYER';
 
     const loadData = useCallback(async () => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
         try {
             if (isEmployer) {
                 // Fetch Employer's Jobs
-                const q = query(
-                    collection(db, 'jobs'),
-                    where('employer_id', '==', user.uid),
-                    where('status', '==', tab === 'active' ? 'ACTIVE' : 'CLOSED'),
-                    orderBy('created_at', 'desc')
-                );
-                const snap = await getDocs(q);
+                const { data: jobsData, error } = await supabase
+                    .from('jobs')
+                    .select('*, applications(count)')
+                    .eq('employer_id', uid)
+                    .eq('status', tab === 'active' ? 'ACTIVE' : 'CLOSED')
+                    .order('created_at', { ascending: false });
 
-                // --- Efficient Self-healing: Get real counts in one go ---
-                const appsQuery = query(collection(db, 'applications'), where('employer_id', '==', user.uid));
-                const appsSnap = await getDocs(appsQuery);
-                const realCounts = {};
-                appsSnap.forEach(d => {
-                    const jid = d.data().job_id;
-                    if (jid) realCounts[jid] = (realCounts[jid] || 0) + 1;
-                });
-
-                const mappedData = [];
-                for (const d of snap.docs) {
-                    const job = d.data();
-                    const actualCount = realCounts[d.id] || 0;
-                    
-                    // Sync if inconsistent (ignore errors to avoid blocking UI)
-                    if (job.applications_count !== actualCount) {
-                        updateDoc(doc(db, 'jobs', d.id), { applications_count: actualCount }).catch(() => {});
-                    }
-
-                    mappedData.push({
-                        id: d.id,
-                        ...job,
-                        applications_count: actualCount, // Use the real count for UI
-                        _count: { applications: actualCount }
-                    });
-                }
-                setItems(mappedData);
+                if (error) throw error;
+                setItems(jobsData || []);
             } else {
                 // Fetch Worker's Applications
-                let qArgs = [where('worker_id', '==', user.uid)];
+                let query = supabase
+                    .from('applications')
+                    .select('*, jobs(*, employer:employer_id(*))')
+                    .eq('worker_id', uid);
+
                 if (tab === 'pending') {
-                    qArgs.push(where('status', '==', 'PENDING'));
+                    query = query.eq('status', 'PENDING');
                 } else if (tab === 'accepted') {
-                    qArgs.push(where('status', 'in', ['ACCEPTED', 'HIRED']));
-                }
-                
-                // Add sorting if possible, but keep it robust
-                qArgs.push(orderBy('created_at', 'desc'));
-
-                const q = query(collection(db, 'applications'), ...qArgs);
-                const snap = await getDocs(q);
-                
-                const mappedData = [];
-                const appDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-                // Batch-fetch all jobs in parallel
-                const jobIds = [...new Set(appDocs.map(a => a.job_id).filter(Boolean))];
-                const jobMap = {};
-                if (jobIds.length > 0) {
-                    const jobSnaps = await Promise.all(jobIds.map(jid => getDoc(doc(db, 'jobs', jid))));
-                    jobSnaps.forEach(s => {
-                        if (s.exists()) jobMap[s.id] = { id: s.id, ...s.data() };
-                    });
+                    query = query.in('status', ['ACCEPTED', 'HIRED']);
                 }
 
-                // Batch-fetch all employers in parallel
-                const empIds = [...new Set(Object.values(jobMap).map(j => j.employer_id).filter(Boolean))];
-                const empMap = {};
-                if (empIds.length > 0) {
-                    const empSnaps = await Promise.all(empIds.map(eid => getDoc(doc(db, 'users', eid))));
-                    empSnaps.forEach(s => {
-                        if (s.exists()) empMap[s.id] = s.data();
-                    });
-                }
+                const { data, error } = await query.order('created_at', { ascending: false });
+                if (error) throw error;
 
-                for (const app of appDocs) {
-                    if (app.job_id && jobMap[app.job_id]) {
-                        const jobData = jobMap[app.job_id];
-                        const employerName = jobData.employer_id && empMap[jobData.employer_id]
-                            ? empMap[jobData.employer_id].name
-                            : 'Cliente';
-                        app.job = { id: jobData.id, title: jobData.title, employer: { name: employerName } };
+                // Map to match old UI structure
+                const mappedData = (data || []).map(app => ({
+                    ...app,
+                    job: {
+                        id: app.jobs?.id,
+                        title: app.jobs?.title,
+                        employer: { name: app.jobs?.employer?.name || 'Cliente' }
                     }
-                    mappedData.push(app);
-                }
+                }));
                 setItems(mappedData);
             }
         } catch (err) {
@@ -136,7 +87,7 @@ export default function Jobs() {
         } finally {
             setInitialLoading(false);
         }
-    }, [tab, isEmployer, user]);
+    }, [tab, isEmployer, user?.id]);
 
     useEffect(() => { loadData(); }, [loadData]);
 
@@ -144,7 +95,7 @@ export default function Jobs() {
 
     const handleCancel = async (appId) => {
         try {
-            await updateDoc(doc(db, 'applications', appId), { status: 'CANCELLED' });
+            await supabase.from('applications').update({ status: 'CANCELLED' }).eq('id', appId);
             loadData();
         } catch (err) {
             console.error('Cancel error:', err);
@@ -154,7 +105,7 @@ export default function Jobs() {
 
     const handleClose = async (jobId) => {
         try {
-            await updateDoc(doc(db, 'jobs', jobId), { status: 'CLOSED' });
+            await supabase.from('jobs').update({ status: 'CLOSED' }).eq('id', jobId);
             loadData();
         } catch (err) {
             console.error('Close error:', err);
@@ -195,15 +146,15 @@ export default function Jobs() {
             <View style={isWeb ? styles.webHeader : styles.mobileHeaderContainer}>
                 {!isWeb ? (
                     <Animated.View style={[
-                        styles.mobileHeader, 
-                        { 
-                            height: HEADER_HEIGHT, 
+                        styles.mobileHeader,
+                        {
+                            height: HEADER_HEIGHT,
                             paddingTop: insets.top,
                             transform: [{ translateY: headerTranslateY }],
                         }
                     ]}>
                         <View style={styles.headerContent}>
-                            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Ionicons name="briefcase-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
                                 <Text style={styles.headerTitle}>{isEmployer ? 'Minhas Vagas' : 'Minhas Candidaturas'}</Text>
                             </View>
@@ -226,7 +177,7 @@ export default function Jobs() {
                 ) : (
                     <View style={styles.webHeaderInner}>
                         <View style={styles.webHeaderTop}>
-                            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Ionicons name="briefcase-outline" size={24} color={Colors.primary} style={{ marginRight: 10 }} />
                                 <Text style={styles.headerTitle}>{isEmployer ? 'Minhas Vagas' : 'Minhas Candidaturas'}</Text>
                             </View>
@@ -255,7 +206,9 @@ export default function Jobs() {
                                 <TouchableOpacity onPress={() => router.push(`/job/${item.id}`)}>
                                     <Text style={styles.cardTitle}>{item.title}</Text>
                                     <Text style={styles.cardMeta}>
-                                        {item._count?.applications || 0} candidatos · <Ionicons name={item.status === 'ACTIVE' ? 'ellipse' : 'close-circle'} size={10} color={item.status === 'ACTIVE' ? '#4CAF50' : Colors.error} /> {item.status === 'ACTIVE' ? 'Ativa' : 'Encerrada'}
+                                        <Text>{`${item.applications?.[0]?.count || 0} candidatos · `}</Text>
+                                        <Ionicons name={item.status === 'ACTIVE' ? 'ellipse' : 'close-circle'} size={10} color={item.status === 'ACTIVE' ? '#4CAF50' : Colors.error} />
+                                        <Text>{` ${item.status === 'ACTIVE' ? 'Ativa' : 'Encerrada'}`}</Text>
                                     </Text>
                                 </TouchableOpacity>
                                 {item.status === 'ACTIVE' && (
@@ -269,7 +222,9 @@ export default function Jobs() {
                                 <TouchableOpacity onPress={() => router.push(`/job/${item.job_id || item.job?.id}`)}>
                                     <Text style={styles.cardTitle}>{item.job?.title}</Text>
                                     <Text style={styles.cardMeta}>
-                                        {item.job?.employer?.name} · <Ionicons name={item.status === 'PENDING' ? 'time' : item.status === 'ACCEPTED' ? 'checkmark-circle' : item.status === 'REJECTED' ? 'close-circle' : 'remove-circle'} size={12} color={item.status === 'ACCEPTED' ? '#4CAF50' : item.status === 'PENDING' ? Colors.warning : Colors.error} /> {item.status === 'PENDING' ? 'Pendente' : item.status === 'ACCEPTED' ? 'Aceite' : item.status === 'REJECTED' ? 'Rejeitada' : 'Cancelada'}
+                                        <Text>{`${item.job?.employer?.name} · `}</Text>
+                                        <Ionicons name={item.status === 'PENDING' ? 'time' : item.status === 'ACCEPTED' ? 'checkmark-circle' : item.status === 'REJECTED' ? 'close-circle' : 'remove-circle'} size={12} color={item.status === 'ACCEPTED' ? '#4CAF50' : item.status === 'PENDING' ? Colors.warning : Colors.error} />
+                                        <Text>{` ${item.status === 'PENDING' ? 'Pendente' : item.status === 'ACCEPTED' ? 'Aceite' : item.status === 'REJECTED' ? 'Rejeitada' : 'Cancelada'}`}</Text>
                                     </Text>
                                 </TouchableOpacity>
                                 {item.status === 'PENDING' && (
@@ -347,7 +302,7 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
     },
-    
+
     // Header Mobile (Sync with home.js)
     mobileHeaderContainer: { zIndex: 1000 },
     mobileHeader: {

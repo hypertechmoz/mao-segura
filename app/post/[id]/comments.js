@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { db } from '../../../services/firebase';
-import { collection, query, where, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { supabase } from '../../../services/supabase';
 import { useAuthStore } from '../../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,95 +23,104 @@ export default function Comments() {
     useEffect(() => {
         if (!id) return;
         
-        // Fetch original post
-        getDoc(doc(db, 'posts', id)).then(docSnap => {
-            if (docSnap.exists()) {
-                setPost({ id: docSnap.id, ...docSnap.data() });
+        const fetchPostAndComments = async () => {
+            // Fetch original post
+            const { data: postData } = await supabase
+                .from('posts')
+                .select('*, user:user_id(*)')
+                .eq('id', id)
+                .single();
+            if (postData) setPost(postData);
+
+            // Fetch comments
+            const { data: commentsData } = await supabase
+                .from('comments')
+                .select('*, author:user_id(id, name, profile_photo)')
+                .eq('post_id', id)
+                .order('created_at', { ascending: true });
+            
+            if (commentsData) {
+                setComments(commentsData);
             }
-        });
+            setLoading(false);
+        };
+
+        fetchPostAndComments();
 
         // Listen for comments
-        const q = query(
-            collection(db, 'posts', id, 'comments'),
-            orderBy('created_at', 'asc')
-        );
+        const channel = supabase.channel(`post-comments-${id}-${Date.now()}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `post_id=eq.${id}` }, () => fetchPostAndComments())
+            .subscribe();
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const commentsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setComments(commentsData);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [id]);
 
     const handleSendComment = async () => {
         if (!newComment.trim() || !user) return;
+        const uid = user.uid || user.id;
         setSubmitting(true);
         
         try {
-            await addDoc(collection(db, 'posts', id, 'comments'), {
+            await supabase.from('comments').insert({
                 post_id: id,
-                user_id: user.uid,
-                author_name: user.name || 'Usuário',
-                author_photo: user.profile_photo || null,
-                text: newComment.trim(),
-                parent_id: replyingTo?.id || null,
-                created_at: serverTimestamp(),
+                user_id: uid,
+                content: newComment.trim(),
+                parent_id: replyingTo?.id || null
             });
 
             // Update comment count on post
-            await updateDoc(doc(db, 'posts', id), {
-                comments_count: increment(1)
-            });
+            await supabase.rpc('increment_comments_count', { post_id_param: id });
 
-            // Enviar notificações
+            // Notifications
             try {
-                // 1. Notificar autor do post (se não for o próprio user)
-                if (post && post.user_id !== user.uid) {
-                    await addDoc(collection(db, 'notifications'), {
+                if (post && post.user_id !== uid) {
+                    await supabase.from('notifications').insert({
                         user_id: post.user_id,
-                        sender_id: user.uid,
+                        sender_id: uid,
                         title: 'Novo Comentário! 💬',
                         description: `${user.name || 'Alguém'} comentou na sua publicação.`,
                         type: 'POST_COMMENT',
-                        read: false,
-                        created_at: serverTimestamp(),
+                        is_read: false,
                         route: `/post/${id}/comments`
                     });
 
                     // Push
-                    const authorSnap = await getDoc(doc(db, 'users', post.user_id));
-                    if (authorSnap.exists() && authorSnap.data().pushToken) {
+                    const { data: author } = await supabase
+                        .from('users')
+                        .select('pushToken')
+                        .eq('id', post.user_id)
+                        .single();
+                    if (author?.pushToken) {
                         await sendPushNotification(
-                            authorSnap.data().pushToken,
+                            author.pushToken,
                             'Novo Comentário! 💬',
                             `${user.name || 'Alguém'} comentou na sua publicação.`
                         );
                     }
                 }
 
-                // 2. Notificar quem está a ser respondido (se houver e não for o autor do post nem o próprio user)
-                if (replyingTo && replyingTo.user_id !== user.uid && replyingTo.user_id !== post?.user_id) {
-                    await addDoc(collection(db, 'notifications'), {
+                if (replyingTo && replyingTo.user_id !== uid && replyingTo.user_id !== post?.user_id) {
+                    await supabase.from('notifications').insert({
                         user_id: replyingTo.user_id,
-                        sender_id: user.uid,
+                        sender_id: uid,
                         title: 'Responderam ao seu comentário! ↩️',
                         description: `${user.name || 'Alguém'} respondeu ao seu comentário.`,
                         type: 'COMMENT_REPLY',
-                        read: false,
-                        created_at: serverTimestamp(),
+                        is_read: false,
                         route: `/post/${id}/comments`
                     });
 
                     // Push
-                    const replierSnap = await getDoc(doc(db, 'users', replyingTo.user_id));
-                    if (replierSnap.exists() && replierSnap.data().pushToken) {
+                    const { data: replier } = await supabase
+                        .from('users')
+                        .select('pushToken')
+                        .eq('id', replyingTo.user_id)
+                        .single();
+                    if (replier?.pushToken) {
                         await sendPushNotification(
-                            replierSnap.data().pushToken,
+                            replier.pushToken,
                             'Responderam ao seu comentário! ↩️',
                             `${user.name || 'Alguém'} respondeu ao seu comentário.`
                         );
@@ -132,32 +140,34 @@ export default function Comments() {
     };
 
     const renderCommentItem = (item, isReply = false) => {
-        const date = item.created_at?.seconds 
-            ? new Date(item.created_at.seconds * 1000).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' }) 
+        const date = item.created_at 
+            ? new Date(item.created_at).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' }) 
             : 'Agora';
+
+        const author = item.author || {};
 
         return (
             <View style={[styles.commentRow, isReply && styles.replyRow]}>
                 <View style={[styles.avatar, isReply ? { width: 28, height: 28, borderRadius: 14 } : { width: 34, height: 34, borderRadius: 17 }]}>
-                    {item.author_photo ? (
-                        <Image source={{ uri: item.author_photo }} style={isReply ? styles.avatarImageSmaller : styles.avatarImageSmall} />
+                    {author.profile_photo ? (
+                        <Image source={{ uri: author.profile_photo }} style={isReply ? styles.avatarImageSmaller : styles.avatarImageSmall} />
                     ) : (
-                        <Text style={[styles.avatarText, { fontSize: isReply ? 12 : 14 }]}>{item.author_name?.[0] || '?'}</Text>
+                        <Text style={[styles.avatarText, { fontSize: isReply ? 12 : 14 }]}>{author.name?.[0] || '?'}</Text>
                     )}
                 </View>
                 <View style={[styles.commentBubble, isReply && styles.replyBubble]}>
                     <View style={styles.commentHeader}>
-                        <Text style={styles.authorName}>{item.author_name}</Text>
+                        <Text style={styles.authorName}>{author.name}</Text>
                         <Text style={styles.commentTime}>{date}</Text>
                     </View>
-                    <Text style={styles.commentText}>{item.text}</Text>
+                    <Text style={styles.commentText}>{item.content}</Text>
                     
                     {!isReply && (
                         <TouchableOpacity 
                             style={styles.replyButton} 
                             onPress={() => {
                                 setReplyingTo(item);
-                                setNewComment(`@${item.author_name} `);
+                                setNewComment(`@${author.name} `);
                             }}
                         >
                             <Text style={styles.replyButtonText}>Responder</Text>

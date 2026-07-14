@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Image, Animated, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
@@ -36,74 +35,69 @@ export default function Messages() {
     const jobsCache = useRef({});
 
     useEffect(() => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
 
         const isWorker = user.role === 'WORKER';
         const field = isWorker ? 'worker_id' : 'employer_id';
-        const q = query(
-            collection(db, 'chat_conversations'), 
-            where(field, '==', user.uid)
-        );
 
-        const unsubscribe = onSnapshot(q, async (snap) => {
-            try {
-                const convDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-                    .sort((a, b) => {
-                        const timeA = a.updated_at?.seconds || 0;
-                        const timeB = b.updated_at?.seconds || 0;
-                        return timeB - timeA;
-                    });
+        const fetchConversations = async () => {
+            const { data: convDocs, error } = await supabase
+                .from('chat_conversations')
+                .select('*')
+                .eq(field, uid)
+                .order('updated_at', { ascending: false });
 
-                // Identify missing profiles and jobs
-                const missingUids = convDocs
-                    .map(c => isWorker ? c.employer_id : c.worker_id)
-                    .filter(uid => uid && !profilesCache.current[uid]);
-                
-                const missingJobIds = convDocs
-                    .map(c => c.job_id)
-                    .filter(jid => jid && !jobsCache.current[jid]);
-
-                // Fetch missing profiles in parallel
-                if (missingUids.length > 0) {
-                    const uniqueUids = [...new Set(missingUids)];
-                    const snaps = await Promise.all(uniqueUids.map(uid => getDoc(doc(db, 'users', uid))));
-                    snaps.forEach(s => {
-                        if (s.exists()) profilesCache.current[s.id] = { id: s.id, ...s.data() };
-                    });
-                }
-
-                // Fetch missing job titles in parallel
-                if (missingJobIds.length > 0) {
-                    const uniqueJobIds = [...new Set(missingJobIds)];
-                    const snaps = await Promise.all(uniqueJobIds.map(jid => getDoc(doc(db, 'jobs', jid))));
-                    snaps.forEach(s => {
-                        if (s.exists()) jobsCache.current[s.id] = s.data().title;
-                    });
-                }
-
-                // Format the final list using cache
-                const formatted = convDocs.map(conv => {
-                    const otherUid = isWorker ? conv.employer_id : conv.worker_id;
-                    return {
-                        id: conv.id,
-                        otherUser: profilesCache.current[otherUid] || { name: 'Utilizador', is_verified: false },
-                        lastMessage: conv.job_id ? (jobsCache.current[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Conversa sobre vaga'),
-                        lastMessageAt: conv.updated_at,
-                        unread: conv.unread_count && conv.unread_count[user.uid] > 0 ? conv.unread_count[user.uid] : 0,
-                    };
-                });
-
-                setConversations(formatted);
-            } catch (err) {
-                console.error('Snapshot conversations error:', err);
-            } finally {
+            if (error) {
+                console.error('Fetch conversations error:', error);
                 setInitialLoading(false);
+                return;
             }
-        }, (err) => {
-            console.error('Conversations listener error:', err);
-            setInitialLoading(false);
-        });
 
+            // Identify missing profiles and jobs
+            const otherUids = convDocs.map(c => isWorker ? c.employer_id : c.worker_id);
+            const jobIds = convDocs.map(c => c.job_id).filter(id => id);
+
+            const missingUids = otherUids.filter(id => id && !profilesCache.current[id]);
+            const missingJobIds = jobIds.filter(id => id && !jobsCache.current[id]);
+
+            if (missingUids.length > 0) {
+                const { data: profiles } = await supabase
+                    .from('users')
+                    .select('id, name, profile_photo, is_verified')
+                    .in('id', [...new Set(missingUids)]);
+                profiles?.forEach(p => profilesCache.current[p.id] = p);
+            }
+
+            if (missingJobIds.length > 0) {
+                const { data: jobs } = await supabase
+                    .from('jobs')
+                    .select('id, title')
+                    .in('id', [...new Set(missingJobIds)]);
+                jobs?.forEach(j => jobsCache.current[j.id] = j.title);
+            }
+
+            const formatted = convDocs.map(conv => {
+                const otherUid = isWorker ? conv.employer_id : conv.worker_id;
+                return {
+                    id: conv.id,
+                    otherUser: profilesCache.current[otherUid] || { name: 'Utilizador', is_verified: false },
+                    lastMessage: conv.job_id ? (jobsCache.current[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Sem mensagens'),
+                    lastMessageAt: conv.updated_at,
+                    unread: conv.unread_count && conv.unread_count[uid] > 0 ? conv.unread_count[uid] : 0,
+                };
+            });
+
+            setConversations(formatted);
+            setInitialLoading(false);
+        };
+
+        fetchConversations();
+
+        // Real-time subscription
+        const channel = supabase.channel('messages-list')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => fetchConversations())
+            .subscribe();
 
         const backAction = () => {
             router.replace('/(tabs)/home');
@@ -112,10 +106,10 @@ export default function Messages() {
         const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
         return () => {
-            unsubscribe();
+            supabase.removeChannel(channel);
             backHandler.remove();
         };
-    }, [user?.uid]);
+    }, [user?.id]);
 
     const onRefresh = async () => { 
         setRefreshing(true); 

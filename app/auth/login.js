@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
@@ -7,14 +7,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function Login() {
     const router = useRouter();
-    const { loginWithPassword, isLoading } = useAuthStore();
+    const { loginWithPassword, signInWithGoogle, isAuthActionLoading } = useAuthStore();
 
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
-    useState(() => {
+    useEffect(() => {
         const backAction = () => {
             if (router.canGoBack()) {
                 router.back();
@@ -43,6 +43,16 @@ export default function Login() {
         }
     };
 
+    const handleGoogleLogin = async () => {
+        try {
+            setErrorMsg('');
+            await signInWithGoogle();
+        } catch (err) {
+            console.error('Google Login Error:', err);
+            Alert.alert('Erro', 'Não foi possível iniciar sessão com o Google.');
+        }
+    };
+
     return (
         <View style={styles.container}>
             <View style={styles.topNav}>
@@ -56,7 +66,7 @@ export default function Login() {
                         <Ionicons name="lock-closed" size={32} color={Colors.white} />
                     </View>
                     <Text style={styles.title}>Bem-vindo de volta</Text>
-                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Trabalhe já.</Text>
+                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Konekta.</Text>
                 </View>
 
                 <View style={styles.form}>
@@ -106,12 +116,12 @@ export default function Login() {
                     {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
                     <TouchableOpacity
-                        style={[styles.button, isLoading && styles.buttonDisabled]}
+                        style={[styles.button, isAuthActionLoading && styles.buttonDisabled]}
                         onPress={handleLogin}
-                        disabled={isLoading}
+                        disabled={isAuthActionLoading}
                         activeOpacity={0.8}
                     >
-                        {isLoading ? (
+                        {isAuthActionLoading ? (
                             <ActivityIndicator color={Colors.white} />
                         ) : (
                             <Text style={styles.buttonText}>Entrar</Text>
@@ -120,6 +130,21 @@ export default function Login() {
 
                     <TouchableOpacity style={styles.forgotBtn} onPress={() => router.push('/auth/forgot-password')}>
                         <Text style={styles.forgotText}>Esqueceu a senha?</Text>
+                    </TouchableOpacity>
+
+                    <View style={styles.divider}>
+                        <View style={styles.line} />
+                        <Text style={styles.dividerText}>ou</Text>
+                        <View style={styles.line} />
+                    </View>
+
+                    <TouchableOpacity 
+                        style={styles.googleButton} 
+                        onPress={handleGoogleLogin}
+                        disabled={isAuthActionLoading}
+                    >
+                        <Ionicons name="logo-google" size={20} color={Colors.text} style={{ marginRight: 12 }} />
+                        <Text style={styles.googleButtonText}>Continuar com Google</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -234,4 +259,23 @@ const styles = StyleSheet.create({
     footer: { alignItems: 'center', marginTop: 'auto', paddingBottom: Spacing.md },
     footerText: { fontSize: Fonts.sizes.md, color: Colors.textSecondary },
     footerLink: { color: Colors.primary, fontWeight: '800' },
+    divider: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.lg },
+    line: { flex: 1, height: 1, backgroundColor: Colors.borderLight },
+    dividerText: { marginHorizontal: 10, color: Colors.textLight, fontSize: 12 },
+    googleButton: {
+        flexDirection: 'row',
+        backgroundColor: Colors.white,
+        borderRadius: 16,
+        paddingVertical: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.borderLight,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+    },
+    googleButtonText: { color: Colors.text, fontSize: Fonts.sizes.md, fontWeight: '600' },
 });

@@ -19,7 +19,7 @@ export default function TermsAndConditions() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>1. Aceitação dos Termos</Text>
                 <Text style={styles.text}>
-                    Ao utilizar a plataforma Trabalhe já, o utilizador concorda em cumprir estes Termos e Condições. 
+                    Ao utilizar a plataforma Konekta, o utilizador concorda em cumprir estes Termos e Condições. 
                     Se não concordar, por favor, não utilize os nossos serviços.
                 </Text>
             </View>
@@ -27,8 +27,8 @@ export default function TermsAndConditions() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>2. Descrição do Serviço</Text>
                 <Text style={styles.text}>
-                    O Trabalhe já é uma plataforma que conecta prestadores de serviços (Trabalhadores) e clientes (Empregadores) em Moçambique. 
-                    O Trabalhe já não é uma agência de emprego e não se responsabiliza pelas negociações diretas entre as partes.
+                    O Konekta é uma plataforma que conecta prestadores de serviços (Trabalhadores) e clientes (Empregadores) em Moçambique. 
+                    O Konekta não é uma agência de emprego e não se responsabiliza pelas negociações diretas entre as partes.
                 </Text>
             </View>
 
@@ -51,7 +51,7 @@ export default function TermsAndConditions() {
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>5. Direitos e Propriedade</Text>
                 <Text style={styles.text}>
-                    Todo o conteúdo disponível na plataforma é propriedade do Trabalhe já ou dos seus licenciadores.
+                    Todo o conteúdo disponível na plataforma é propriedade do Konekta ou dos seus licenciadores.
                 </Text>
             </View>
 

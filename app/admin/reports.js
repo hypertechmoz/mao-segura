@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
-import { db } from '../../services/firebase';
-import { collection, query, orderBy, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, RefreshControl } from 'react-native';
+import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -12,25 +11,15 @@ export default function AdminReports() {
 
   const loadReports = async () => {
     try {
-      const q = query(collection(db, 'reports'), orderBy('created_at', 'desc'));
-      const snap = await getDocs(q);
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*, reporter:users!reporter_id(name), reported:users!reported_id(name)')
+        .order('created_at', { ascending: false });
       
-      const data = [];
-      for (const d of snap.docs) {
-          const report = { id: d.id, ...d.data() };
-          if (report.reporter_id) {
-              const rSnap = await getDoc(doc(db, 'users', report.reporter_id));
-              if(rSnap.exists()) report.reporter = { name: rSnap.data().name };
-          }
-          if (report.reported_id) {
-              const rrSnap = await getDoc(doc(db, 'users', report.reported_id));
-              if(rrSnap.exists()) report.reported = { name: rrSnap.data().name };
-          }
-          data.push(report);
-      }
-      setReports(data);
+      if (error) throw error;
+      setReports(data || []);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading reports:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -41,7 +30,13 @@ export default function AdminReports() {
 
   const handleResolve = async (id) => {
     try {
-      await updateDoc(doc(db, 'reports', id), { status: 'RESOLVED' });
+      const { error } = await supabase
+        .from('reports')
+        .update({ status: 'RESOLVED', updated_at: new Date().toISOString() })
+        .eq('id', id);
+      
+      if (error) throw error;
+      
       setReports(prev => prev.map(r => r.id === id ? { ...r, status: 'RESOLVED' } : r));
       Alert.alert('Sucesso', 'Denúncia marcada como resolvida.');
     } catch (err) {
@@ -56,8 +51,12 @@ export default function AdminReports() {
       <FlatList
         data={reports}
         keyExtractor={item => item.id}
-        refreshing={refreshing}
-        onRefresh={() => { setRefreshing(true); loadReports(); }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => { setRefreshing(true); loadReports(); }}
+          />
+        }
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
@@ -74,7 +73,7 @@ export default function AdminReports() {
                   {item.status === 'PENDING' ? 'Pendente' : 'Resolvida'}
                 </Text>
               </View>
-              <Text style={styles.date}>{item.created_at?.toDate ? new Date(item.created_at.toDate()).toLocaleDateString() : 'Recent'}</Text>
+              <Text style={styles.date}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent'}</Text>
             </View>
 
             <Text style={styles.reason}>"{item.reason}"</Text>

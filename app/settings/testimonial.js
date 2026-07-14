@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,15 +21,18 @@ export default function SubmitTestimonial() {
 
         try {
             setSubmitting(true);
-            await addDoc(collection(db, 'testimonials'), {
-                user_id: user.uid,
-                name: user.name || 'Utilizador Trabalhe já',
+            const uid = user?.uid || user?.id;
+
+            const { error } = await supabase.from('testimonials').insert({
+                user_id: uid,
+                name: user.name || 'Utilizador Konekta',
                 role: user.role,
                 text: text.trim(),
                 rating: rating,
                 status: 'PENDING',
-                created_at: serverTimestamp(),
             });
+
+            if (error) throw error;
 
             Alert.alert(
                 'Sucesso', 
@@ -77,7 +79,7 @@ export default function SubmitTestimonial() {
                     <Text style={[styles.label, { marginTop: Spacing.lg }]}>O seu depoimento</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Escreva aqui como o Trabalhe já mudou a sua vida ou o seu negócio..."
+                        placeholder="Escreva aqui como o Konekta mudou a sua vida ou o seu negócio..."
                         placeholderTextColor={Colors.textLight}
                         multiline
                         numberOfLines={6}

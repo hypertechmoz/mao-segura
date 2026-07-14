@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { db } from '../../services/firebase';
-import { doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +20,7 @@ export default function UserDetail() {
     const [isReporting, setIsReporting] = useState(false);
     const [reviews, setReviews] = useState([]);
     const [loadingReviews, setLoadingReviews] = useState(false);
+    const [connectionsCount, setConnectionsCount] = useState(0);
     const [isConnected, setIsConnected] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
@@ -37,13 +37,12 @@ export default function UserDetail() {
         }
         setIsReporting(true);
         try {
-            await addDoc(collection(db, 'reports'), {
-                reporter_id: user.uid,
+            await supabase.from('reports').insert({
+                reporter_id: user.uid || user.id,
                 reported_id: profileUser.id,
                 reason: reportReason,
                 details: reportText,
                 status: 'pending',
-                created_at: serverTimestamp()
             });
             setShowReportModal(false);
             setReportReason('');
@@ -59,24 +58,26 @@ export default function UserDetail() {
     const loadUser = useCallback(async () => {
         try {
             // Fetch User Basic Info
-            const userRef = doc(db, 'users', id);
-            const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) throw new Error('Utilizador não encontrado');
-            const userData = userSnap.data();
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (userError || !userData) throw new Error('Utilizador não encontrado');
 
             let profileData = {};
-            if (userData.role === 'EMPLOYER') {
-                const profileRef = doc(db, 'employer_profiles', id);
-                const profileSnap = await getDoc(profileRef);
-                profileData = profileSnap.exists() ? profileSnap.data() : {};
-            } else {
-                const profileRef = doc(db, 'worker_profiles', id);
-                const profileSnap = await getDoc(profileRef);
-                profileData = profileSnap.exists() ? profileSnap.data() : {};
-            }
+            const profileTable = userData.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
+            const { data: pData } = await supabase
+                .from(profileTable)
+                .select('*')
+                .eq('user_id', id)
+                .single();
+            
+            profileData = pData || {};
 
             setProfileUser({
-                id: userSnap.id,
+                id: id,
                 ...userData,
                 ...profileData
             });
@@ -91,25 +92,21 @@ export default function UserDetail() {
     const loadReviews = useCallback(async () => {
         setLoadingReviews(true);
         try {
-            const q = query(
-                collection(db, 'reviews'),
-                where('to_id', '==', id),
-                orderBy('created_at', 'desc')
-            );
-            const snap = await getDocs(q);
-            const reviewsData = [];
+            const { data: reviewsData, error } = await supabase
+                .from('reviews')
+                .select('*, reviewer:users!from_id(name, profile_photo)')
+                .eq('to_id', id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
             
-            // Fetch reviewer names
-            for (const d of snap.docs) {
-                const rev = { id: d.id, ...d.data() };
-                const uSnap = await getDoc(doc(db, 'users', rev.from_id));
-                if (uSnap.exists()) {
-                    rev.reviewer_name = uSnap.data().name;
-                    rev.reviewer_photo = uSnap.data().profile_photo;
-                }
-                reviewsData.push(rev);
-            }
-            setReviews(reviewsData);
+            const formattedReviews = reviewsData.map(rev => ({
+                ...rev,
+                reviewer_name: rev.reviewer?.name,
+                reviewer_photo: rev.reviewer?.profile_photo
+            }));
+
+            setReviews(formattedReviews);
         } catch (err) {
             console.error('Error loading reviews:', err);
         } finally {
@@ -118,19 +115,33 @@ export default function UserDetail() {
     }, [id]);
 
     const checkConnection = useCallback(async () => {
-        if (!user || !id) return;
+        const uid = user?.uid || user?.id;
+        
         try {
-            const reqQ1 = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid), where('receiver_id', '==', id), where('status', '==', 'PENDING'));
-            const reqQ2 = query(collection(db, 'connection_requests'), where('sender_id', '==', id), where('receiver_id', '==', user.uid), where('status', '==', 'PENDING'));
-            
-            const [snap1, snap2] = await Promise.all([getDocs(reqQ1), getDocs(reqQ2)]);
-            if (!snap1.empty || !snap2.empty) setHasPendingRequest(true);
+            if (id) {
+                const { count } = await supabase
+                    .from('connections')
+                    .select('*', { count: 'exact', head: true })
+                    .or(`user1_id.eq.${id},user2_id.eq.${id}`);
+                setConnectionsCount(count || 0);
+            }
 
-            const connQ1 = query(collection(db, 'connections'), where('user1_id', '==', user.uid), where('user2_id', '==', id));
-            const connQ2 = query(collection(db, 'connections'), where('user1_id', '==', id), where('user2_id', '==', user.uid));
+        if (!uid || !id) return;
+            const { data: reqs } = await supabase
+                .from('connection_requests')
+                .select('*')
+                .or(`and(sender_id.eq.${uid},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${uid})`)
+                .eq('status', 'PENDING');
+
+            if (reqs && reqs.length > 0) setHasPendingRequest(true);
+
+            const { data: conns } = await supabase
+                .from('chat_conversations')
+                .select('*')
+                .or(`and(worker_id.eq.${uid},employer_id.eq.${id}),and(worker_id.eq.${id},employer_id.eq.${uid})`)
+                .eq('is_authorized', true);
             
-            const [csnap1, csnap2] = await Promise.all([getDocs(connQ1), getDocs(connQ2)]);
-            if (!csnap1.empty || !csnap2.empty) setIsConnected(true);
+            if (conns && conns.length > 0) setIsConnected(true);
         } catch(e) {
             console.log(e);
         }
@@ -179,9 +190,9 @@ export default function UserDetail() {
         } else {
             try {
                 import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
-                    await sendConnectionRequest(user, id, { type: 'CONTACT' });
+                    await sendConnectionRequest(user, id, { type: 'CONNECTION' });
                     setHasPendingRequest(true);
-                    Alert.alert("Pedido Enviado", "Será notificado quando o profissional aceitar o seu pedido para iniciar a conversa.");
+                    Alert.alert("Pedido Enviado", "Será notificado quando o profissional aceitar o seu pedido para iniciar a conexão.");
                 });
             } catch (e) {
                 console.error(e);
@@ -221,31 +232,47 @@ export default function UserDetail() {
                     <Text style={styles.locationText}>{profileUser.city}, {profileUser.bairro || profileUser.province}</Text>
                 </View>
 
-                {/* Rating Summary */}
-                <View style={styles.ratingSummary}>
-                    <View style={styles.starsRow}>
-                        {[1,2,3,4,5].map(s => (
-                            <Ionicons 
-                                key={s} 
-                                name={s <= Math.round(profileUser.rating_avg || 0) ? "star" : "star-outline"} 
-                                size={16} 
-                                color="#FFB800" 
-                            />
-                        ))}
+                {/* Connection Status Badge */}
+                {user && id !== user.uid && id !== user.id && (
+                    <View style={{ marginTop: 12 }}>
+                        {isConnected ? (
+                            <View style={{ backgroundColor: Colors.success + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="checkmark-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.success }}>Conectados</Text>
+                            </View>
+                        ) : hasPendingRequest ? (
+                            <View style={{ backgroundColor: Colors.warning + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
+                                <Ionicons name="time" size={14} color={Colors.warning} style={{ marginRight: 4 }} />
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.warning }}>Ligação Pendente</Text>
+                            </View>
+                        ) : null}
                     </View>
-                    <Text style={styles.ratingText}>
-                        {profileUser.rating_avg ? profileUser.rating_avg.toFixed(1) : 'Sem avaliações'} 
-                        {profileUser.rating_count > 0 && ` (${profileUser.rating_count})`}
-                    </Text>
-                    {profileUser.role === 'WORKER' && (
-                        <>
-                            <View style={styles.dotSeparator} />
-                            <Text style={styles.completedText}>
-                                {profileUser.completed_contracts || 0} trabalhos concluídos
-                            </Text>
-                        </>
-                    )}
+                )}
+
+                {/* Stats Section */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', width: '100%', marginTop: 24, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 20 }}>
+                    <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{connectionsCount || 0}</Text>
+                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Conexões</Text>
+                    </View>
+                    <View style={{ width: 1, backgroundColor: Colors.borderLight, height: 40 }} />
+                    <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{profileUser.rating_count || 0}</Text>
+                            {profileUser.rating_avg > 0 && <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFB800' }}>⭐ {profileUser.rating_avg.toFixed(1)}</Text>}
+                        </View>
+                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Recomendações</Text>
+                    </View>
                 </View>
+
+                {profileUser.role === 'WORKER' && (
+                    <View style={{ alignItems: 'center', marginTop: 12 }}>
+                        <Text style={styles.completedText}>
+                            {profileUser.completed_contracts || 0} trabalhos concluídos
+                        </Text>
+                    </View>
+                )}
+
             </View>
 
             <View style={styles.section}>
@@ -322,7 +349,7 @@ export default function UserDetail() {
             {/* Reviews Section */}
             <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Avaliações</Text>
+                    <Text style={styles.sectionTitle}>Recomendações</Text>
                     <Text style={styles.reviewCount}>{reviews.length}</Text>
                 </View>
                 
@@ -362,7 +389,7 @@ export default function UserDetail() {
                         </View>
                     ))
                 ) : (
-                    <Text style={styles.emptyReviews}>Nenhuma avaliação recebida.</Text>
+                    <Text style={styles.emptyReviews}>Nenhuma recomendação recebida.</Text>
                 )}
             </View>
 

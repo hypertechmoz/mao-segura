@@ -1,5 +1,4 @@
-import { db } from '../services/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase } from '../services/supabase';
 
 /**
  * Inicia ou recupera uma conversa existente entre dois utilizadores.
@@ -11,51 +10,63 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'fire
  * @returns {Promise<string>} - O ID da conversa (existente ou nova)
  */
 export async function startOrGetConversation(user, targetId, metadata = {}) {
-    if (!user?.uid || !targetId) throw new Error('Utilizador ou destinatário inválido.');
-    if (user.uid === targetId) throw new Error('Não pode iniciar conversa consigo mesmo.');
+    const uid = user?.uid || user?.id;
+    if (!uid || !targetId) throw new Error('Utilizador ou destinatário inválido.');
+    if (uid === targetId) throw new Error('Não pode iniciar conversa consigo mesmo.');
 
     const isWorker = user.role === 'WORKER';
     const fieldSelf = isWorker ? 'worker_id' : 'employer_id';
     const fieldOther = isWorker ? 'employer_id' : 'worker_id';
 
     // Verificar se já existe conversa
-    const q = query(
-        collection(db, 'chat_conversations'),
-        where(fieldSelf, '==', user.uid),
-        where(fieldOther, '==', targetId)
-    );
-    const snap = await getDocs(q);
+    const { data: existing, error: fetchError } = await supabase
+        .from('chat_conversations')
+        .select('id')
+        .eq(fieldSelf, uid)
+        .eq(fieldOther, targetId)
+        .maybeSingle();
 
-    if (!snap.empty) {
-        return snap.docs[0].id;
+    if (existing) {
+        return existing.id;
     }
 
     // Criar nova conversa com autorização pendente
     const convData = {
-        employer_id: isWorker ? targetId : user.uid,
-        worker_id: isWorker ? user.uid : targetId,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
+        employer_id: isWorker ? targetId : uid,
+        worker_id: isWorker ? uid : targetId,
         last_message: metadata.last_message || 'Pedido de contacto enviado',
         is_authorized: false,
-        initiated_by: user.uid,
+        initiated_by: uid,
         job_id: metadata.job_id || null,
         post_id: metadata.post_id || null,
         unread_count: {
-            [targetId]: 1, // The recipient has 1 unread message
-            [user.uid]: 0
-        }
+            [targetId]: 1,
+            [uid]: 0
+        },
+        participants: [uid, targetId]
     };
 
-    const newRef = await addDoc(collection(db, 'chat_conversations'), convData);
+    const { data: newConv, error: insertError } = await supabase
+        .from('chat_conversations')
+        .insert(convData)
+        .select()
+        .single();
+
+    if (insertError) throw insertError;
 
     // Add initial system/intro message
-    await addDoc(collection(db, 'chat_conversations', newRef.id, 'messages'), {
-        text: convData.last_message,
-        sender_id: user.uid,
-        created_at: serverTimestamp(),
-        type: 'SYSTEM'
-    });
+    const { error: msgError } = await supabase
+        .from('messages')
+        .insert({
+            conversation_id: newConv.id,
+            content: convData.last_message,
+            sender_id: uid,
+            receiver_id: targetId,
+            // In the new schema, type might be inferred or we can add a column if needed
+            // For now, content is enough.
+        });
 
-    return newRef.id;
+    if (msgError) console.warn('Error creating initial message:', msgError);
+
+    return newConv.id;
 }

@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform, Image, ActivityIndicator, Modal, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, doc, getDoc, updateDoc, addDoc, serverTimestamp, onSnapshot, getDocs, increment } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,97 +35,116 @@ export default function ChatScreen() {
 
     useEffect(() => {
         if (!user || !id) return;
+        const uid = user.uid || user.id;
 
         // Ensure we know the other person's ID by checking the conversation
         const getReceiver = async () => {
-            const convSnap = await getDoc(doc(db, 'chat_conversations', id));
-            if (convSnap.exists()) {
-                const data = convSnap.data();
-                const otherUid = data.employer_id === user.uid ? data.worker_id : data.employer_id;
+            const { data: convData, error } = await supabase
+                .from('chat_conversations')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (convData) {
+                const otherUid = convData.employer_id === uid ? convData.worker_id : convData.employer_id;
                 setReceiverId(otherUid);
-                setIsAuthorized(data.is_authorized !== false);
-                setInitiatedBy(data.initiated_by || null);
-                
-                // Fetch the other user's profile for the avatar
-                const uSnap = await getDoc(doc(db, 'users', otherUid));
-                if (uSnap.exists()) {
-                    setReceiverProfile(uSnap.data());
-                }
+                setIsAuthorized(convData.is_authorized !== false);
+                setInitiatedBy(convData.initiated_by || null);
+
+                // Fetch the other user's profile
+                const { data: userData } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', otherUid)
+                    .single();
+
+                if (userData) setReceiverProfile(userData);
 
                 // Check for active contract
                 const isEmployer = user.role === 'EMPLOYER';
-                const contractsQ = query(
-                    collection(db, 'contracts'),
-                    where('conversation_id', '==', id),
-                    where(isEmployer ? 'employer_id' : 'worker_id', '==', user.uid),
-                    where('status', '==', 'hired')
-                );
-                const contractsSnap = await getDocs(contractsQ);
-                if (!contractsSnap.empty) {
-                    setActiveContract({ id: contractsSnap.docs[0].id, ...contractsSnap.docs[0].data() });
+                const { data: contracts } = await supabase
+                    .from('contracts')
+                    .select('*')
+                    .eq('conversation_id', id)
+                    .eq(isEmployer ? 'employer_id' : 'worker_id', uid)
+                    .eq('status', 'hired');
+
+                if (contracts && contracts.length > 0) {
+                    setActiveContract(contracts[0]);
                     setContractStatus('hired');
                 }
 
-                // Clear unread count for current user
-                if (data.unread_count && data.unread_count[user.uid] > 0) {
-                    await updateDoc(doc(db, 'chat_conversations', id), {
-                        [`unread_count.${user.uid}`]: 0
-                    });
+                // Clear unread count
+                if (convData.unread_count && convData.unread_count[uid] > 0) {
+                    const newUnread = { ...convData.unread_count, [uid]: 0 };
+                    await supabase.from('chat_conversations').update({
+                        unread_count: newUnread
+                    }).eq('id', id);
                 }
             }
         };
 
         getReceiver();
 
-        // Real-time subscription for conversation authorization status
-        const convUnsubscribe = onSnapshot(doc(db, 'chat_conversations', id), (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setIsAuthorized(data.is_authorized !== false);
-            }
-        });
+        // Subscriptions
+        const convChannel = supabase
+            .channel(`chat-${id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations', filter: `id=eq.${id}` }, payload => {
+                if (payload.new) {
+                    setIsAuthorized(payload.new.is_authorized !== false);
+                }
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, payload => {
+                setMessages(prev => [...prev, payload.new]);
+            })
+            .subscribe();
 
-        // Real-time subscription for messages
-        const messagesQuery = query(
-            collection(db, 'chat_conversations', id, 'messages'),
-            orderBy('created_at', 'asc')
-        );
-        const messagesUnsubscribe = onSnapshot(messagesQuery, (snapshot) => {
-            const msgs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-            setMessages(msgs);
-        });
+        // Initial messages fetch
+        const fetchMessages = async () => {
+            const { data } = await supabase
+                .from('messages')
+                .select('*')
+                .eq('conversation_id', id)
+                .order('created_at', { ascending: true });
+            if (data) setMessages(data);
+        };
+        fetchMessages();
 
         return () => {
-            messagesUnsubscribe();
-            convUnsubscribe();
+            supabase.removeChannel(convChannel);
         };
     }, [id, user]);
 
     const handleSend = async () => {
         if (!text.trim() || !user || !receiverId) return;
+        const uid = user.uid || user.id;
 
         const sentText = text.trim();
         setText('');
 
         try {
-            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+            await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: user.uid,
+                sender_id: uid,
                 receiver_id: receiverId,
                 content: sentText,
-                read: false,
-                created_at: serverTimestamp()
+                read: false
             });
 
-            await updateDoc(doc(db, 'chat_conversations', id), {
-                updated_at: serverTimestamp(),
+            // Update conversation
+            const { data: conv } = await supabase.from('chat_conversations').select('unread_count').eq('id', id).single();
+            const unread = conv?.unread_count || {};
+            const newUnread = { ...unread, [receiverId]: (unread[receiverId] || 0) + 1 };
+
+            await supabase.from('chat_conversations').update({
                 last_message: sentText,
-                [`unread_count.${receiverId}`]: increment(1)
-            });
+                updated_at: new Date().toISOString(),
+                unread_count: newUnread
+            }).eq('id', id);
 
-            if (receiverProfile?.pushToken) {
+            if (receiverProfile?.push_token) {
                 sendPushNotification(
-                    receiverProfile.pushToken,
+                    receiverProfile.push_token,
                     user.name || 'Mensagem nova',
                     sentText,
                     { type: 'chat', chatId: id }
@@ -137,37 +155,40 @@ export default function ChatScreen() {
         }
     };
 
-    
+
     const handleHire = async () => {
         if (!user || user.role !== 'EMPLOYER' || !receiverId || isHiring) return;
-        
+        const uid = user.uid || user.id;
+
         setIsHiring(true);
         try {
             const contractData = {
                 conversation_id: id,
-                employer_id: user.uid,
+                employer_id: uid,
                 worker_id: receiverId,
-                status: 'hired',
-                created_at: serverTimestamp()
+                status: 'hired'
             };
-            const docRef = await addDoc(collection(db, 'contracts'), contractData);
-            setActiveContract({ id: docRef.id, ...contractData });
+            const { data: newContract, error } = await supabase
+                .from('contracts')
+                .insert(contractData)
+                .select()
+                .single();
+
+            if (error) throw error;
+            setActiveContract(newContract);
             setContractStatus('hired');
-            
-            // Send system message in chat
-            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+
+            // Send system message
+            await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: 'system',
-                receiver_id: 'all',
-                content: '🎉 Profissional contratado! O histórico será atualizado quando o trabalho for concluído.',
-                type: 'system',
-                created_at: serverTimestamp()
+                sender_id: '00000000-0000-0000-0000-000000000000', // Use a zero UUID for system or add a sender_type
+                content: '🎉 Profissional contratado! O histórico será atualizado quando o trabalho for concluído.'
             });
 
             // Push notification to worker
-            if (receiverProfile?.pushToken) {
+            if (receiverProfile?.push_token) {
                 sendPushNotification(
-                    receiverProfile.pushToken,
+                    receiverProfile.push_token,
                     'Contratado!',
                     `${user.name} aceitou o seu serviço.`,
                     { type: 'hire', chatId: id }
@@ -183,32 +204,28 @@ export default function ChatScreen() {
 
     const handleReject = async () => {
         if (!user || user.role !== 'EMPLOYER' || !receiverId || isRejecting) return;
-        
+        const uid = user.uid || user.id;
+
         setIsRejecting(true);
         try {
-            await addDoc(collection(db, 'contracts'), {
+            await supabase.from('contracts').insert({
                 conversation_id: id,
-                employer_id: user.uid,
+                employer_id: uid,
                 worker_id: receiverId,
-                status: 'rejected',
-                created_at: serverTimestamp()
+                status: 'rejected'
             });
             setContractStatus('rejected');
-            
+
             // Send system message
-            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+            await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: 'system',
-                receiver_id: 'all',
-                content: '🚫 O empregador decidiu não prosseguir com a contratação neste momento.',
-                type: 'system',
-                created_at: serverTimestamp()
+                sender_id: '00000000-0000-0000-0000-000000000000',
+                content: '🚫 O empregador decidiu não prosseguir com a contratação neste momento.'
             });
 
-            // Push notification
-            if (receiverProfile?.pushToken) {
+            if (receiverProfile?.push_token) {
                 sendPushNotification(
-                    receiverProfile.pushToken,
+                    receiverProfile.push_token,
                     'Contrato Negado',
                     `${user.name} encerrou a negociação.`,
                     { type: 'reject', chatId: id }
@@ -223,62 +240,100 @@ export default function ChatScreen() {
 
     const handleCompleteJob = async () => {
         if (!activeContract || isSubmittingReview) return;
-        
+        const uid = user.uid || user.id;
+
         setIsSubmittingReview(true);
         try {
             // Update contract status
-            await updateDoc(doc(db, 'contracts', activeContract.id), {
+            await supabase.from('contracts').update({
                 status: 'completed',
-                completed_at: serverTimestamp()
-            });
+                completed_at: new Date().toISOString()
+            }).eq('id', activeContract.id);
 
-            // Create review
-            await addDoc(collection(db, 'reviews'), {
-                contract_id: activeContract.id,
-                from_id: user.uid,
-                to_id: receiverId,
-                rating,
-                comment: reviewComment,
-                created_at: serverTimestamp()
-            });
+            // Check if review already exists
+            const { data: existingReview } = await supabase
+                .from('reviews')
+                .select('*')
+                .eq('from_id', uid)
+                .eq('to_id', receiverId)
+                .maybeSingle();
 
-            // Update Worker Profile (Completed Jobs & Rating)
-            const profRef = doc(db, 'worker_profiles', receiverId);
-            const profSnap = await getDoc(profRef);
-            
-            if (profSnap.exists()) {
-                const data = profSnap.data();
-                const currentCount = data.completed_contracts || 0;
-                const currentRatingAvg = data.rating_avg || 0;
-                const currentRatingCount = data.rating_count || 0;
+            // Update Worker Profile
+            const { data: prof } = await supabase
+                .from('worker_profiles')
+                .select('*')
+                .eq('user_id', receiverId)
+                .single();
+
+            if (prof) {
+                const currentCount = prof.completed_contracts || 0;
+                const currentRatingAvg = prof.rating_avg || 0;
+                const currentRatingCount = prof.rating_count || 0;
 
                 const newCount = currentCount + 1;
-                const newRatingCount = currentRatingCount + 1;
-                const newRatingAvg = ((currentRatingAvg * currentRatingCount) + rating) / newRatingCount;
 
-                await updateDoc(profRef, {
-                    completed_contracts: newCount,
-                    rating_avg: newRatingAvg,
-                    rating_count: newRatingCount
-                });
+                if (existingReview) {
+                    // Update existing review
+                    await supabase.from('reviews').update({
+                        rating,
+                        comment: reviewComment,
+                        contract_id: activeContract.id,
+                        created_at: new Date().toISOString()
+                    }).eq('id', existingReview.id);
+
+                    // Recalculate average without changing count
+                    const newRatingAvg = currentRatingCount > 0
+                        ? ((currentRatingAvg * currentRatingCount) - existingReview.rating + rating) / currentRatingCount
+                        : rating;
+
+                    await supabase.from('worker_profiles').update({
+                        completed_contracts: newCount,
+                        rating_avg: newRatingAvg
+                    }).eq('user_id', receiverId);
+                } else {
+                    // Insert new review
+                    await supabase.from('reviews').insert({
+                        contract_id: activeContract.id,
+                        from_id: uid,
+                        to_id: receiverId,
+                        rating,
+                        comment: reviewComment
+                    });
+
+                    const newRatingCount = currentRatingCount + 1;
+                    const newRatingAvg = ((currentRatingAvg * currentRatingCount) + rating) / newRatingCount;
+
+                    await supabase.from('worker_profiles').update({
+                        completed_contracts: newCount,
+                        rating_avg: newRatingAvg,
+                        rating_count: newRatingCount
+                    }).eq('user_id', receiverId);
+                }
+            } else {
+                if (!existingReview) {
+                    await supabase.from('reviews').insert({
+                        contract_id: activeContract.id,
+                        from_id: uid,
+                        to_id: receiverId,
+                        rating,
+                        comment: reviewComment
+                    });
+                }
             }
 
             // System message
-            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+            await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: 'system',
-                receiver_id: 'all',
-                content: `✨ Trabalho concluído e avaliado com ${rating} estrelas!`,
-                type: 'system',
-                created_at: serverTimestamp()
+                sender_id: '00000000-0000-0000-0000-000000000000',
+                content: `✨ Trabalho concluído e recomendado com ${rating} estrelas!`
             });
 
             setActiveContract(null);
             setShowReviewModal(false);
-            Alert.alert('Sucesso', 'Trabalho concluído e avaliação enviada!');
+            Alert.alert('Sucesso', 'Trabalho concluído e recomendação enviada!');
         } catch (err) {
             console.error('Review error:', err);
-            Alert.alert('Erro', 'Não foi possível gravar a avaliação.');
+            Alert.alert('Erro', 'Não foi possível gravar a recomendação.');
         } finally {
             setIsSubmittingReview(false);
             setContractStatus('completed');
@@ -289,28 +344,35 @@ export default function ChatScreen() {
         if (!user || isAuthorizing) return;
         setIsAuthorizing(true);
         try {
-            await updateDoc(doc(db, 'chat_conversations', id), {
+            await supabase.from('chat_conversations').update({
                 is_authorized: true,
-                updated_at: serverTimestamp(),
+                updated_at: new Date().toISOString(),
                 last_message: 'Contacto autorizado'
-            });
+            }).eq('id', id);
 
             // System message
-            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+            await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: 'system',
-                receiver_id: 'all',
-                content: '✅ Contacto autorizado. Podem agora trocar mensagens.',
-                type: 'system',
-                created_at: serverTimestamp()
+                sender_id: '00000000-0000-0000-0000-000000000000',
+                content: '✅ Contacto autorizado. Podem agora trocar mensagens.'
             });
 
-            // Notification
-            if (receiverProfile?.pushToken) {
+            // Adicionar à lista de notificações da app
+            await supabase.from('notifications').insert({
+                user_id: receiverId,
+                sender_id: user.uid || user.id,
+                title: 'Contacto Autorizado ✅',
+                description: `${user.name} aceitou o seu pedido de chat. Podem agora conversar e negociar.`,
+                type: 'CHAT_AUTHORIZED',
+                is_read: false,
+                route: `/chat/${id}`
+            });
+
+            if (receiverProfile?.push_token) {
                 sendPushNotification(
-                    receiverProfile.pushToken,
+                    receiverProfile.push_token,
                     'Contacto Autorizado',
-                    `${user.name} aceitou o seu pedido de contacto.`,
+                    `${user.name} aceitou o seu pedido de chat.`,
                     { type: 'auth', chatId: id }
                 );
             }
@@ -323,53 +385,40 @@ export default function ChatScreen() {
 
     const handleRejectApplication = async () => {
         if (!user || isAuthorizing) return;
+        const uid = user.uid || user.id;
+
         Alert.alert(
             "Recusar Contacto",
             "Deseja recusar este pedido de contacto? A conversa será encerrada.",
             [
                 { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Recusar", 
-                    style: "destructive", 
+                {
+                    text: "Recusar",
+                    style: "destructive",
                     onPress: async () => {
                         setIsAuthorizing(true);
                         try {
-                            // Marcar como rejeitado (usamos o sistema de contratos existente ou um campo na conv)
-                            await updateDoc(doc(db, 'chat_conversations', id), {
+                            await supabase.from('chat_conversations').update({
                                 is_authorized: false,
-                                status: 'rejected',
-                                updated_at: serverTimestamp(),
-                                last_message: 'Contacto recusado'
-                            });
+                                last_message: 'Contacto recusado',
+                                updated_at: new Date().toISOString()
+                            }).eq('id', id);
 
-                            const systemMsg = '🚫 Infelizmente, o empregador decidiu não prosseguir com esta candidatura. Contacto encerrado.';
-                            
-                            await addDoc(collection(db, 'chat_conversations', id, 'messages'), {
+                            await supabase.from('messages').insert({
                                 conversation_id: id,
-                                sender_id: 'system',
-                                receiver_id: 'all',
-                                content: systemMsg,
-                                type: 'system',
-                                created_at: serverTimestamp()
+                                sender_id: '00000000-0000-0000-0000-000000000000',
+                                content: '🚫 Infelizmente, o empregador decidiu não prosseguir com esta candidatura. Contacto encerrado.'
                             });
 
-                            // Enviar notificação ao iniciador (candidato)
-                            if (receiverProfile?.pushToken && user.uid !== initiatedBy) {
+                            if (receiverProfile?.push_token && uid !== initiatedBy) {
                                 sendPushNotification(
-                                    receiverProfile.pushToken,
+                                    receiverProfile.push_token,
                                     'Candidatura Recusada',
                                     'O empregador decidiu não prosseguir com o seu contacto.',
                                     { type: 'reject_auth', chatId: id }
                                 );
-                            } else {
-                                // Se o receiver for o empregador (quem está a ver agora é o outro), 
-                                // precisamos de garantir que quem iniciou receba.
-                                // Na verdade, quem iniciou é sempre 'initiatedBy'.
-                                // Se user.uid (quem recusa) !== initiatedBy, então o outro é o iniciado.
-                                // Já tratamos isso acima.
                             }
 
-                            // Feedback visual rápido antes de sair
                             Alert.alert("Sucesso", "Contacto recusado e candidatura encerrada.");
                             if (router.canGoBack()) {
                                 router.back();
@@ -381,7 +430,7 @@ export default function ChatScreen() {
                         } finally {
                             setIsAuthorizing(false);
                         }
-                    } 
+                    }
                 }
             ]
         );
@@ -402,17 +451,17 @@ export default function ChatScreen() {
         <KeyboardAvoidingView
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={90}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
             <View style={[styles.headerBar, { paddingTop: insets.top + 10 }]}>
-                <TouchableOpacity 
+                <TouchableOpacity
                     onPress={() => {
                         if (router.canGoBack()) {
                             router.back();
                         } else {
                             router.replace('/(tabs)/home');
                         }
-                    }} 
+                    }}
                     style={{ marginRight: 12 }}
                 >
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
@@ -434,7 +483,7 @@ export default function ChatScreen() {
                 renderItem={({ item }) => {
                     const mine = isMyMessage(item);
                     const isSystem = item.sender_id === 'system' || item.type === 'system';
-                    
+
                     if (isSystem) {
                         return (
                             <View style={styles.systemMessage}>
@@ -453,11 +502,11 @@ export default function ChatScreen() {
                                     {formatTime(item.created_at)}
                                 </Text>
                                 {mine && (
-                                    <Ionicons 
-                                        name={item.read ? "checkmark-done" : "checkmark"} 
-                                        size={14} 
-                                        color={item.read ? "#4CAF50" : "rgba(255,255,255,0.5)"} 
-                                        style={{ marginLeft: 4 }} 
+                                    <Ionicons
+                                        name={item.read ? "checkmark-done" : "checkmark"}
+                                        size={14}
+                                        color={item.read ? "#4CAF50" : "rgba(255,255,255,0.5)"}
+                                        style={{ marginLeft: 4 }}
                                     />
                                 )}
                             </View>
@@ -473,13 +522,13 @@ export default function ChatScreen() {
                 )}
             />
 
-            {/* Contract Control Bar (Top) */}
-            {user?.role === 'EMPLOYER' && isAuthorized && !['rejected', 'completed'].includes(contractStatus) && (
+            {/* Contract Control Bar (Top) - Only show if enough messages exchanged */}
+            {user?.role === 'EMPLOYER' && isAuthorized && messages.filter(m => m.sender_id !== '00000000-0000-0000-0000-000000000000').length >= 5 && !['rejected', 'completed'].includes(contractStatus) && (
                 <View style={styles.contractBar}>
                     {!activeContract ? (
                         <View style={styles.hireOptionsRow}>
-                            <TouchableOpacity 
-                                style={[styles.hireBtn, { flex: 2 }]} 
+                            <TouchableOpacity
+                                style={[styles.hireBtn, { flex: 2 }]}
                                 onPress={handleHire}
                                 disabled={isHiring || isRejecting}
                             >
@@ -490,8 +539,8 @@ export default function ChatScreen() {
                                     </>
                                 )}
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.rejectBtn} 
+                            <TouchableOpacity
+                                style={styles.rejectBtn}
                                 onPress={handleReject}
                                 disabled={isHiring || isRejecting}
                             >
@@ -506,8 +555,8 @@ export default function ChatScreen() {
                                 <View style={styles.statusDot} />
                                 <Text style={styles.statusText}>Contrato Activo</Text>
                             </View>
-                            <TouchableOpacity 
-                                style={styles.completeBtn} 
+                            <TouchableOpacity
+                                style={styles.completeBtn}
                                 onPress={() => setShowReviewModal(true)}
                             >
                                 <Ionicons name="checkmark-circle" size={16} color={Colors.white} style={{ marginRight: 6 }} />
@@ -529,8 +578,8 @@ export default function ChatScreen() {
                                 <Text style={styles.authSubtitle}>{receiverProfile?.name} candidatou-se ou demonstrou interesse.</Text>
                             </View>
                             <View style={styles.authButtons}>
-                                <TouchableOpacity 
-                                    style={styles.authAcceptBtn} 
+                                <TouchableOpacity
+                                    style={styles.authAcceptBtn}
                                     onPress={handleAuthorize}
                                     disabled={isAuthorizing}
                                 >
@@ -538,8 +587,8 @@ export default function ChatScreen() {
                                         <Text style={styles.authAcceptText}>Autorizar Contacto</Text>
                                     )}
                                 </TouchableOpacity>
-                                <TouchableOpacity 
-                                    style={styles.authRejectBtn} 
+                                <TouchableOpacity
+                                    style={styles.authRejectBtn}
                                     onPress={handleRejectApplication}
                                     disabled={isAuthorizing}
                                 >
@@ -562,11 +611,11 @@ export default function ChatScreen() {
             <Modal visible={showReviewModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Avaliar Profissional</Text>
+                        <Text style={styles.modalTitle}>Recomendar Profissional</Text>
                         <Text style={styles.modalSubtitle}>Como foi o serviço realizado por {receiverProfile?.name}?</Text>
-                        
+
                         <View style={styles.starsRow}>
-                            {[1,2,3,4,5].map(s => (
+                            {[1, 2, 3, 4, 5].map(s => (
                                 <TouchableOpacity key={s} onPress={() => setRating(s)}>
                                     <Ionicons name={s <= rating ? "star" : "star-outline"} size={36} color={s <= rating ? "#FFB800" : Colors.textLight} />
                                 </TouchableOpacity>
@@ -586,8 +635,8 @@ export default function ChatScreen() {
                             <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowReviewModal(false)}>
                                 <Text style={styles.cancelBtnText}>Cancelar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={styles.submitBtn} 
+                            <TouchableOpacity
+                                style={styles.submitBtn}
                                 onPress={handleCompleteJob}
                                 disabled={isSubmittingReview}
                             >
@@ -600,7 +649,7 @@ export default function ChatScreen() {
 
             <View style={[styles.inputBar, !isAuthorized && styles.inputDisabled, { paddingBottom: Math.max(insets.bottom, 8) }]}>
                 <TextInput
-                    style={[styles.textInput, !isAuthorized && {backgroundColor: '#f1f1f1'}]}
+                    style={[styles.textInput, !isAuthorized && { backgroundColor: '#f1f1f1' }]}
                     placeholder={isAuthorized ? "Mensagem..." : "Chat bloqueado..."}
                     placeholderTextColor={Colors.textLight}
                     value={text}
@@ -610,9 +659,9 @@ export default function ChatScreen() {
                     maxLength={1000}
                     editable={isAuthorized}
                 />
-                <TouchableOpacity 
-                    style={[styles.sendButton, (!text.trim() || !isAuthorized) && {opacity: 0.5}]} 
-                    onPress={handleSend} 
+                <TouchableOpacity
+                    style={[styles.sendButton, (!text.trim() || !isAuthorized) && { opacity: 0.5 }]}
+                    onPress={handleSend}
                     disabled={!text.trim() || !isAuthorized}
                 >
                     <Ionicons name="send" size={20} color={Colors.white} />
@@ -624,22 +673,22 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
-    headerBar: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        backgroundColor: Colors.white, 
-        paddingHorizontal: Spacing.md, 
-        paddingVertical: 12, 
-        borderBottomWidth: 1, 
-        borderBottomColor: Colors.borderLight 
+    headerBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.white,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight
     },
-    headerAvatar: { 
-        width: 36, 
-        height: 36, 
-        borderRadius: 18, 
-        backgroundColor: Colors.primaryBg, 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+    headerAvatar: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryBg,
+        justifyContent: 'center',
+        alignItems: 'center',
         marginRight: 10,
         overflow: 'hidden'
     },
@@ -665,21 +714,21 @@ const styles = StyleSheet.create({
     emptyText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, textAlign: 'center' },
 
     // Contract System
-    contractBar: { 
-        backgroundColor: Colors.white, 
-        paddingHorizontal: Spacing.md, 
+    contractBar: {
+        backgroundColor: Colors.white,
+        paddingHorizontal: Spacing.md,
         paddingVertical: 10,
         borderBottomWidth: 1,
         borderBottomColor: Colors.borderLight,
         zIndex: 10,
     },
-    hireBtn: { 
-        backgroundColor: Colors.primary, 
-        paddingVertical: 10, 
-        borderRadius: 12, 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        justifyContent: 'center' 
+    hireBtn: {
+        backgroundColor: Colors.primary,
+        paddingVertical: 10,
+        borderRadius: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     hireBtnText: { color: Colors.white, fontWeight: '700', fontSize: 13 },
     activeContractRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -691,17 +740,17 @@ const styles = StyleSheet.create({
 
     // Reject Flow
     hireOptionsRow: { flexDirection: 'row', gap: 10 },
-    rejectBtn: { 
-        flex: 1, 
-        borderWidth: 1, 
-        borderColor: Colors.border, 
-        borderRadius: 12, 
-        paddingVertical: 10, 
-        alignItems: 'center', 
-        justifyContent: 'center' 
+    rejectBtn: {
+        flex: 1,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 12,
+        paddingVertical: 10,
+        alignItems: 'center',
+        justifyContent: 'center'
     },
     rejectBtnText: { color: Colors.textSecondary, fontWeight: '600', fontSize: 13 },
-    
+
     // Review Modal
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
     modalContent: { backgroundColor: Colors.white, borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 },
@@ -714,7 +763,7 @@ const styles = StyleSheet.create({
     cancelBtnText: { color: Colors.textLight, fontWeight: '600' },
     submitBtn: { flex: 2, backgroundColor: Colors.primary, paddingVertical: 12, borderRadius: 12, alignItems: 'center' },
     submitBtnText: { color: Colors.white, fontWeight: '700' },
-    
+
     // System message style (bonus)
     systemMessage: { alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 6, marginVertical: 12 },
     systemMessageText: { fontSize: 11, color: Colors.textSecondary, fontStyle: 'italic', textAlign: 'center' },

@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, ActivityIndicator, useWindowDimensions, Animated } from 'react-native';
-import { db } from '../services/firebase';
-import { collection, query, where, orderBy, getDocs, limit, doc, getDoc } from 'firebase/firestore';
-import { useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Platform, ActivityIndicator, useWindowDimensions, Animated, Linking } from 'react-native';
+import { supabase } from '../services/supabase';
+import { useRouter, Redirect } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { Colors, Fonts, Spacing } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +15,7 @@ export default function WebLandingOrSplash() {
     const { width, height } = useWindowDimensions();
     const isMobileWeb = width < 768; // Simple responsive check
     const isNarrowWeb = width < 640;
-    
+
     // Refs for smooth scroll navigation
     const scrollRef = useRef(null);
     const howItWorksRef = useRef(null);
@@ -42,28 +41,21 @@ export default function WebLandingOrSplash() {
         const fetchTestimonials = async () => {
             if (Platform.OS !== 'web' || user) return;
             try {
-                const q = query(
-                    collection(db, 'testimonials'), 
-                    where('status', '==', 'APPROVED'),
-                    orderBy('created_at', 'desc'),
-                    limit(6)
-                );
-                const snap = await getDocs(q);
-                const data = [];
-                for (const d of snap.docs) {
-                    const item = { id: d.id, ...d.data() };
-                    // Fetch user photo if NOT present (it might already be in the doc if we optimized, 
-                    // but let's be safe as per our current implementation)
-                   if (item.user_id && !item.user_photo) {
-                       const uRef = doc(db, 'users', item.user_id);
-                       const uSnap = await getDoc(uRef);
-                       if (uSnap.exists()) {
-                           item.user_photo = uSnap.data().profile_photo;
-                       }
-                   }
-                   data.push(item);
-                }
-                setDynamicTestimonials(data);
+                const { data, error } = await supabase
+                    .from('testimonials')
+                    .select('*, author:users!user_id(profile_photo)')
+                    .eq('status', 'APPROVED')
+                    .order('created_at', { ascending: false })
+                    .limit(6);
+
+                if (error) throw error;
+
+                const formattedData = data?.map(item => ({
+                    ...item,
+                    user_photo: item.author?.profile_photo || null
+                }));
+
+                setDynamicTestimonials(formattedData || []);
             } catch (err) {
                 console.error('Error fetching testimonials:', err);
             } finally {
@@ -80,22 +72,6 @@ export default function WebLandingOrSplash() {
         require('../assets/images/plumber.png')
     ];
 
-    useEffect(() => {
-        // Wait for initialize to finish
-        if (isLoading) return;
-
-        if (Platform.OS !== 'web' || user) {
-            const timer = setTimeout(() => {
-                if (user) {
-                    router.replace('/(tabs)/home');
-                } else if (!isOnboarded && Platform.OS !== 'web') {
-                    router.replace('/onboarding');
-                }
-            }, 50); // Small delay to ensure root layout is ready
-            return () => clearTimeout(timer);
-        }
-    }, [user, isOnboarded, isLoading]);
-
     // Slider effect
     useEffect(() => {
         if (Platform.OS === 'web' && !user) {
@@ -106,12 +82,24 @@ export default function WebLandingOrSplash() {
         }
     }, [user]);
 
-    if (Platform.OS !== 'web' || user) {
+    if (isLoading) {
         return (
             <View style={styles.splashContainer}>
                 <ActivityIndicator size="large" color={Colors.primary} />
             </View>
         );
+    }
+
+    if (user) {
+        return <Redirect href="/(tabs)/home" />;
+    }
+
+    if (Platform.OS !== 'web') {
+        if (!isOnboarded) {
+            return <Redirect href="/onboarding" />;
+        } else {
+            return <Redirect href="/auth/choose-type" />;
+        }
     }
 
     // MAIN WEB LANDING PAGE
@@ -128,7 +116,7 @@ export default function WebLandingOrSplash() {
                         style={{ marginRight: 4 }}
                     />
                 </View>
-                
+
                 {!isMobileWeb && (
                     <View style={styles.navCenter}>
                         <TouchableOpacity onPress={() => scrollToSection(howItWorksRef)}>
@@ -164,273 +152,273 @@ export default function WebLandingOrSplash() {
             </View>
 
             <ScrollView ref={scrollRef} contentContainerStyle={{ flexGrow: 1 }} stickyHeaderIndices={[]}>
-            
-            {/* ====== FULL HERO SECTION ====== */}
-            <View style={[styles.heroFull, { height }]}>
-                {/* Background Slider Images */}
-                {sliderImages.map((src, idx) => (
-                    <Image 
-                        key={idx}
-                        source={src} 
-                        style={[styles.heroBgImage, { opacity: currentImageIdx === idx ? 1 : 0 }]} 
-                        resizeMode="cover" 
-                    />
-                ))}
-                
-                {/* Dark Overlay for text readability */}
-                <View style={styles.heroOverlay} />
 
-                {/* Content over Image */}
-                <View style={styles.heroContentOver}>
-                    <View style={styles.heroTag}>
-                        <View style={styles.heroTagBadge}><Text style={styles.heroTagBadgeText}>{t('lander.hero_tag')}</Text></View>
-                    </View>
-                    
-                    <Text style={[styles.heroTitleOver, isMobileWeb && { fontSize: 36, lineHeight: 44 }]}>
-                        {t('home.hero_title')}<Text style={{ color: Colors.primary }}>{t('lander.hero_title_accent')}</Text>.
-                    </Text>
-                    <Text style={styles.heroSubtitleOver}>
-                        {t('home.hero_subtitle')}
-                    </Text>
-                    
-                    <View style={[styles.heroButtonsOver, isMobileWeb && { flexDirection: 'column', width: '100%' }]}>
-                        <TouchableOpacity style={[styles.btnHeroPrimary, isMobileWeb && { alignItems: 'center' }]} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'EMPLOYER' } })}>
-                            <Text style={styles.btnHeroPrimaryText}>{t('lander.hire_button')}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.btnHeroSecondary, { backgroundColor: 'transparent', borderColor: '#4B5563', backgroundColor: 'rgba(255,255,255,0.1)' }, isMobileWeb && { alignItems: 'center' }]} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
-                            <Text style={[styles.btnHeroSecondaryText, { color: Colors.white }]}>{t('lander.work_button')}</Text>
-                        </TouchableOpacity>
-                    </View>
+                {/* ====== FULL HERO SECTION ====== */}
+                <View style={[styles.heroFull, { height }]}>
+                    {/* Background Slider Images */}
+                    {sliderImages.map((src, idx) => (
+                        <Image
+                            key={idx}
+                            source={src}
+                            style={[styles.heroBgImage, { opacity: currentImageIdx === idx ? 1 : 0 }]}
+                            resizeMode="cover"
+                        />
+                    ))}
 
-                    <View style={styles.heroTrustIndicators}>
-                        <Text style={styles.trustText}><Ionicons name="card" size={14} color={Colors.primary} /> M-Pesa & e-Mola</Text>
-                        <Text style={styles.trustText}><Ionicons name="shield-checkmark" size={14} color={Colors.primary} /> {t('lander.trust_profiles')}</Text>
-                    </View>
-                </View>
-            </View>
-            {/* ====== SECTION 1B: FIND JOB (DARK) ====== */}
-            <View ref={howItWorksRef} style={styles.darkSectionFull}>
-                <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
-                <View style={styles.sectionDarkOverlay} />
-                <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
-                    <View style={styles.sectionVisualCol}>
-                        <View style={styles.floatingPreviewCard}>
-                            <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
-                            <Text style={styles.previewTitle}>{t('lander.worker_card_title')}</Text>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>{t('tabs.jobs')}:</Text><Text style={styles.previewValue}>Limpeza / Babá</Text></View>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Maputo / Matola</Text></View>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>Disponib.:</Text><Text style={styles.previewValue}>Imediata</Text></View>
-                            <View style={[styles.previewBadge, {backgroundColor: Colors.primary + '20'}]}><Text style={{color: Colors.primary, fontSize: 10, fontWeight: '800'}}>{t('lander.worker_card_verified')}</Text></View>
+                    {/* Dark Overlay for text readability */}
+                    <View style={styles.heroOverlay} />
+
+                    {/* Content over Image */}
+                    <View style={styles.heroContentOver}>
+                        <View style={styles.heroTag}>
+                            <View style={styles.heroTagBadge}><Text style={styles.heroTagBadgeText}>{t('lander.hero_tag')}</Text></View>
                         </View>
-                    </View>
-                    <View style={styles.sectionTextCol}>
-                        <Text style={styles.sectionHeadingDark}>{t('lander.worker_heading')}</Text>
-                        <Text style={styles.sectionBodyDark}>{t('lander.worker_body_1')}</Text>
-                        <Text style={styles.sectionBodyDark}>{t('lander.worker_body_2')}</Text>
-                        <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
-                            <Text style={styles.btnSectionActionText}>{t('home.find_job')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
 
-            {/* ====== SECTION 1: POST JOB (DARK) ====== */}
-            <View style={styles.darkSectionFull}>
-                <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
-                <View style={styles.sectionDarkOverlay} />
-                <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobile]}>
-                    <View style={styles.sectionTextCol}>
-                        <Text style={styles.sectionHeadingDark}>{t('lander.employer_heading')}</Text>
-                        <Text style={styles.sectionBodyDark}>{t('lander.employer_body_1')}</Text>
-                        <Text style={styles.sectionBodyDark}>{t('lander.employer_body_2')}</Text>
-                        <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push('/auth/register')}>
-                            <Text style={styles.btnSectionActionText}>{t('lander.employer_action')}</Text>
-                        </TouchableOpacity>
-                    </View>
-                    <View style={styles.sectionVisualCol}>
-                        <View style={styles.floatingPreviewCard}>
-                            <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
-                            <Text style={styles.previewTitle}>{t('lander.employer_card_title')}</Text>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>Tipo:</Text><Text style={styles.previewValue}>Cozinheira / Limpeza</Text></View>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Sommerschield, Maputo</Text></View>
-                            <View style={styles.previewRow}><Text style={styles.previewLabel}>Turnos:</Text><Text style={styles.previewValue}>Segunda a Sexta (Diarista)</Text></View>
-                            <View style={[styles.previewBadge, {backgroundColor: Colors.primary + '20'}]}><Text style={{color: Colors.primary, fontSize: 10, fontWeight: '800'}}>{t('lander.employer_card_recommended')}</Text></View>
+                        <Text style={[styles.heroTitleOver, isMobileWeb && { fontSize: 36, lineHeight: 44 }]}>
+                            {t('home.hero_title')}<Text style={{ color: Colors.primary }}>{t('lander.hero_title_accent')}.</Text>
+                        </Text>
+                        <Text style={styles.heroSubtitleOver}>
+                            {t('home.hero_subtitle')}
+                        </Text>
+
+                        <View style={[styles.heroButtonsOver, isMobileWeb && { flexDirection: 'column', width: '100%' }]}>
+                            <TouchableOpacity style={[styles.btnHeroPrimary, isMobileWeb && { alignItems: 'center' }]} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'EMPLOYER' } })}>
+                                <Text style={styles.btnHeroPrimaryText}>{t('lander.hire_button')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.btnHeroSecondary, { backgroundColor: 'transparent', borderColor: '#4B5563', backgroundColor: 'rgba(255,255,255,0.1)' }, isMobileWeb && { alignItems: 'center' }]} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
+                                <Text style={[styles.btnHeroSecondaryText, { color: Colors.white }]}>{t('lander.work_button')}</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.heroTrustIndicators}>
+                            <Text style={styles.trustText}><Ionicons name="card" size={14} color={Colors.primary} /> M-Pesa & e-Mola</Text>
+                            <Text style={styles.trustText}><Ionicons name="shield-checkmark" size={14} color={Colors.primary} /> {t('lander.trust_profiles')}</Text>
                         </View>
                     </View>
                 </View>
-            </View>
+                {/* ====== SECTION 1B: FIND JOB (DARK) ====== */}
+                <View ref={howItWorksRef} style={styles.darkSectionFull}>
+                    <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
+                    <View style={styles.sectionDarkOverlay} />
+                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
+                        <View style={styles.sectionVisualCol}>
+                            <View style={styles.floatingPreviewCard}>
+                                <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
+                                <Text style={styles.previewTitle}>{t('lander.worker_card_title')}</Text>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>{t('tabs.jobs')}:</Text><Text style={styles.previewValue}>Limpeza / Babá</Text></View>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Maputo / Matola</Text></View>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Disponib.:</Text><Text style={styles.previewValue}>Imediata</Text></View>
+                                <View style={[styles.previewBadge, { backgroundColor: Colors.primary + '20' }]}><Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '800' }}>{t('lander.worker_card_verified')}</Text></View>
+                            </View>
+                        </View>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingDark}>{t('lander.worker_heading')}</Text>
+                            <Text style={styles.sectionBodyDark}>{t('lander.worker_body_1')}</Text>
+                            <Text style={styles.sectionBodyDark}>{t('lander.worker_body_2')}</Text>
+                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
+                                <Text style={styles.btnSectionActionText}>{t('home.find_job')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
 
-            {/* ====== SECTION 2: CHOOSE WORKERS (LIGHT) ====== */}
-            <View style={[styles.sectionLight, {paddingTop: isMobileWeb ? 60 : 100}]}>
-                <Image source={require('../assets/images/workers_grid_bg.png')} style={[styles.sectionBgImage, {opacity: 0.25}]} resizeMode="cover" />
-                <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
-                    <View style={styles.sectionVisualCol}>
-                        <View style={[styles.profilesGrid, isMobileWeb && { alignItems: 'center', width: '100%' }]}>
-                            <View style={styles.miniProfileCard}>
-                                <Image source={{uri: 'https://i.pravatar.cc/150?u=1'}} style={styles.miniAvatar} />
-                                <View style={styles.miniInfo}>
-                                    <Text style={styles.miniName}>Sara Vuma</Text>
-                                    <Text style={styles.miniRole}>Limpeza e Cozinha</Text>
-                                    <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.9 (24 avaliações)</Text>
-                                </View>
-                            </View>
-                            <View style={[styles.miniProfileCard, !isMobileWeb && {marginLeft: 30}]}>
-                                <Image source={{uri: 'https://i.pravatar.cc/150?u=2'}} style={styles.miniAvatar} />
-                                <View style={styles.miniInfo}>
-                                    <Text style={styles.miniName}>José Carlos</Text>
-                                    <Text style={styles.miniRole}>Jardineiro Especialista</Text>
-                                    <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.8 (19 avaliações)</Text>
-                                </View>
-                            </View>
-                            <View style={styles.miniProfileCard}>
-                                <Image source={{uri: 'https://i.pravatar.cc/150?u=3'}} style={styles.miniAvatar} />
-                                <View style={styles.miniInfo}>
-                                    <Text style={styles.miniName}>Ana Maria</Text>
-                                    <Text style={styles.miniRole}>Babá Certificada</Text>
-                                    <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 5.0 (42 avaliações)</Text>
-                                </View>
+                {/* ====== SECTION 1: POST JOB (DARK) ====== */}
+                <View style={styles.darkSectionFull}>
+                    <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
+                    <View style={styles.sectionDarkOverlay} />
+                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobile]}>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingDark}>{t('lander.employer_heading')}</Text>
+                            <Text style={styles.sectionBodyDark}>{t('lander.employer_body_1')}</Text>
+                            <Text style={styles.sectionBodyDark}>{t('lander.employer_body_2')}</Text>
+                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push('/auth/register')}>
+                                <Text style={styles.btnSectionActionText}>{t('lander.employer_action')}</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.sectionVisualCol}>
+                            <View style={styles.floatingPreviewCard}>
+                                <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
+                                <Text style={styles.previewTitle}>{t('lander.employer_card_title')}</Text>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Tipo:</Text><Text style={styles.previewValue}>Cozinheira / Limpeza</Text></View>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Sommerschield, Maputo</Text></View>
+                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Turnos:</Text><Text style={styles.previewValue}>Segunda a Sexta (Diarista)</Text></View>
+                                <View style={[styles.previewBadge, { backgroundColor: Colors.primary + '20' }]}><Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '800' }}>{t('lander.employer_card_recommended')}</Text></View>
                             </View>
                         </View>
                     </View>
-                    <View style={styles.sectionTextCol}>
-                        <Text style={styles.sectionHeadingLight}>{t('lander.choose_heading')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.choose_body_1')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.choose_body_2')}</Text>
-                        <TouchableOpacity style={styles.btnSectionOutline} onPress={() => router.push('/auth/login')}>
-                            <Text style={styles.btnSectionOutlineText}>{t('lander.choose_action')}</Text>
-                        </TouchableOpacity>
-                    </View>
                 </View>
-            </View>
 
-            {/* ====== SECTION 4: SUPPORT (LIGHT) ====== */}
-            <View ref={supportSectionRef} style={styles.sectionLight}>
-                <Image source={require('../assets/images/support_bg.png')} style={[styles.sectionBgImage, {opacity: 0.1}]} resizeMode="cover" />
-                <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
-                    <View style={styles.sectionVisualCol}>
-                        <View style={styles.supportCard}>
-                            <Ionicons name="headset" size={48} color={Colors.primary} style={{ marginBottom: 20 }} />
-                            <Text style={styles.supportCardTitle}>{t('lander.support_card_title')}</Text>
-                            <Text style={styles.supportCardText}>{t('lander.support_card_text')}</Text>
+                {/* ====== SECTION 2: CHOOSE WORKERS (LIGHT) ====== */}
+                <View style={[styles.sectionLight, { paddingTop: isMobileWeb ? 60 : 100 }]}>
+                    <Image source={require('../assets/images/workers_grid_bg.png')} style={[styles.sectionBgImage, { opacity: 0.25 }]} resizeMode="cover" />
+                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
+                        <View style={styles.sectionVisualCol}>
+                            <View style={[styles.profilesGrid, isMobileWeb && { alignItems: 'center', width: '100%' }]}>
+                                <View style={styles.miniProfileCard}>
+                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=1' }} style={styles.miniAvatar} />
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>Sara Vuma</Text>
+                                        <Text style={styles.miniRole}>Limpeza e Cozinha</Text>
+                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.9 (24 avaliações)</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.miniProfileCard, !isMobileWeb && { marginLeft: 30 }]}>
+                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=2' }} style={styles.miniAvatar} />
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>José Carlos</Text>
+                                        <Text style={styles.miniRole}>Jardineiro Especialista</Text>
+                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.8 (19 avaliações)</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.miniProfileCard}>
+                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=3' }} style={styles.miniAvatar} />
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>Ana Maria</Text>
+                                        <Text style={styles.miniRole}>Babá Certificada</Text>
+                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 5.0 (42 avaliações)</Text>
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingLight}>{t('lander.choose_heading')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.choose_body_1')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.choose_body_2')}</Text>
+                            <TouchableOpacity style={styles.btnSectionOutline} onPress={() => router.push('/auth/login')}>
+                                <Text style={styles.btnSectionOutlineText}>{t('lander.choose_action')}</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
-                    <View style={styles.sectionTextCol}>
-                        <Text style={styles.sectionHeadingLight}>{t('lander.support_heading')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.support_body_1')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.support_body_2')}</Text>
-                        <TouchableOpacity style={[styles.btnSectionOutline, {borderColor: Colors.primary}]} onPress={() => router.push('/auth/login')}>
-                            <Text style={[styles.btnSectionOutlineText, {color: Colors.primary}]}>{t('lander.support_action')}</Text>
-                        </TouchableOpacity>
+                </View>
+
+                {/* ====== SECTION 4: SUPPORT (LIGHT) ====== */}
+                <View ref={supportSectionRef} style={styles.sectionLight}>
+                    <Image source={require('../assets/images/support_bg.png')} style={[styles.sectionBgImage, { opacity: 0.1 }]} resizeMode="cover" />
+                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
+                        <View style={styles.sectionVisualCol}>
+                            <View style={styles.supportCard}>
+                                <Ionicons name="headset" size={48} color={Colors.primary} style={{ marginBottom: 20 }} />
+                                <Text style={styles.supportCardTitle}>{t('lander.support_card_title')}</Text>
+                                <Text style={styles.supportCardText}>{t('lander.support_card_text')}</Text>
+                            </View>
+                        </View>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingLight}>{t('lander.support_heading')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.support_body_1')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.support_body_2')}</Text>
+                            <TouchableOpacity style={[styles.btnSectionOutline, { borderColor: Colors.primary }]} onPress={() => router.push('/auth/login')}>
+                                <Text style={[styles.btnSectionOutlineText, { color: Colors.primary }]}>{t('lander.support_action')}</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
-            </View>
 
-            {/* ====== SECTION 5: TESTIMONIALS (DARK) ====== */}
-            <View ref={testimonialsRef} style={styles.darkSectionFull}>
-                <View style={[styles.sectionContentRow, {flexDirection: 'column', gap: 40}]}>
-                    <Text style={[styles.sectionHeadingDark, {textAlign: 'center'}]}>{t('lander.user_feedback_title')}</Text>
-                    <View style={[styles.grid, isMobileWeb && styles.gridMobile]}>
-                        {!loadingTestimonials && dynamicTestimonials.length > 0 ? (
-                            dynamicTestimonials.map((item) => (
-                                <View key={item.id} style={styles.testimoCard}>
-                                    <View style={styles.testimoHeader}>
-                                        <View style={styles.testimoAvatar}>
-                                            {item.user_photo ? (
-                                                <Image source={{ uri: item.user_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-                                            ) : (
-                                                <Text style={{ fontWeight: '700' }}>{item.name?.[0]}</Text>
-                                            )}
+                {/* ====== SECTION 5: TESTIMONIALS (DARK) ====== */}
+                <View ref={testimonialsRef} style={styles.darkSectionFull}>
+                    <View style={[styles.sectionContentRow, { flexDirection: 'column', gap: 40 }]}>
+                        <Text style={[styles.sectionHeadingDark, { textAlign: 'center' }]}>{t('lander.user_feedback_title')}</Text>
+                        <View style={[styles.grid, isMobileWeb && styles.gridMobile]}>
+                            {!loadingTestimonials && dynamicTestimonials.length > 0 ? (
+                                dynamicTestimonials.map((item) => (
+                                    <View key={item.id} style={styles.testimoCard}>
+                                        <View style={styles.testimoHeader}>
+                                            <View style={styles.testimoAvatar}>
+                                                {item.user_photo ? (
+                                                    <Image source={{ uri: item.user_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                                                ) : (
+                                                    <Text style={{ fontWeight: '700' }}>{item.name?.[0]}</Text>
+                                                )}
+                                            </View>
+                                            <View>
+                                                <Text style={styles.testimoName}>{item.name}</Text>
+                                                <Text style={styles.testimoRole}>{item.role === 'WORKER' ? t('role_worker') : t('role_employer')}</Text>
+                                            </View>
                                         </View>
-                                        <View>
-                                            <Text style={styles.testimoName}>{item.name}</Text>
-                                            <Text style={styles.testimoRole}>{item.role === 'WORKER' ? t('role_worker') : t('role_employer')}</Text>
-                                        </View>
+                                        <Text style={styles.testimoQuote}>"{item.text}"</Text>
+                                        <Text style={styles.stars}>
+                                            {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
+                                        </Text>
                                     </View>
-                                    <Text style={styles.testimoQuote}>"{item.text}"</Text>
-                                    <Text style={styles.stars}>
-                                        {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
-                                    </Text>
-                                </View>
-                            ))
-                        ) : (
-                            <>
-                                <View style={styles.testimoCard}>
-                                    <View style={styles.testimoHeader}>
-                                        <View style={styles.testimoAvatar}><Text style={{fontWeight: '700'}}>ES</Text></View>
-                                        <View>
-                                            <Text style={styles.testimoName}>Elena Sitoe</Text>
-                                            <Text style={styles.testimoRole}>Empregadora - Maputo</Text>
+                                ))
+                            ) : (
+                                <>
+                                    <View style={styles.testimoCard}>
+                                        <View style={styles.testimoHeader}>
+                                            <View style={styles.testimoAvatar}><Text style={{ fontWeight: '700' }}>ES</Text></View>
+                                            <View>
+                                                <Text style={styles.testimoName}>Elena Sitoe</Text>
+                                                <Text style={styles.testimoRole}>Empregadora - Maputo</Text>
+                                            </View>
                                         </View>
+                                        <Text style={styles.testimoQuote}>"Consegui uma babá maravilhosa em menos de 2 dias. Ver o perfil verificado e as avaliações deu-me confiança para decidir rápido."</Text>
+                                        <Text style={styles.stars}>★★★★★</Text>
                                     </View>
-                                    <Text style={styles.testimoQuote}>"Consegui uma babá maravilhosa em menos de 2 dias. Ver o perfil verificado e as avaliações deu-me confiança para decidir rápido."</Text>
-                                    <Text style={styles.stars}>★★★★★</Text>
-                                </View>
-                                <View style={styles.testimoCard}>
-                                    <View style={styles.testimoHeader}>
-                                        <View style={styles.testimoAvatar}><Text style={{fontWeight: '700'}}>AL</Text></View>
-                                        <View>
-                                            <Text style={styles.testimoName}>Armando Langa</Text>
-                                            <Text style={styles.testimoRole}>Trabalhador - Matola</Text>
+                                    <View style={styles.testimoCard}>
+                                        <View style={styles.testimoHeader}>
+                                            <View style={styles.testimoAvatar}><Text style={{ fontWeight: '700' }}>AL</Text></View>
+                                            <View>
+                                                <Text style={styles.testimoName}>Armando Langa</Text>
+                                                <Text style={styles.testimoRole}>Trabalhador - Matola</Text>
+                                            </View>
                                         </View>
+                                        <Text style={styles.testimoQuote}>"Desde que entrei no Konekta, a minha agenda de jardinagem está sempre cheia. Recomendo a todos."</Text>
+                                        <Text style={styles.stars}>★★★★★</Text>
                                     </View>
-                                    <Text style={styles.testimoQuote}>"Desde que entrei no Trabalhe Já, a minha agenda de jardinagem está sempre cheia. Recomendo a todos."</Text>
-                                    <Text style={styles.stars}>★★★★★</Text>
-                                </View>
-                            </>
+                                </>
+                            )}
+                        </View>
+                    </View>
+                </View>
+
+                {/* ====== SECTION 6: ABOUT US (LIGHT) ====== */}
+                <View ref={aboutUsRef} style={[styles.sectionLight, { backgroundColor: '#F3F4F6' }]}>
+                    <View style={styles.sectionContentRow}>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingLight}>{t('lander.about_heading')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.about_body_1')}</Text>
+                            <Text style={styles.sectionBodyLight}>{t('lander.about_body_2')}</Text>
+                        </View>
+                        {!isMobileWeb && (
+                            <View style={styles.sectionVisualCol}>
+                                <BrandWordmark variant="muted" />
+                            </View>
                         )}
                     </View>
                 </View>
-            </View>
 
-            {/* ====== SECTION 6: ABOUT US (LIGHT) ====== */}
-            <View ref={aboutUsRef} style={[styles.sectionLight, {backgroundColor: '#F3F4F6'}]}>
-                <View style={styles.sectionContentRow}>
-                    <View style={styles.sectionTextCol}>
-                        <Text style={styles.sectionHeadingLight}>{t('lander.about_heading')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.about_body_1')}</Text>
-                        <Text style={styles.sectionBodyLight}>{t('lander.about_body_2')}</Text>
-                    </View>
-                    {!isMobileWeb && (
-                        <View style={styles.sectionVisualCol}>
-                            <BrandWordmark variant="muted" />
+                {/* ====== FOOTER ====== */}
+                <View style={styles.footer}>
+                    <View style={[styles.footerGrid, isMobileWeb && styles.gridMobile]}>
+                        <View style={styles.footerCol}>
+                            <View style={styles.footerBrand}>
+                                <BrandWordmark variant="footer" />
+                            </View>
+                            <Text style={styles.footerDesc}>{t('lander.footer_desc')}</Text>
+                            <View style={styles.socialIcons}>
+                                <Ionicons name="globe-outline" size={20} color="#9CA3AF" />
+                                <Ionicons name="logo-whatsapp" size={20} color="#9CA3AF" />
+                                <Ionicons name="mail-outline" size={20} color="#9CA3AF" />
+                            </View>
                         </View>
-                    )}
-                </View>
-            </View>
-
-            {/* ====== FOOTER ====== */}
-            <View style={styles.footer}>
-                <View style={[styles.footerGrid, isMobileWeb && styles.gridMobile]}>
-                    <View style={styles.footerCol}>
-                        <View style={styles.footerBrand}>
-                            <BrandWordmark variant="footer" />
+                        <View style={styles.footerColLinks}>
+                            <Text style={styles.footerTitle}>{t('lander.footer_company')}</Text>
+                            <TouchableOpacity onPress={() => router.push('/info/about')}><Text style={styles.footerLink}>{t('lander.footer_about')}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_careers')}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_press')}</Text></TouchableOpacity>
                         </View>
-                        <Text style={styles.footerDesc}>{t('lander.footer_desc')}</Text>
-                        <View style={styles.socialIcons}>
-                            <Ionicons name="globe-outline" size={20} color="#9CA3AF" />
-                            <Ionicons name="logo-whatsapp" size={20} color="#9CA3AF" />
-                            <Ionicons name="mail-outline" size={20} color="#9CA3AF" />
+                        <View style={styles.footerColLinks}>
+                            <Text style={styles.footerTitle}>{t('lander.footer_support')}</Text>
+                            <TouchableOpacity onPress={() => router.push('/info/help')}><Text style={styles.footerLink}>{t('lander.footer_help')}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/info/privacy')}><Text style={styles.footerLink}>{t('lander.footer_privacy')}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={styles.footerLink}>{t('lander.footer_terms')}</Text></TouchableOpacity>
                         </View>
                     </View>
-                    <View style={styles.footerColLinks}>
-                        <Text style={styles.footerTitle}>{t('lander.footer_company')}</Text>
-                        <TouchableOpacity onPress={() => router.push('/info/about')}><Text style={styles.footerLink}>{t('lander.footer_about')}</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_careers')}</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_press')}</Text></TouchableOpacity>
-                    </View>
-                    <View style={styles.footerColLinks}>
-                        <Text style={styles.footerTitle}>{t('lander.footer_support')}</Text>
-                        <TouchableOpacity onPress={() => router.push('/info/help')}><Text style={styles.footerLink}>{t('lander.footer_help')}</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/info/privacy')}><Text style={styles.footerLink}>{t('lander.footer_privacy')}</Text></TouchableOpacity>
-                        <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={styles.footerLink}>{t('lander.footer_terms')}</Text></TouchableOpacity>
+                    <View style={styles.footerBottom}>
+                        <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Konekta. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
                     </View>
                 </View>
-                <View style={styles.footerBottom}>
-                    <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Trabalhe Já. Todos os direitos reservados ao Studio do Scott.</Text>
-                </View>
-            </View>
 
-        </ScrollView>
+            </ScrollView>
         </View>
     );
 }
@@ -466,18 +454,18 @@ const styles = StyleSheet.create({
     heroBgImage: { position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, width: '100%', height: '100%', transition: 'opacity 0.8s ease-in-out' },
     heroOverlay: { position: 'absolute', top: 0, left: 0, bottom: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.4)' },
     heroContentOver: { position: 'relative', zIndex: 10, maxWidth: 800, marginTop: 60 },
-    
+
     heroTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingRight: 12, borderRadius: 100, alignSelf: 'flex-start', marginBottom: 20, borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1 },
     heroTagBadge: { backgroundColor: Colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 100, marginRight: 8 },
     heroTagBadgeText: { color: '#000', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
     heroTagText: { color: Colors.white, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
-    
+
     heroTitleOver: { fontSize: 56, fontWeight: '900', color: Colors.white, lineHeight: 64, letterSpacing: -1.5, marginBottom: 20 },
     heroSubtitleOver: { fontSize: 16, color: '#D1D5DB', lineHeight: 26, marginBottom: 32, maxWidth: 600 },
-    
+
     heroButtonsOver: { flexDirection: 'row', gap: 16, marginBottom: 40 },
-    btnHeroPrimary: { 
-        backgroundColor: Colors.primary, 
+    btnHeroPrimary: {
+        backgroundColor: Colors.primary,
         paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8,
         ...Platform.select({
             web: { boxShadow: '0 4px 10px rgba(0,0,0,0.3)' },
@@ -488,7 +476,7 @@ const styles = StyleSheet.create({
     btnHeroPrimaryText: { color: '#000', fontSize: 14, fontWeight: '800' },
     btnHeroSecondary: { paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8, borderWidth: 1 },
     btnHeroSecondaryText: { color: Colors.white, fontSize: 14, fontWeight: '700' },
-    
+
     heroTrustIndicators: { flexDirection: 'row', gap: 24 },
     trustText: { color: '#9CA3AF', fontSize: 12, fontWeight: '600' },
 
@@ -497,27 +485,27 @@ const styles = StyleSheet.create({
     darkSectionFull: { paddingVertical: 100, paddingHorizontal: '8%', width: '100%', backgroundColor: '#0F172A', position: 'relative', overflow: 'hidden' },
     sectionBgImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%', opacity: 0.15 },
     sectionDarkOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 23, 42, 0.85)' },
-    
+
     sectionContentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', maxWidth: 1200, alignSelf: 'center', width: '100%', zIndex: 10 },
     columnMobile: { flexDirection: 'column', gap: 40, alignItems: 'stretch' },
     columnMobileReverse: { flexDirection: 'column-reverse', gap: 40, alignItems: 'stretch' },
-    
+
     sectionTextCol: { flex: 1, maxWidth: 550 },
     sectionVisualCol: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    
+
     sectionHeadingDark: { fontSize: 36, fontWeight: '800', color: Colors.white, marginBottom: 20, lineHeight: 44 },
     sectionHeadingLight: { fontSize: 36, fontWeight: '800', color: '#111', marginBottom: 20, lineHeight: 44 },
     sectionBodyDark: { fontSize: 16, color: '#9CA3AF', lineHeight: 28, marginBottom: 16 },
     sectionBodyLight: { fontSize: 16, color: Colors.textSecondary, lineHeight: 28, marginBottom: 16 },
-    
+
     btnSectionAction: { backgroundColor: Colors.primary, paddingHorizontal: 32, paddingVertical: 16, borderRadius: 8, alignSelf: 'flex-start', marginTop: 12 },
     btnSectionActionText: { color: Colors.white, fontSize: 15, fontWeight: '800' },
     btnSectionOutline: { borderWidth: 1, borderColor: '#D1D5DB', paddingHorizontal: 32, paddingVertical: 16, borderRadius: 8, alignSelf: 'flex-start', marginTop: 12 },
     btnSectionOutlineText: { color: Colors.text, fontSize: 15, fontWeight: '700' },
 
     // Visual elements
-    floatingPreviewCard: { 
-        backgroundColor: Colors.white, padding: 24, borderRadius: 12, width: '100%', maxWidth: 350, alignSelf: 'center', 
+    floatingPreviewCard: {
+        backgroundColor: Colors.white, padding: 24, borderRadius: 12, width: '100%', maxWidth: 350, alignSelf: 'center',
         elevation: 10,
         ...Platform.select({
             web: { boxShadow: '0 10px 20px rgba(0,0,0,0.1)' },
@@ -534,8 +522,8 @@ const styles = StyleSheet.create({
     previewBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4, marginTop: 12 },
 
     profilesGrid: { width: '100%', maxWidth: 450, gap: 16 },
-    miniProfileCard: { 
-        flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, padding: 16, borderRadius: 12, 
+    miniProfileCard: {
+        flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white, padding: 16, borderRadius: 12,
         elevation: 2,
         ...Platform.select({
             web: { boxShadow: '0 2px 10px rgba(0,0,0,0.05)' },
@@ -559,8 +547,8 @@ const styles = StyleSheet.create({
     sealTitle: { color: Colors.white, fontSize: 20, fontWeight: '800', marginBottom: 8 },
     sealSubtitle: { color: '#9CA3AF', fontSize: 13 },
 
-    supportCard: { 
-        backgroundColor: Colors.white, padding: 40, borderRadius: 24, alignItems: 'center', 
+    supportCard: {
+        backgroundColor: Colors.white, padding: 40, borderRadius: 24, alignItems: 'center',
         elevation: 5,
         ...Platform.select({
             web: { boxShadow: '0 10px 30px rgba(0,0,0,0.05)' },
@@ -579,8 +567,8 @@ const styles = StyleSheet.create({
     gridMobile: { flexDirection: 'column' },
 
     // Cards
-    card: { 
-        flex: 1, backgroundColor: Colors.white, padding: 32, borderRadius: 16, 
+    card: {
+        flex: 1, backgroundColor: Colors.white, padding: 32, borderRadius: 16,
         elevation: 2,
         ...Platform.select({
             web: { boxShadow: '0 4px 10px rgba(0,0,0,0.03)' },
@@ -605,8 +593,8 @@ const styles = StyleSheet.create({
     shieldRing: { width: 140, height: 140, borderRadius: 70, backgroundColor: '#DCFCE7', justifyContent: 'center', alignItems: 'center', position: 'relative' },
     shieldInner: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
     shieldIcon: { fontSize: 40 },
-    checkBadge: { 
-        position: 'absolute', bottom: 5, right: 5, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center', 
+    checkBadge: {
+        position: 'absolute', bottom: 5, right: 5, width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.white, justifyContent: 'center', alignItems: 'center',
         ...Platform.select({
             web: { boxShadow: '0 2px 5px rgba(0,0,0,0.1)' },
             default: { shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 5 }

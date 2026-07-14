@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 export default function ForgotPassword() {
     const router = useRouter();
-    const { requestPasswordReset, isLoading } = useAuthStore();
+    const { requestPasswordReset, isAuthActionLoading } = useAuthStore();
 
     const [email, setEmail] = useState('');
     const [errorMsg, setErrorMsg] = useState('');
@@ -101,11 +101,11 @@ export default function ForgotPassword() {
                 {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
                 <TouchableOpacity
-                    style={[styles.button, isLoading && styles.buttonDisabled]}
+                    style={[styles.button, isAuthActionLoading && styles.buttonDisabled]}
                     onPress={handleSendReset}
-                    disabled={isLoading}
+                    disabled={isAuthActionLoading}
                 >
-                    {isLoading ? (
+                    {isAuthActionLoading ? (
                         <ActivityIndicator color={Colors.white} />
                     ) : (
                         <Text style={styles.buttonText}>Enviar Link de Recuperação</Text>

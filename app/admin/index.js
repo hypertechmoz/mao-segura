@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, getCountFromServer } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,23 +29,23 @@ export default function AdminDashboard() {
             pendingReportsSnap,
             pendingTestimonialsSnap
         ] = await Promise.all([
-            getCountFromServer(collection(db, 'users')),
-            getCountFromServer(query(collection(db, 'users'), where('role', '==', 'WORKER'))),
-            getCountFromServer(query(collection(db, 'users'), where('role', '==', 'EMPLOYER'))),
-            getCountFromServer(query(collection(db, 'jobs'), where('status', '==', 'ACTIVE'))),
-            getCountFromServer(query(collection(db, 'jobs'), where('status', '==', 'CLOSED'))),
-            getCountFromServer(query(collection(db, 'reports'), where('status', '==', 'PENDING'))),
-            getCountFromServer(query(collection(db, 'testimonials'), where('status', '==', 'PENDING')))
+            supabase.from('users').select('*', { count: 'exact', head: true }),
+            supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'WORKER'),
+            supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'EMPLOYER'),
+            supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
+            supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'CLOSED'),
+            supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
+            supabase.from('testimonials').select('*', { count: 'exact', head: true }).eq('status', 'PENDING')
         ]);
  
         setStats({
-            totalUsers: totalUsersSnap.data().count,
-            workers: workersSnap.data().count,
-            employers: employersSnap.data().count,
-            activeJobs: activeJobsSnap.data().count,
-            closedJobs: closedJobsSnap.data().count,
-            pendingReports: pendingReportsSnap.data().count,
-            pendingTestimonials: pendingTestimonialsSnap.data().count
+            totalUsers: totalUsersSnap.count || 0,
+            workers: workersSnap.count || 0,
+            employers: employersSnap.count || 0,
+            activeJobs: activeJobsSnap.count || 0,
+            closedJobs: closedJobsSnap.count || 0,
+            pendingReports: pendingReportsSnap.count || 0,
+            pendingTestimonials: pendingTestimonialsSnap.count || 0
         });
       } catch (err) {
         console.error('Error loading stats:', err);

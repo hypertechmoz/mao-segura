@@ -1,99 +1,153 @@
 import { create } from 'zustand';
-import { auth, db } from '../services/firebase';
-import {
-    onAuthStateChanged,
-    signOut,
-    createUserWithEmailAndPassword,
-    signInWithEmailAndPassword,
-    sendPasswordResetEmail,
-    sendEmailVerification,
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, deleteDoc, serverTimestamp, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// On mobile/native, we use AsyncStorage instead of window.localStorage
-// Mantido após rebrand para não invalidar sessões guardadas localmente.
 const PERSISTENCE_KEY = 'mao_segura_user_session';
+let hasInitializedAuthStore = false;
+let authStateSubscription = null;
+let authInitializePromise = null;
+
+const normalizeStoredUser = (storedUser) => {
+    if (!storedUser || typeof storedUser !== 'object') return storedUser;
+
+    const normalizedUser = { ...storedUser };
+
+    if (normalizedUser.uid) {
+        normalizedUser.id = normalizedUser.uid;
+    }
+
+    return normalizedUser;
+};
 
 export const useAuthStore = create((set, get) => ({
     user: null,
     session: null,
-    isLoading: true, // Start as loading until initialized
+    isLoading: true,
+    isAuthActionLoading: false,
     isOnboarded: false,
 
     setOnboarded: () => set({ isOnboarded: true }),
 
-    // Initialize session listener on app start
     initialize: async () => {
-        // Tenta recuperar sessão salva primeiro (mais rápido que firebase)
-        try {
-            const saved = await AsyncStorage.getItem(PERSISTENCE_KEY);
-            if (saved) {
-                const cachedUser = JSON.parse(saved);
-                set({ user: cachedUser, session: { user: cachedUser }, isLoading: false });
-            }
-        } catch (e) {
-            console.error('Error reading persistence:', e);
+        if (authInitializePromise) {
+            return authInitializePromise;
         }
 
-        onAuthStateChanged(auth, async (firebaseUser) => {
-            if (firebaseUser) {
-                try {
-                    await get().refreshUser(firebaseUser);
-                } catch (error) {
-                    console.error('Error fetching user metadata:', error);
-                    set({ user: firebaseUser, session: { user: firebaseUser }, isLoading: false });
+        if (hasInitializedAuthStore) {
+            set({ isLoading: false });
+            return;
+        }
+
+        set({ isLoading: true });
+
+        authInitializePromise = (async () => {
+            try {
+                const saved = await AsyncStorage.getItem(PERSISTENCE_KEY);
+                if (saved) {
+                    const cachedUser = normalizeStoredUser(JSON.parse(saved));
+                    set({ user: cachedUser, session: { user: cachedUser }, isLoading: false });
                 }
-            } else {
-                // Se não há usuário Firebase, mas temos user em cache, mantemos
-                // (O login legacy de mock users usa esse fluxo)
-                const currentStoredUser = get().user;
-                if (!currentStoredUser) {
-                    set({ user: null, session: null, isLoading: false });
-                } else {
-                    set({ isLoading: false });
-                }
+            } catch (e) {
+                console.error('Error reading persistence:', e);
             }
+
+            // Get initial session
+            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+            if (sessionError || !session) {
+                await AsyncStorage.removeItem(PERSISTENCE_KEY);
+                set({ user: null, session: null, isLoading: false });
+                hasInitializedAuthStore = true;
+                return;
+            }
+
+            if (session) {
+                await get().refreshUser(session.user);
+            } else {
+                set({ isLoading: false });
+            }
+
+            authStateSubscription?.unsubscribe?.();
+            const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+                if (session) {
+                    await get().refreshUser(session.user);
+                } else {
+                    set({ user: null, session: null, isLoading: false });
+                    await AsyncStorage.removeItem(PERSISTENCE_KEY);
+                }
+            });
+            authStateSubscription = subscription;
+            hasInitializedAuthStore = true;
+        })().finally(() => {
+            authInitializePromise = null;
         });
+
+        return authInitializePromise;
     },
 
-    refreshUser: async (firebaseObject = null) => {
-        const firebaseUser = firebaseObject || auth.currentUser;
-        if (!firebaseUser && !get().user?.uid) return;
-
-        const uid = firebaseUser?.uid || get().user.uid;
-
+    refreshUser: async (supabaseUser = null) => {
         try {
-            // 1. Fetch base metadata from Users collection
-            const userDoc = await getDoc(doc(db, 'users', uid));
-            if (!userDoc.exists()) return;
-            const userData = userDoc.data();
+            const user = supabaseUser || (await supabase.auth.getUser()).data.user;
+            if (!user) {
+                set({ isLoading: false });
+                return;
+            }
+
+            const uid = user.id;
+
+            // 1. Fetch base metadata from Users table
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', uid)
+                .maybeSingle(); // maybeSingle handles "not found" without error 406/404
+
+            if (userError) {
+                console.warn('Profile fetch warning:', userError.message);
+                // Don't throw, just set loading false. The user record might not be ready yet.
+                set({ isLoading: false });
+                return;
+            }
+
+            if (!userData) {
+                set({ isLoading: false });
+                return;
+            }
 
             // 2. Fetch role-specific profile data
             const role = userData.role;
             let profileData = {};
+            let profileRecord = null;
             if (role) {
                 const profileTable = role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-                const profileDoc = await getDoc(doc(db, profileTable, uid));
-                if (profileDoc.exists()) {
-                    profileData = profileDoc.data();
+                const { data: pData, error: pError } = await supabase
+                    .from(profileTable)
+                    .select('*')
+                    .eq('user_id', uid)
+                    .maybeSingle();
+
+                if (!pError && pData) {
+                    profileRecord = pData;
+                    const { id: _profileId, user_id: _profileUserId, ...profileFields } = pData;
+                    profileData = profileFields;
                 }
             }
 
             const enrichedUser = {
                 uid: uid,
-                phoneNumber: firebaseUser?.phoneNumber || userData.phoneNumber,
-                email: firebaseUser?.email || userData.email,
-                emailVerified: firebaseUser?.emailVerified || false,
+                id: uid,
+                email: user.email,
+                emailVerified: !!user.email_confirmed_at,
                 ...userData,
                 ...profileData,
+                profileId: profileRecord?.id || null,
+                workerProfile: role === 'WORKER' ? profileRecord : null,
+                employerProfile: role === 'EMPLOYER' ? profileRecord : null,
             };
 
-            // Custom name logic
-            enrichedUser.name = userData.name || userData.full_name || firebaseUser?.displayName || get().user?.name || 'Utilizador';
+            enrichedUser.name = userData.name || 'Utilizador';
             enrichedUser.firstName = enrichedUser.name.split(' ')[0];
 
-            // Persist for future restarts
             await AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(enrichedUser));
 
             set({
@@ -103,270 +157,185 @@ export const useAuthStore = create((set, get) => ({
             });
         } catch (error) {
             console.error('Refresh user error:', error);
-            throw error;
+            set({ isLoading: false });
         }
     },
 
-    // Registo com email e senha (gratuito no Firebase Spark)
     register: async (email, password, userData) => {
-        set({ isLoading: true });
+        set({ isAuthActionLoading: true });
         try {
-            // 1. Criar conta no Firebase Auth com email/senha
-            const credential = await createUserWithEmailAndPassword(auth, email, password);
-            const firebaseUser = credential.user;
-
-            // 2. Enviar email de verificação (gratuito)
-            try {
-                await sendEmailVerification(firebaseUser);
-            } catch (emailErr) {
-                console.warn('Email verification send failed (non-critical):', emailErr);
-            }
-
             const { name, role, phone, province, city, bairro } = userData;
-
-            // 3. Criar documento na coleção 'users'
-            await setDoc(doc(db, 'users', firebaseUser.uid), {
+            const normalizedPhone = phone?.trim() ? phone.trim() : null;
+            const metadata = {
                 name,
-                role,
-                email,
-                phoneNumber: phone ? `+258${phone}` : '',
+                role: role || 'WORKER',
                 province,
                 city,
                 bairro,
-                is_permanent: true,
-                created_at: serverTimestamp(),
-                updated_at: serverTimestamp(),
-            });
-
-            // 4. Criar perfil específico do role
-            const profileTable = role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-            await setDoc(doc(db, profileTable, firebaseUser.uid), {
-                name,
-                user_id: firebaseUser.uid,
-                email,
-                phone: phone ? `+258${phone}` : '',
-                province,
-                city,
-                bairro,
-                created_at: serverTimestamp(),
-                updated_at: serverTimestamp(),
-            });
-
-            // 5. Construir objecto de utilizador enriquecido
-            const enrichedUser = {
-                uid: firebaseUser.uid,
-                email,
-                emailVerified: firebaseUser.emailVerified || false,
-                phoneNumber: phone ? `+258${phone}` : '',
-                name,
-                role,
-                province,
-                city,
-                bairro,
-                firstName: name.split(' ')[0],
             };
 
-            await AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(enrichedUser));
-            set({ user: enrichedUser, session: { user: enrichedUser } });
+            if (normalizedPhone) {
+                metadata.phone = normalizedPhone;
+            }
 
-            return { user: enrichedUser };
+            // SignUp with metadata - the database trigger handle_new_user() 
+            // will automatically create the public.users and profile records.
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                    data: metadata
+                }
+            });
+
+            if (authError) throw authError;
+
+            // The session might not be active yet if email confirmation is required.
+            // If it is active, refreshUser will load the data from public.users.
+            if (authData.session) {
+                await get().refreshUser(authData.user);
+            }
+
+            return { user: authData.user, session: authData.session };
         } catch (error) {
-            // Traduzir erros de Firebase para Português
-            if (error.code === 'auth/email-already-in-use') {
-                throw new Error('Este email já está associado a uma conta existente.');
+            console.error('Registration error:', error);
+            if (error?.message?.includes('users_phone_key') || error?.message?.includes('duplicate key value violates unique constraint')) {
+                throw new Error('Este número de telefone já está associado a outra conta.');
             }
-            if (error.code === 'auth/invalid-email') {
-                throw new Error('O endereço de email inserido não é válido.');
-            }
-            if (error.code === 'auth/weak-password') {
-                throw new Error('A senha é demasiado fraca. Use pelo menos 6 caracteres.');
+            if (error?.message?.includes('Database error saving new user')) {
+                throw new Error('Não foi possível criar a conta. Se preencheu telefone, confirme que ele ainda não está em uso.');
             }
             throw error;
         } finally {
-            set({ isLoading: false });
+            set({ isAuthActionLoading: false });
         }
     },
 
-    // Login com email e senha
     loginWithPassword: async (email, password) => {
-        set({ isLoading: true });
+        set({ isAuthActionLoading: true });
         try {
-            // Tentar login via Firebase Auth (novos utilizadores com email)
-            try {
-                const credential = await signInWithEmailAndPassword(auth, email, password);
-                const firebaseUser = credential.user;
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
 
-                // Buscar dados do Firestore
-                const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-                let enrichedUser = {
-                    uid: firebaseUser.uid,
-                    email: firebaseUser.email,
-                };
-
-                if (userDoc.exists()) {
-                    const userData = userDoc.data();
-                    const role = userData.role;
-                    let profileData = {};
-                    if (role) {
-                        const profileTable = role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-                        const profileDoc = await getDoc(doc(db, profileTable, firebaseUser.uid));
-                        if (profileDoc.exists()) {
-                            profileData = profileDoc.data();
-                        }
-                    }
-                    enrichedUser = {
-                        ...enrichedUser,
-                        ...userData,
-                        ...profileData,
-                        emailVerified: firebaseUser.emailVerified || false,
-                    };
-                    enrichedUser.name = userData.name || userData.full_name || 'Utilizador';
-                    enrichedUser.firstName = enrichedUser.name.split(' ')[0];
-                }
-
-                await AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(enrichedUser));
-                set({ user: enrichedUser, session: { user: enrichedUser } });
-
-                return { user: enrichedUser };
-            } catch (firebaseErr) {
-                // Se falhou no Firebase Auth, tentar fallback para utilizadores legacy (mock)
-                // que foram criados com o sistema antigo de telefone
-                if (firebaseErr.code === 'auth/user-not-found' || firebaseErr.code === 'auth/invalid-credential') {
-                    // Fallback: pesquisar no Firestore por email
-                    const usersRef = collection(db, 'users');
-                    const q = query(usersRef, where('email', '==', email));
-                    const querySnapshot = await getDocs(q);
-
-                    if (querySnapshot.empty) {
-                        throw new Error('Nenhuma conta encontrada com este email.');
-                    }
-
-                    const userDocSnap = querySnapshot.docs[0];
-                    const userData = userDocSnap.data();
-
-                    if (!userData.password || userData.password !== password) {
-                        throw new Error('Senha incorreta.');
-                    }
-
-                    const enrichedUser = {
-                        uid: userDocSnap.id,
-                        ...userData,
-                    };
-                    enrichedUser.name = userData.name || userData.full_name || 'Utilizador';
-                    enrichedUser.firstName = enrichedUser.name.split(' ')[0];
-
-                    await AsyncStorage.setItem(PERSISTENCE_KEY, JSON.stringify(enrichedUser));
-                    set({ user: enrichedUser, session: { user: enrichedUser } });
-
-                    return { user: enrichedUser };
-                }
-
-                // Traduzir outros erros Firebase
-                if (firebaseErr.code === 'auth/wrong-password' || firebaseErr.code === 'auth/invalid-credential') {
-                    throw new Error('Email ou senha incorretos.');
-                }
-                if (firebaseErr.code === 'auth/too-many-requests') {
-                    throw new Error('Demasiadas tentativas. Tente novamente mais tarde.');
-                }
-                throw firebaseErr;
-            }
-        } finally {
-            set({ isLoading: false });
-        }
-    },
-
-    // Recuperação de senha via email (gratuito no Firebase)
-    requestPasswordReset: async (email) => {
-        set({ isLoading: true });
-        try {
-            await sendPasswordResetEmail(auth, email);
+            if (error) throw error;
+            await get().refreshUser(data.user);
+            return { user: get().user };
         } catch (error) {
-            if (error.code === 'auth/user-not-found') {
-                throw new Error('Nenhuma conta encontrada com este email.');
-            }
-            if (error.code === 'auth/invalid-email') {
-                throw new Error('O endereço de email inserido não é válido.');
+            if (error.message === 'Invalid login credentials') {
+                throw new Error('Email ou senha incorretos.');
             }
             throw error;
         } finally {
-            set({ isLoading: false });
+            set({ isAuthActionLoading: false });
+        }
+    },
+
+    requestPasswordReset: async (email) => {
+        set({ isAuthActionLoading: true });
+        try {
+            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            if (error) throw error;
+        } finally {
+            set({ isAuthActionLoading: false });
         }
     },
 
     logout: async () => {
-        set({ isLoading: true });
+        set({ user: null, session: null, isLoading: false, isAuthActionLoading: false });
         try {
             await AsyncStorage.removeItem(PERSISTENCE_KEY);
-            await signOut(auth);
-            set({ user: null, session: null });
+            // Sign out locally only to prevent hanging the auth queue on slow networks
+            await supabase.auth.signOut({ scope: 'local' });
+        } catch (error) { // DO NOT throw error; allow the local logout to succeed even if backend signout fails
         } finally {
-            set({ isLoading: false });
+            set({ isLoading: false, isAuthActionLoading: false });
         }
     },
 
     checkEmailVerification: async () => {
-        const firebaseUser = auth.currentUser;
-        if (!firebaseUser) return false;
-
         try {
-            await firebaseUser.reload();
-            const isVerified = auth.currentUser.emailVerified;
-            
-            if (isVerified) {
-                await get().refreshUser(auth.currentUser);
+            // Use getSession instead of getUser to avoid 403 Forbidden
+            // getSession() will refresh the local state and we can check the user from there
+            const { data: { session }, error } = await supabase.auth.getSession();
+
+            if (error || !session?.user) return false;
+
+            const user = session.user;
+
+            if (user?.email_confirmed_at) {
+                // If confirmed, refresh our enriched profile
+                await get().refreshUser(user);
+                return true;
             }
-            return isVerified;
-        } catch (error) {
-            if (error.code === 'auth/network-request-failed') {
-                throw new Error('Falha na rede ao verificar email.');
-            }
-            throw error;
+            return false;
+        } catch (e) {
+            console.error('Verification check error:', e);
+            return false;
         }
     },
 
     resendVerificationEmail: async () => {
-        const firebaseUser = auth.currentUser;
-        if (!firebaseUser) throw new Error("A sessão expirou. Entre novamente.");
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Sessão expirada");
+        await supabase.auth.resend({
+            type: 'signup',
+            email: user.email,
+        });
+    },
+
+    deleteAccount: async (password) => {
+        if (!password) throw new Error("A senha é obrigatória para eliminar a conta.");
+
+        set({ isAuthActionLoading: true });
         try {
-            await sendEmailVerification(firebaseUser);
-        } catch (error) {
-            if (error.code === 'auth/network-request-failed') {
-                throw new Error('Falha na rede. Verifique a sua ligação à internet.');
+            const { user } = get();
+            if (!user?.email) throw new Error("Utilizador não autenticado.");
+
+            // 1. Verify password by attempting a re-login
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: password,
+            });
+
+            if (signInError) {
+                throw new Error("Senha incorreta. Não foi possível eliminar a conta.");
             }
+
+            // 2. Call the RPC to delete the user
+            const { error: deleteError } = await supabase.rpc('delete_own_user');
+            if (deleteError) throw deleteError;
+
+            // 3. Clear local session
+            await AsyncStorage.removeItem(PERSISTENCE_KEY);
+            set({ user: null, session: null });
+
+            return true;
+        } catch (error) {
+            console.error('Delete account error:', error);
             throw error;
+        } finally {
+            set({ isAuthActionLoading: false });
         }
     },
 
-    deleteAccount: async () => {
-        set({ isLoading: true });
+    signInWithGoogle: async () => {
+        set({ isAuthActionLoading: true });
         try {
-            const currentUser = get().user;
-            if (!currentUser) throw new Error("Não há utilizador logado.");
-
-            const uid = currentUser.uid;
-
-            // Delete specialized
-            if (currentUser.role === 'EMPLOYER') {
-                try { await deleteDoc(doc(db, 'employer_profiles', uid)); } catch (e) {}
-            } else if (currentUser.role === 'WORKER') {
-                try { await deleteDoc(doc(db, 'worker_profiles', uid)); } catch (e) {}
-            }
-
-            // Delete main user row
-            try { await deleteDoc(doc(db, 'users', uid)); } catch (e) {}
-
-            // Delete from Firebase Auth if real user
-            if (auth.currentUser) {
-                try { await auth.currentUser.delete(); } catch (e) { console.error("Firebase auth delete failed:", e); }
-            }
-
-            await AsyncStorage.removeItem(PERSISTENCE_KEY);
-            await signOut(auth);
-            set({ user: null, session: null });
+            const { data, error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: 'maosegura://home',
+                    skipBrowserRedirect: false,
+                }
+            });
+            if (error) throw error;
+            return data;
         } catch (error) {
             throw error;
         } finally {
-            set({ isLoading: false });
+            set({ isAuthActionLoading: false });
         }
     },
 

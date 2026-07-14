@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { db } from '../../services/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { uploadImage } from '../../services/storageService';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +12,7 @@ export default function CompleteProfile() {
     const { user, refreshUser } = useAuthStore();
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [profilePhoto, setProfilePhoto] = useState(null);
+    const [profileExists, setProfileExists] = useState(false);
 
     const AVATARS = [
         'Maria', 'Jose', 'Elena', 'Carlos', 'Amina', 'David', 'Sofia', 'Lucas',
@@ -43,26 +42,34 @@ export default function CompleteProfile() {
 
     useEffect(() => {
         const loadData = async () => {
-            if (!user) return;
+            const uid = user?.uid || user?.id;
+            if (!uid) return;
             try {
-                const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-                const profileSnap = await getDoc(doc(db, profileTable, user.uid));
-                const profileData = profileSnap.exists() ? profileSnap.data() : {};
+                const { data: userData, error } = await supabase
+                    .from('users')
+                    .select('*, worker_profiles(*), employer_profiles(*)')
+                    .eq('id', uid)
+                    .single();
+
+                if (error || !userData) throw new Error('User not found');
+
+                const profileData = userData.role === 'EMPLOYER' 
+                    ? userData.employer_profiles?.[0] 
+                    : userData.worker_profiles?.[0];
 
                 const loadedProfile = {
-                    profile_photo: profileData.profile_photo || null,
-                    description: profileData.description || null,
-                    contact_preference: profileData.contact_preference || null,
-                    document_photo: profileData.document_photo || null,
+                    profile_photo: profileData?.profile_photo || null,
+                    description: profileData?.description || null,
+                    contact_preference: profileData?.contact_preference || null,
                 };
 
+                setProfileExists(!!profileData);
                 setInitialProfile(loadedProfile);
                 setProfilePhoto(loadedProfile.profile_photo || null);
                 setForm({
                     profile_photo: loadedProfile.profile_photo || '',
                     description: loadedProfile.description || '',
                     contact_preference: loadedProfile.contact_preference || '',
-                    document_photo: loadedProfile.document_photo || '',
                 });
                 setInitialDataLoaded(true);
             } catch (err) {
@@ -70,7 +77,7 @@ export default function CompleteProfile() {
             }
         };
         loadData();
-    }, [user]);
+    }, [user?.uid, user?.id]);
 
     const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -80,7 +87,8 @@ export default function CompleteProfile() {
     };
 
     const handleSave = async () => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
         setLoading(true);
         try {
             const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
@@ -95,10 +103,16 @@ export default function CompleteProfile() {
             if (isEmpty(initialProfile.contact_preference) && form.contact_preference.trim()) updates.contact_preference = form.contact_preference;
 
             if (Object.keys(updates).length > 0) {
-                await setDoc(doc(db, profileTable, user.uid), updates, { merge: true });
+                const profilePayload = { user_id: uid, ...updates };
+                const profileUpdatePayload = { ...updates };
+                const profileMutation = profileExists
+                    ? supabase.from(profileTable).update(profileUpdatePayload).eq('user_id', uid)
+                    : supabase.from(profileTable).insert(profilePayload);
+                const { error: profileError } = await profileMutation;
+                if (profileError) throw profileError;
                 
                 if (updates.profile_photo) {
-                    await setDoc(doc(db, 'users', user.uid), { profile_photo: updates.profile_photo }, { merge: true });
+                    await supabase.from('users').update({ profile_photo: updates.profile_photo }).eq('id', uid);
                 }
                 
                 await refreshUser();

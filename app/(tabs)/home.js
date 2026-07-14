@@ -1,12 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, ScrollView, Image, ActivityIndicator, useWindowDimensions, Animated } from 'react-native';
-import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, getDoc, limit } from 'firebase/firestore';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, ScrollView, Image, ActivityIndicator, useWindowDimensions, Animated, Linking } from 'react-native';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../components/PostCard';
+import JobCard from '../../components/JobCard';
+import WorkerCard from '../../components/WorkerCard';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
 import { calculateCompleteness, formatTime, formatRelativeTime } from '../../utils/profileUtils';
@@ -14,6 +15,7 @@ import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BackHandler } from 'react-native';
+import { handleError } from '../../utils/errorHandler';
 
 // === Shared Components ===
 function ProfileBanner({ completeness }) {
@@ -40,162 +42,6 @@ function ProfileBanner({ completeness }) {
     );
 }
 
-function JobCard({ job, onPress, userLocation, isApplied }) {
-    const router = useRouter();
-    const isNear = userLocation?.city && job.city && userLocation.city.toLowerCase() === job.city.toLowerCase();
-
-    return (
-        <TouchableOpacity style={styles.card} onPress={() => router.push(`/job/${job.id}`)} activeOpacity={0.7}>
-            <View style={styles.cardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={styles.cardType}>
-                        <Text style={styles.cardTypeText}>{job.type}</Text>
-                    </View>
-                    {isNear && (
-                        <View style={styles.proximityBadge}>
-                            <Text style={styles.proximityText}>Perto de si</Text>
-                        </View>
-                    )}
-                </View>
-                <Text style={styles.cardTime}>
-                    {formatTime(job.created_at)}
-                </Text>
-            </View>
-            <Text style={styles.cardTitle}>{job.title}</Text>
-            <Text style={styles.cardDescription} numberOfLines={2}>{job.description}</Text>
-            <View style={styles.cardFooter}>
-                <View style={styles.cardLocation}>
-                    <Text style={styles.locationText}>
-                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> {job.city || 'Moçambique'}{(job.bairro || job.province) ? `, ${job.bairro || job.province}` : ''}
-                    </Text>
-                </View>
-                <View style={styles.cardContract}>
-                    <Text style={styles.contractText}>
-                        {job.contract_type === 'DAILY' ? 'Diarista' : job.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}
-                    </Text>
-                </View>
-            </View>
-            <View style={{ marginTop: 12, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <TouchableOpacity
-                    style={styles.cardEmployer}
-                    onPress={() => router.push(`/user/${job.employer_id}`)}
-                >
-                    <View style={styles.employerAvatar}>
-                        {job.employer?.profile_photo ? (
-                            <Image source={{ uri: job.employer.profile_photo }} style={styles.avatarImageSmall} />
-                        ) : (
-                            <Text style={styles.avatarText}>{job.employer?.name?.[0] || '?'}</Text>
-                        )}
-                    </View>
-                    <View>
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Text style={styles.employerName}>{job.employer?.name || 'Cliente'}</Text>
-                            {job.employer?.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 4 }} />}
-                        </View>
-                        <Text style={styles.applicants}>{job.applications_count || 0} candidatos</Text>
-                    </View>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[
-                        { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
-                        isApplied === 'PENDING' ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
-                    ]}
-                    onPress={() => {
-                        if (isApplied && isApplied !== 'PENDING' && isApplied !== 'AUTHORIZED') {
-                            router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name } });
-                        } else if (isApplied === 'AUTHORIZED') {
-                            onPress('MESSAGE', job);
-                        } else if (!isApplied) {
-                            onPress('APPLY', job);
-                        }
-                    }}
-                    disabled={isApplied === 'PENDING'}
-                >
-                    <Ionicons name={isApplied === 'PENDING' ? "time" : (isApplied ? "chatbubbles" : "document-text")} size={14} color={isApplied === 'PENDING' ? Colors.textSecondary : Colors.white} style={{ marginRight: 6 }} />
-                    <Text style={{ color: isApplied === 'PENDING' ? Colors.textSecondary : Colors.white, fontWeight: '700', fontSize: 13 }}>
-                        {isApplied === 'PENDING' ? 'Pendente' : (isApplied ? 'Mensagem' : 'Candidatar')}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-    );
-}
-
-function WorkerCard({ worker, onPress, userLocation, isContacted }) {
-    const router = useRouter();
-    const isNear = userLocation?.city && worker.city && userLocation.city.toLowerCase() === worker.city.toLowerCase();
-
-    return (
-        <TouchableOpacity style={styles.card} onPress={() => router.push(`/user/${worker.id}`)} activeOpacity={0.7}>
-            <View style={styles.cardHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <View style={styles.cardType}>
-                        <Text style={styles.cardTypeText}>{worker.work_types?.[0] || worker.profession_category || 'Profissional'}</Text>
-                    </View>
-                    {isNear && (
-                        <View style={styles.proximityBadge}>
-                            <Text style={styles.proximityText}>Perto de si</Text>
-                        </View>
-                    )}
-                </View>
-                <Text style={styles.cardTime}>
-                    {worker.bairro || worker.province || ''}
-                </Text>
-            </View>
-            <View style={styles.workerMain}>
-                <View style={[styles.employerAvatar, { width: 44, height: 44, borderRadius: 22 }]}>
-                    {worker.profile_photo ? (
-                        <Image source={{ uri: worker.profile_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-                    ) : (
-                        <Text style={[styles.avatarText, { fontSize: 18 }]}>{worker.name?.[0] || '?'}</Text>
-                    )}
-                </View>
-                <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{worker.name}</Text>
-                    <Text style={styles.cardDescription} numberOfLines={1}>
-                        {worker.skills?.length > 0 ? worker.skills.join(', ') : (worker.profession_category || 'Profissional')}
-                    </Text>
-                </View>
-            </View>
-            <View style={[styles.cardFooter, { alignItems: 'center', justifyContent: 'space-between', marginBottom: 0, marginTop: 12 }]}>
-                <View style={{flexDirection: 'row', gap: 12, alignItems: 'center'}}>
-                    <View style={styles.cardLocation}>
-                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} /> 
-                        <Text style={styles.locationText}> {worker.city}, {worker.bairro}</Text>
-                    </View>
-                    {worker.rating_avg > 0 && (
-                        <View style={styles.cardRating}>
-                            <Ionicons name="star" size={12} color="#FFB800" />
-                            <Text style={styles.cardRatingText}>{worker.rating_avg.toFixed(1)}</Text>
-                            <Text style={styles.cardCompletedText}>({worker.completed_contracts || 0})</Text>
-                        </View>
-                    )}
-                </View>
-
-                <TouchableOpacity
-                    style={[
-                        { paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, flexDirection: 'row', alignItems: 'center' },
-                        isContacted === 'PENDING' ? { backgroundColor: Colors.borderLight, borderWidth: 0 } : { borderWidth: 1, borderColor: Colors.primary }
-                    ]}
-                    onPress={() => {
-                        if (isContacted && isContacted !== 'PENDING') {
-                            router.push({ pathname: `/chat/${isContacted}`, params: { name: worker.name } });
-                        } else if (!isContacted) {
-                            onPress('CONTACT', worker);
-                        }
-                    }}
-                    disabled={isContacted === 'PENDING'}
-                >
-                    <Ionicons name={isContacted === 'PENDING' ? "time" : (isContacted ? "chatbubbles" : "chatbubble-ellipses")} size={14} color={isContacted === 'PENDING' ? Colors.textSecondary : Colors.primary} style={{ marginRight: 4 }} />
-                    <Text style={{ color: isContacted === 'PENDING' ? Colors.textSecondary : Colors.primary, fontWeight: '700', fontSize: 12 }}>
-                        {isContacted === 'PENDING' ? 'Pendente' : (isContacted ? 'Mensagem' : 'Contactar')}
-                    </Text>
-                </TouchableOpacity>
-            </View>
-        </TouchableOpacity>
-    );
-}
 
 // === Web-Only: Left Sidebar ===
 function WebLeftSidebar({ user, completeness, router }) {
@@ -259,7 +105,7 @@ function WebLeftSidebar({ user, completeness, router }) {
 }
 
 // === Web-Only: Right Sidebar (Widgets) ===
-function WebRightSidebar({ router, suggestedUsers, handleContact }) {
+function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds }) {
     const trendingTypes = PROFESSION_CATEGORIES.slice(0, 5);
 
     return (
@@ -273,9 +119,9 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                     <Text style={webStyles.premiumWidgetTitle}>Dicas de Sucesso</Text>
                 </View>
                 <Text style={webStyles.premiumWidgetText}>
-                    Sabia que utilizadores com o <Text style={{fontWeight: '700'}}>perfil Completo</Text> recebem em média <Text style={{color: Colors.primary, fontWeight: '700'}}>3x mais</Text> propostas de trabalho em Moçambique?
+                    Sabia que utilizadores com o <Text style={{ fontWeight: '700' }}>perfil Completo</Text> recebem em média <Text style={{ color: Colors.primary, fontWeight: '700' }}>3x mais</Text> propostas de trabalho em Moçambique?
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={webStyles.premiumWidgetBtn}
                     onPress={() => router.push('/settings/edit-profile')}
                 >
@@ -287,29 +133,51 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
             {suggestedUsers && suggestedUsers.length > 0 && (
                 <View style={webStyles.widget}>
                     <Text style={webStyles.widgetTitle}>Recomendado para si</Text>
-                    {suggestedUsers.map((sugg, i) => (
-                        <View key={`sugg-${i}`} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
-                            <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' }}>
-                                {sugg.profile_photo ? (
-                                    <Image source={{ uri: sugg.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-                                ) : (
-                                    <Text style={{fontSize: 16, fontWeight: '700', color: Colors.primary}}>{sugg.name?.[0] || '?'}</Text>
-                                )}
-                            </TouchableOpacity>
-                            <View style={{ flex: 1 }}>
-                                <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)}>
-                                    <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
+                    {suggestedUsers.map((sugg, i) => {
+                        const status = actionedIds?.get(sugg.id);
+                        const isPending = status === 'PENDING';
+                        const isConnected = status && status !== 'PENDING' && status !== 'AUTHORIZED';
+
+                        return (
+                            <View key={`sugg-${i}`} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 }}>
+                                <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' }}>
+                                    {sugg.profile_photo ? (
+                                        <Image source={{ uri: sugg.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                                    ) : (
+                                        <Text style={{ fontSize: 16, fontWeight: '700', color: Colors.primary }}>{sugg.name?.[0] || '?'}</Text>
+                                    )}
                                 </TouchableOpacity>
-                                <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
-                                    {sugg.role === 'EMPLOYER' ? 'Cliente' : (sugg.profession_category || 'Profissional')}
-                                </Text>
-                                <TouchableOpacity onPress={() => handleContact('CONTACT', sugg)} style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center' }}>
-                                    <Ionicons name="add" size={14} color={Colors.primary} />
-                                    <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>Seguir / Ligar</Text>
-                                </TouchableOpacity>
+                                <View style={{ flex: 1 }}>
+                                    <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
+                                    </TouchableOpacity>
+                                    <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
+                                        {sugg.role === 'EMPLOYER' ? 'Cliente' : (sugg.profession_category || 'Profissional')}
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            if (isConnected) {
+                                                router.push(`/chat/${status}`);
+                                            } else if (!isPending) {
+                                                handleContact('CONTACT', sugg);
+                                            }
+                                        }}
+                                        style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center' }}
+                                        disabled={isPending}
+                                    >
+                                        <Ionicons
+                                            name={isConnected ? "chatbubbles" : (isPending ? "time" : "add")}
+                                            size={14}
+                                            color={isPending ? Colors.textLight : Colors.primary}
+                                        />
+                                        <Text style={{ fontSize: 12, color: isPending ? Colors.textLight : Colors.primary, fontWeight: '600', marginLeft: 4 }}>
+                                            {isConnected ? 'Mensagem' : (isPending ? 'Pendente' : 'Conectar')}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                        </View>
-                    ))}
+                        );
+                    })}
                 </View>
             )}
 
@@ -342,7 +210,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
                     <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={webStyles.footerLink}>Termos</Text></TouchableOpacity>
                 </View>
                 <Text style={webStyles.footerText}>A maior rede de contactos perto de si</Text>
-                <Text style={webStyles.footerSub}>© 2026 Trabalhe Já. Todos os direitos reservados ao Studio do Scott.</Text>
+                <Text style={webStyles.footerSub}>© 2026 Konekta. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
             </View>
         </View>
     );
@@ -351,7 +219,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact }) {
 // === Main Component ===
 export default function Home() {
     const router = useRouter();
-    const { user } = useAuthStore();
+    const { user, isLoading: authLoading } = useAuthStore();
     const { unreadMessages, unreadNotifications } = useUnreadCount();
     const { requireAuth } = useAuthGuard();
     const [jobs, setJobs] = useState([]);
@@ -368,11 +236,17 @@ export default function Home() {
     const { t } = useTranslation();
     const insets = useSafeAreaInsets();
 
+    // --- Pagination State ---
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const PAGE_SIZE = 10;
+
     // --- Header Animation (Mobile) ---
     const scrollY = useRef(new Animated.Value(0)).current;
     const TAB_BAR_HEIGHT = 58;
     const HEADER_HEIGHT = 64 + insets.top + TAB_BAR_HEIGHT;
-    
+
     const scrollYClamped = Animated.diffClamp(scrollY, 0, HEADER_HEIGHT);
     const headerTranslateY = scrollYClamped.interpolate({
         inputRange: [0, HEADER_HEIGHT],
@@ -385,30 +259,61 @@ export default function Home() {
         extrapolate: 'clamp',
     });
 
-    const userName = user?.name || user?.displayName || user?.firstName || 'Acesso Visitante';
+    const uid = user?.uid || user?.id || null;
+    const userRole = user?.role || null;
+    const userProvince = user?.province || null;
+    const userCity = user?.city || null;
 
     const handleContact = useCallback(async (type, item) => {
         if (!requireAuth()) return;
-        
-        const targetId = type === 'APPLY' ? item.employer_id : item.id;
-        if (user.uid === targetId) return;
+
+        // Ensure we have a valid target ID regardless of the item source (job vs user)
+        const targetId = type === 'APPLY' ? item.employer_id : (item.employer_id || item.id);
+        if (uid === targetId) return;
 
         // Feedback imediato na UI
         setActionedIds(prev => new Map(prev).set(item.id, 'PENDING'));
 
         try {
-            if (type === 'MESSAGE') {
+            if (type === 'MESSAGE' && item.title) {
+                // Job Message -> Creates candidataure silently
+                const { data, error } = await supabase.rpc('apply_to_job', {
+                    p_job_id: item.id,
+                    p_worker_id: user.uid || user.id,
+                    p_is_connected: true
+                });
+                if (error) throw error;
+                setActionedIds(prev => new Map(prev).set(item.id, data.chat_id));
+                router.push({ pathname: `/chat/${data.chat_id}`, params: { name: item.employer?.name } });
+                return;
+            } else if (type === 'MESSAGE') {
                 const { startOrGetConversation } = await import('../../utils/chatHelper');
                 const convId = await startOrGetConversation(user, targetId);
-                router.push({ pathname: `/chat/${convId}`, params: { name: item.employer?.name || item.name } });
+                router.push({ pathname: `/chat/${convId}`, params: { name: item.name } });
                 return;
             }
 
-            const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
-            await sendConnectionRequest(user, targetId, {
-                type: type,
-                job_id: type === 'APPLY' ? item.id : null
-            });
+            if (type === 'APPLY') {
+                const { data, error } = await supabase.rpc('apply_to_job', {
+                    p_job_id: item.id,
+                    p_worker_id: user.uid || user.id,
+                    p_is_connected: false
+                });
+                if (error) throw error;
+
+                const { useAlertStore } = await import('../../store/alertStore');
+                useAlertStore.getState().showAlert('Sucesso', 'Candidatura enviada para a vaga!', 'success');
+                return;
+            }
+
+            if (type === 'CONTACT') {
+                const { startOrGetConversation } = await import('../../utils/chatHelper');
+                const convId = await startOrGetConversation(user, targetId, { last_message: 'Gostaria de falar consigo!' });
+
+                router.push({ pathname: `/chat/${convId}`, params: { name: item.name || 'Utilizador' } });
+                return;
+            }
+
         } catch (err) {
             console.error('Error sending request:', err);
             // Reverter em caso de erro
@@ -417,215 +322,209 @@ export default function Home() {
                 next.delete(item.id);
                 return next;
             });
+            const { useAlertStore } = await import('../../store/alertStore');
+            useAlertStore.getState().showAlert('Erro', err.message || 'Não foi possível enviar o pedido.', 'error');
         }
-    }, [user, requireAuth]);
+    }, [user, requireAuth, router]);
 
-    const loadData = useCallback(async () => {
-        setLoading(true);
+    const loadData = useCallback(async (isSilent = false, isLoadMore = false) => {
+        if (authLoading) return;
+
+        const currentPage = isLoadMore ? page + 1 : 0;
+        const from = currentPage * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        if (isLoadMore) {
+            setLoadingMore(true);
+        } else {
+            if (!isSilent) setLoading(true);
+            setPage(0);
+            setHasMore(true);
+        }
+
         try {
-            if (!user || user.role === 'WORKER') {
-                // Fetch Active Jobs for Workers
-                const jobsQuery = query(
-                    collection(db, 'jobs'),
-                    where('status', '==', 'ACTIVE')
-                );
-                const jobsSnap = await getDocs(jobsQuery);
-                const jobsData = [];
-                const empPromises = [];
+            const isWorker = !user || user?.role === 'WORKER';
 
-                for (const docSnap of jobsSnap.docs) {
-                    const job = { id: docSnap.id, ...docSnap.data() };
-                    jobsData.push(job);
-                    if (job.employer_id) {
-                        empPromises.push({ index: jobsData.length - 1, promise: getDoc(doc(db, 'users', job.employer_id)) });
-                    }
+            // 1. Preparar todos os pedidos para rodar em paralelo
+            const queries = [];
+
+            // [0] Feed Principal (Vagas ou Trabalhadores) - Com Paginação
+            if (isWorker) {
+                let jobQuery = supabase.from('jobs')
+                    .select('*, employer:users!employer_id(id, name, city, province, is_verified)')
+                    .eq('status', 'ACTIVE');
+
+                if (user?.province) {
+                    jobQuery = jobQuery.eq('province', user.province);
                 }
 
-                // Resolve all employers at once sequentially wait
-                const empSnaps = await Promise.all(empPromises.map(p => p.promise));
+                queries.push(jobQuery.order('created_at', { ascending: false }).range(from, to));
+            } else {
+                let workerQuery = supabase.from('users')
+                    .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
+                    .eq('role', 'WORKER');
 
-                empPromises.forEach((p, i) => {
-                    const empSnap = empSnaps[i];
-                    if (empSnap.exists()) {
-                        const empData = empSnap.data();
-                        jobsData[p.index].employer = {
-                            id: empSnap.id,
-                            name: empData.name,
-                            city: empData.city,
-                            province: empData.province,
-                            is_verified: empData.is_verified,
-                        };
-                    }
-                });
+                if (user?.province) {
+                    workerQuery = workerQuery.eq('province', user.province);
+                }
 
-                // --- Location-based Sorting ---
+                queries.push(workerQuery.order('created_at', { ascending: false }).range(from, to));
+            }
+
+            // [1] Posts - Com Paginação
+            queries.push(
+                supabase.from('posts')
+                    .select('*, author:users!user_id(name, profile_photo, role, province)')
+                    .order('created_at', { ascending: false })
+                    .range(from, to)
+            );
+
+            // Pedidos específicos do utilizador (Apenas no carregamento inicial)
+            if (user && uid && !isLoadMore) {
+                // [2] Conversas
+                queries.push(supabase.from('chat_conversations').select('*').or(`worker_id.eq.${uid},employer_id.eq.${uid}`));
+                // [3] Pedidos de conexão
+                queries.push(supabase.from('connection_requests').select('*').eq('sender_id', uid));
+                // [4] Candidaturas
+                queries.push(supabase.from('applications').select('*').eq('worker_id', uid));
+
+                // [5] Utilizadores Sugeridos
+                let sQuery = supabase.from('users').select('*').limit(15);
+                if (user.province) sQuery = sQuery.eq('province', user.province);
+                queries.push(sQuery);
+
+                // [6 e 7] Dados de Perfil e Completude
+                const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
+                queries.push(supabase.from('users').select('*').eq('id', uid).maybeSingle());
+                queries.push(supabase.from(profileTable).select('*').eq('user_id', uid).maybeSingle());
+            }
+
+            // 2. Executar todos os pedidos ao mesmo tempo
+            const results = await Promise.all(queries);
+
+            const mainFeedError = results[0].error;
+            if (mainFeedError) throw mainFeedError;
+            let mainFeedData = results[0].data || [];
+
+            const postsError = results[1].error;
+            if (postsError) throw postsError;
+            let postsData = results[1].data || [];
+
+            // Verificar se ainda há mais dados
+            if (mainFeedData.length < PAGE_SIZE && postsData.length < PAGE_SIZE) {
+                setHasMore(false);
+            }
+
+            // 3. Processar resultados do Feed Principal
+            if (isWorker) {
+                // Manter ordenação por localização mas dentro do chunk recebido
                 const userProvince = user?.province?.toLowerCase();
                 const userCity = user?.city?.toLowerCase();
-
-                jobsData.sort((a, b) => {
+                mainFeedData.sort((a, b) => {
                     const locA = (userCity && a.city?.toLowerCase() === userCity ? 2 : (userProvince && a.province?.toLowerCase() === userProvince ? 1 : 0));
                     const locB = (userCity && b.city?.toLowerCase() === userCity ? 2 : (userProvince && b.province?.toLowerCase() === userProvince ? 1 : 0));
-
                     if (locA !== locB) return locB - locA;
                     return new Date(b.created_at) - new Date(a.created_at);
                 });
-
-                setJobs(jobsData);
+                setJobs(prev => isLoadMore ? [...prev, ...mainFeedData] : mainFeedData);
             } else {
-                // Fetch Workers for Employers
-                const workersQuery = query(
-                    collection(db, 'users'),
-                    where('role', '==', 'WORKER')
-                );
-                const workersSnap = await getDocs(workersQuery);
-                const workersData = [];
-
-                // Load all profiles in parallel
-                const profilePromises = workersSnap.docs.map(docSnap =>
-                    getDoc(doc(db, 'worker_profiles', docSnap.id))
-                );
-
-                const profileSnaps = await Promise.all(profilePromises);
-
-                workersSnap.docs.forEach((docSnap, index) => {
-                    const workerUser = { id: docSnap.id, ...docSnap.data() };
-                    const profileSnap = profileSnaps[index];
-
-                    if (profileSnap.exists()) {
-                        workersData.push({
-                            ...workerUser,
-                            ...profileSnap.data(),
-                            id: workerUser.id
-                        });
-                    } else {
-                        workersData.push(workerUser);
-                    }
-                });
-
-                setJobs(workersData); // Reusing 'jobs' state for feedData
+                const flattenedWorkers = mainFeedData.map(w => ({
+                    ...w,
+                    ...(w.worker_profiles?.[0] || {}),
+                    id: w.id
+                }));
+                setJobs(prev => isLoadMore ? [...prev, ...flattenedWorkers] : flattenedWorkers);
             }
 
-            // Fetch Posts
-            const postsQuery = query(collection(db, 'posts'), orderBy('created_at', 'desc'));
-            const postsSnap = await getDocs(postsQuery);
-            const postsData = [];
-
-            const authorPromises = [];
-            postsSnap.forEach(d => {
-                const p = { id: d.id, ...d.data() };
-                postsData.push(p);
-                if (!p.user_role && p.user_id) {
-                    authorPromises.push({ 
-                        index: postsData.length - 1, 
-                        promise: getDoc(doc(db, 'users', p.user_id)) 
-                    });
-                }
-            });
-
-            if (authorPromises.length > 0) {
-                const authorSnaps = await Promise.all(authorPromises.map(ap => ap.promise));
-                authorPromises.forEach((ap, idx) => {
-                    const snap = authorSnaps[idx];
-                    if (snap.exists()) {
-                        postsData[ap.index].user_role = snap.data().role;
-                    }
-                });
-            }
-
-            // --- Location-based Sorting for Posts ---
+            // 4. Processar Posts
             const postUserProvince = user?.province?.toLowerCase();
             const postUserCity = user?.city?.toLowerCase();
 
-            postsData.sort((a, b) => {
-                const locA = (postUserCity && a.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && a.province?.toLowerCase() === postUserProvince ? 1 : 0));
-                const locB = (postUserCity && b.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && b.province?.toLowerCase() === postUserProvince ? 1 : 0));
+            // Filtrar posts apenas da mesma província
+            let filteredPosts = postsData;
+            if (postUserProvince) {
+                filteredPosts = postsData.filter(p => p.author?.province?.toLowerCase() === postUserProvince);
+            }
 
+            filteredPosts.sort((a, b) => {
+                const locA = (postUserCity && a.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && a.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
+                const locB = (postUserCity && b.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && b.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
                 if (locA !== locB) return locB - locA;
-                return new Date(b.created_at?.seconds * 1000 || b.created_at) - new Date(a.created_at?.seconds * 1000 || a.created_at);
+                return new Date(b.created_at) - new Date(a.created_at);
             });
+            setPosts(prev => isLoadMore ? [...prev, ...filteredPosts] : filteredPosts);
 
-            setPosts(postsData);
+            // 5. Processar dados do utilizador logado (Apenas se não for Load More)
+            if (user && uid && !isLoadMore) {
+                let currentActionedIds = new Map();
 
-            // Fetch Actioned IDs (Conversations & Connection Requests) first for filtering
-            let currentActionedIds = new Map();
-            if (user) {
-                // 1. Existing Conversations
-                const fieldSelf = user.role === 'WORKER' ? 'worker_id' : 'employer_id';
-                const convQ = query(collection(db, 'chat_conversations'), where(fieldSelf, '==', user.uid));
-                const convSnap = await getDocs(convQ);
-                convSnap.forEach(d => {
-                    const data = d.data();
-                    if (data.is_authorized) {
-                        if (data.job_id) currentActionedIds.set(data.job_id, d.id);
-                        const otherId = user.role === 'WORKER' ? data.employer_id : data.worker_id;
+                // Conversas [2]
+                results[2].data?.forEach(d => {
+                    if (d.is_authorized) {
+                        if (d.job_id) currentActionedIds.set(d.job_id, d.id);
+                        const otherId = user.role === 'WORKER' ? d.employer_id : d.worker_id;
                         if (otherId) currentActionedIds.set(otherId, d.id);
                     }
                 });
 
-                // 2. Sent Connection Requests
-                const sentReqQ = query(collection(db, 'connection_requests'), where('sender_id', '==', user.uid));
-                const sentSnap = await getDocs(sentReqQ);
-                sentSnap.forEach(d => {
-                    const data = d.data();
-                    if (data.job_id && !currentActionedIds.has(data.job_id)) {
-                        currentActionedIds.set(data.job_id, data.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
+                // Pedidos [3]
+                results[3].data?.forEach(d => {
+                    if (d.job_id && !currentActionedIds.has(d.job_id)) {
+                        currentActionedIds.set(d.job_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
+                    }
+                    if (d.receiver_id && !currentActionedIds.has(d.receiver_id)) {
+                        currentActionedIds.set(d.receiver_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
                     }
                 });
 
-                // 3. Applications (Most reliable for Jobs)
-                const appsQ = query(collection(db, 'applications'), where('worker_id', '==', user.uid));
-                const appsSnap = await getDocs(appsQ);
-                appsSnap.forEach(d => {
-                    const data = d.data();
-                    if (data.job_id && !currentActionedIds.has(data.job_id)) {
-                        currentActionedIds.set(data.job_id, data.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
+                // Candidaturas [4]
+                results[4].data?.forEach(d => {
+                    if (d.job_id && !currentActionedIds.has(d.job_id)) {
+                        currentActionedIds.set(d.job_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
                     }
                 });
-
                 setActionedIds(currentActionedIds);
-            }
 
-            // Fetch Suggested Users for Sidebar (Filtered by currentActionedIds)
-            try {
-                let suggQuery;
-                if (user?.province) {
-                    suggQuery = query(collection(db, 'users'), where('province', '==', user.province), limit(15));
-                } else {
-                    suggQuery = query(collection(db, 'users'), limit(10));
+                // Sugeridos [5]
+                if (!results[5].error) {
+                    const filteredSugg = (results[5].data || [])
+                        .filter(u => u.id !== uid && !currentActionedIds.has(u.id))
+                        .slice(0, 3);
+                    setSuggestedUsers(filteredSugg);
                 }
-                const suggSnap = await getDocs(suggQuery);
-                const suggData = suggSnap.docs
-                    .map(d => ({ id: d.id, ...d.data() }))
-                    .filter(u => u.id !== user?.uid && !currentActionedIds.has(u.id))
-                    .slice(0, 3);
-                setSuggestedUsers(suggData);
-            } catch (err) {
-                console.warn('Suggested users error:', err);
-            }
 
-            // Calculate Completeness
-            if (user) {
-                const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-                const profileRef = doc(db, profileTable, user.uid);
-                const userRef = doc(db, 'users', user.uid);
-                const [profileSnap, userSnap] = await Promise.all([getDoc(profileRef), getDoc(userRef)]);
-
-                const userData = userSnap.exists() ? userSnap.data() : {};
-                const profileData = profileSnap.exists() ? profileSnap.data() : {};
-
+                // Completude [6 e 7]
+                const userData = results[6].data || {};
+                const profileData = results[7].data || {};
                 const finalCompleteness = calculateCompleteness(userData, profileData, user.role);
                 setCompleteness(finalCompleteness);
-            } else {
-                setCompleteness(100); // Hide banner for visitors
+            } else if (!user || !uid) {
+                if (!isLoadMore) setCompleteness(100);
             }
+
+            if (isLoadMore) setPage(currentPage);
+
         } catch (err) {
-            console.warn('Load data error:', err);
+            console.error('Home load error:', err);
+            if (!isSilent) handleError(err, 'Atualização de Dados');
         } finally {
             setLoading(false);
+            setLoadingMore(false);
         }
-    }, [user, userName]);
+    }, [authLoading, uid, userRole, userProvince, userCity, page]);
 
-    useEffect(() => { loadData(); }, [loadData]);
+    useEffect(() => {
+        if (authLoading) return;
+        loadData();
+    }, [authLoading, uid, userRole, userProvince, userCity]);
+
+    // Recarregar os dados de forma silenciosa sempre que a página ganhar foco
+    useFocusEffect(
+        useCallback(() => {
+            if (authLoading) return;
+            loadData(true, false);
+        }, [authLoading, uid, userRole, userProvince, userCity])
+    );
 
     useEffect(() => {
         // Handle back button on home to prevent app closing if user is on other tabs or nested
@@ -643,24 +542,31 @@ export default function Home() {
 
     const onRefresh = async () => {
         setRefreshing(true);
-        await loadData();
+        setPage(0);
+        setHasMore(true);
+        await loadData(true, false);
         setRefreshing(false);
     };
 
+    const handleLoadMore = async () => {
+        if (loadingMore || !hasMore) return;
+        await loadData(true, true);
+    };
+
     // === WEB: 3-Column Layout ===
-    if (isWeb) {
-        // Prepare mixed feed (Only include jobs if they are NOT user profiles. i.e., they have a title property)
-        let mixedFeed = [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
+    // Prepare mixed feed (Only include jobs if they are NOT user profiles. i.e., they have a title property)
+    const mixedFeed = useMemo(() => {
+        return [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
             const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
             const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
             return dateB - dateA;
         });
+    }, [posts, jobs]);
 
+    if (isWeb) {
         return (
             <View style={[webStyles.webContainer, { height: '100vh', overflow: 'hidden' }]}>
-                <View style={[webStyles.threeCol, isSmallScreen && { flexDirection: 'column', maxWidth: 600, alignItems: 'center' }, { flex: 1 }]}>
-                    
-                    {/* Left Sidebar */}
+                <View style={[webStyles.threeCol, isSmallScreen ? { flexDirection: 'column', maxWidth: 600, alignItems: 'center' } : {}, { flex: 1 }]}>
                     {!isSmallScreen && (
                         <View style={{ width: 225 }}>
                             <WebLeftSidebar user={user} completeness={completeness} router={router} />
@@ -741,15 +647,24 @@ export default function Home() {
                                         </View>
                                     ) : (
                                         (feedTab === 'POSTS' ? mixedFeed : jobs).map(item => {
-                                            // Identify if it's a post or job/worker
-                                            if (item.content || item.image_url || item.likes_count !== undefined) {
-                                                return <PostCard key={`post-${item.id}`} post={item} />;
+                                            if ('user_id' in item) {
+                                                return <PostCard key={`post-${item.id}`} post={item} connectionStatusProp={actionedIds.get(item.user_id)} />;
                                             } else {
                                                 return (!user || user.role === 'WORKER')
                                                     ? <JobCard key={`job-${item.id}`} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />
                                                     : <WorkerCard key={`worker-${item.id}`} worker={item} onPress={handleContact} userLocation={user} isContacted={actionedIds.get(item.id)} />;
                                             }
                                         })
+                                    )}
+
+                                    {hasMore && (
+                                        <TouchableOpacity
+                                            style={webStyles.loadMoreBtn}
+                                            onPress={handleLoadMore}
+                                            disabled={loadingMore}
+                                        >
+                                            {loadingMore ? <ActivityIndicator size="small" color={Colors.primary} /> : <Text style={webStyles.loadMoreText}>Carregar mais</Text>}
+                                        </TouchableOpacity>
                                     )}
                                 </>
                             )}
@@ -759,7 +674,7 @@ export default function Home() {
                     {!isSmallScreen && (
                         <View style={webStyles.rightSidebar}>
                             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                                <WebRightSidebar router={router} suggestedUsers={suggestedUsers} handleContact={handleContact} />
+                                <WebRightSidebar router={router} suggestedUsers={suggestedUsers} handleContact={handleContact} actionedIds={actionedIds} />
                             </ScrollView>
                         </View>
                     )}
@@ -769,11 +684,13 @@ export default function Home() {
     }
 
     // Mobile Mixed Feed preparation (Only include jobs if they are NOT user profiles)
-    let mobileMixedFeed = [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
-        const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
-        const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
-        return dateB - dateA;
-    });
+    const mobileMixedFeed = useMemo(() => {
+        return [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
+            const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
+            const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
+            return dateB - dateA;
+        });
+    }, [posts, jobs]);
 
     // === MOBILE: Single column (unchanged) ===
     return (
@@ -781,16 +698,16 @@ export default function Home() {
             {/* Custom Animated Header (Mobile) */}
             {!isWeb && (
                 <Animated.View style={[
-                    styles.mobileHeader, 
-                    { 
-                        height: HEADER_HEIGHT, 
+                    styles.mobileHeader,
+                    {
+                        height: HEADER_HEIGHT,
                         paddingTop: insets.top,
                         transform: [{ translateY: headerTranslateY }],
                     }
                 ]}>
                     <View style={styles.headerContent}>
-                        <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                            <Text style={styles.headerTitle}>Trabalhe Já</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Text style={styles.headerTitle}>Konekta</Text>
                         </View>
                         <View style={styles.headerActions}>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
@@ -818,14 +735,14 @@ export default function Home() {
                     {/* Integrated Mobile Switch Tabs */}
                     <View style={styles.switchWrapper}>
                         <View style={styles.switchBackground}>
-                            <TouchableOpacity 
-                                style={[styles.switchBtn, feedTab === 'POSTS' && styles.switchBtnActive]} 
+                            <TouchableOpacity
+                                style={[styles.switchBtn, feedTab === 'POSTS' && styles.switchBtnActive]}
                                 onPress={() => setFeedTab('POSTS')}
                             >
                                 <Text style={[styles.switchBtnText, feedTab === 'POSTS' && styles.switchBtnTextActive]}>Atualizações</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity 
-                                style={[styles.switchBtn, feedTab === 'OPORTUNIDADES' && styles.switchBtnActive]} 
+                            <TouchableOpacity
+                                style={[styles.switchBtn, feedTab === 'OPORTUNIDADES' && styles.switchBtnActive]}
                                 onPress={() => setFeedTab('OPORTUNIDADES')}
                             >
                                 <Text style={[styles.switchBtnText, feedTab === 'OPORTUNIDADES' && styles.switchBtnTextActive]}>
@@ -856,8 +773,8 @@ export default function Home() {
                     )}
                     renderItem={({ item }) => {
                         if (feedTab === 'POSTS') {
-                            if (item.content || item.image_url || item.likes_count !== undefined) {
-                                return <PostCard post={item} />;
+                            if ('user_id' in item) {
+                                return <PostCard key={`post-${item.id}`} post={item} connectionStatusProp={actionedIds.get(item.user_id)} />;
                             } else {
                                 return (!user || user.role === 'WORKER')
                                     ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />
@@ -877,6 +794,15 @@ export default function Home() {
                     )}
                     contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT + 16, paddingBottom: insets.bottom + 100 }]}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+                    onEndReached={handleLoadMore}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={() => (
+                        loadingMore ? (
+                            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                                <ActivityIndicator size="small" color={Colors.primary} />
+                            </View>
+                        ) : null
+                    )}
                     showsVerticalScrollIndicator={false}
                 />
             )}
@@ -906,48 +832,8 @@ const styles = StyleSheet.create({
         paddingVertical: 14, alignItems: 'center', marginBottom: Spacing.md,
     },
     createButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: '700' },
-    card: {
-        backgroundColor: Colors.white,
-        borderRadius: Platform.OS === 'web' ? 8 : 16,
-        padding: Spacing.md,
-        marginBottom: Spacing.sm,
-        ...(Platform.OS === 'web' ? {
-            borderWidth: 1,
-            borderColor: '#E0DFDC',
-        } : {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 3,
-        }),
-    },
-    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-    cardType: { backgroundColor: Colors.primaryBg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-    cardTypeText: { fontSize: Fonts.sizes.xs, color: Colors.primary, fontWeight: '600' },
-    cardTime: { fontSize: Fonts.sizes.xs, color: Colors.textLight },
-    cardTitle: { fontSize: Fonts.sizes.lg, fontWeight: '700', color: Colors.text, marginBottom: 4 },
-    cardDescription: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, lineHeight: 20, marginBottom: 10 },
-    cardFooter: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-    cardLocation: { flexDirection: 'row', alignItems: 'center' },
-    locationText: { fontSize: Fonts.sizes.xs, color: Colors.textSecondary },
-    cardContract: { backgroundColor: Colors.info + '12', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
-    contractText: { fontSize: Fonts.sizes.xs, color: Colors.info, fontWeight: '600' },
-    cardEmployer: { flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 10 },
-    employerAvatar: { width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 8, overflow: 'hidden' },
-    avatarImageSmall: { width: 28, height: 28, borderRadius: 14 },
-    avatarText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
-    employerName: { fontSize: Fonts.sizes.sm, color: Colors.text, fontWeight: '500', flex: 1 },
-    verified: { color: Colors.primary, fontWeight: '700', marginRight: 8 },
-    applicants: { fontSize: Fonts.sizes.xs, color: Colors.textLight },
-    proximityBadge: { backgroundColor: Colors.primary + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-    proximityText: { fontSize: 10, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
-    empty: { alignItems: 'center', paddingVertical: Spacing.xxl },
-    emptyEmoji: { fontSize: 48, marginBottom: Spacing.md },
-    emptyText: { fontSize: Fonts.sizes.lg, fontWeight: '600', color: Colors.text },
-    emptySubtext: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 4 },
     workerMain: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 },
-    
+
     // Switch Styles
     switchWrapper: {
         paddingHorizontal: Spacing.md,
@@ -971,11 +857,15 @@ const styles = StyleSheet.create({
     },
     switchBtnActive: {
         backgroundColor: Colors.white,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 2,
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        } : {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 2,
+        }),
     },
     switchBtnText: {
         fontSize: 13,
@@ -986,10 +876,7 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: '700',
     },
-    cardRating: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 'auto' },
-    cardRatingText: { fontSize: 12, fontWeight: '700', color: Colors.text },
-    cardCompletedText: { fontSize: 11, color: Colors.textLight },
-    
+
     // Header Mobile
     mobileHeader: {
         backgroundColor: Colors.white,
@@ -1122,6 +1009,21 @@ const webStyles = StyleSheet.create({
     },
     feedGreetingTop: {},
     feedGreetingTitle: { fontSize: 22, fontWeight: '800', color: Colors.text },
+    loadMoreBtn: {
+        backgroundColor: Colors.white,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: 8,
+        paddingVertical: 12,
+        alignItems: 'center',
+        marginTop: 16,
+        marginBottom: 32,
+    },
+    loadMoreText: {
+        color: Colors.primary,
+        fontWeight: '700',
+        fontSize: 14,
+    },
     feedGreetingSub: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
 
     feedProgressSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: Colors.borderLight },

@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { db } from '../../services/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
 import { sendPushNotification } from '../../services/notificationService';
@@ -53,65 +52,85 @@ export default function CreatePost() {
         }
 
         setLoading(true);
+        const uid = user?.uid || user?.id;
+
         try {
             let imageUrl = null;
             if (imageUri) {
-                imageUrl = await uploadImage(imageUri, `posts/${user.uid}/${Date.now()}.jpg`);
+                // Ensure unique path for Supabase Storage
+                const fileName = `${Date.now()}.jpg`;
+                imageUrl = await uploadImage(imageUri, `posts/${uid}/${fileName}`);
             }
 
+            let finalContent = content.trim();
+            
+            // Construir tags com os dados adicionais para não perder informação
+            const tags = [];
+            if (category) tags.push(`📌 ${category}`);
+            
+            const finalWorkType = (workType === 'Outro' ? customWorkType.trim() : workType);
+            if (finalWorkType) tags.push(`🛠️ ${finalWorkType}`);
+            
+            if (availability) tags.push(`⏰ ${availability}`);
+            
+            // Se o utilizador tiver preenchido estes campos extras, adicionamos ao fim do texto
+            if (tags.length > 0) {
+                finalContent += `\n\n${tags.join('  •  ')}`;
+            }
+
+            // Apenas enviamos as colunas que sabemos que existem na tabela "posts"
             const postData = {
-                user_id: user.uid,
-                user_role: user.role,
-                author_name: user?.name || 'Usuário',
-                author_photo: user?.profile_photo || null,
-                content: content.trim(),
-                image_url: imageUrl,
-                work_type: (workType === 'Outro' ? customWorkType.trim() : workType) || null,
-                availability: availability || null,
-                province: user?.province || null,
-                city: user?.city || null,
-                bairro: user?.bairro || null,
-                created_at: serverTimestamp(),
-                liked_by: [],
-                comments_count: 0
+                user_id: uid,
+                content: finalContent,
+                image_url: imageUrl
             };
 
-            await addDoc(collection(db, 'posts'), postData);
+            const { error: postError } = await supabase.from('posts').insert(postData);
+            if (postError) throw postError;
 
             // Disparar Notificação Background para Empregadores da mesma cidade
             (async () => {
                 try {
-                    const qEmps = query(collection(db, 'users'), where('role', '==', 'EMPLOYER'));
-                    const snap = await getDocs(qEmps);
-                    snap.forEach(docSnap => {
-                        const data = docSnap.data();
-                        if (data.pushToken && data.city === user.city) {
+                    const { data: emps, error: empsError } = await supabase
+                        .from('users')
+                        .select('push_token, city')
+                        .eq('role', 'EMPLOYER')
+                        .eq('city', user.city);
+                    
+                    if (empsError) throw empsError;
+
+                    emps?.forEach(emp => {
+                        if (emp.push_token) {
                             sendPushNotification(
-                                data.pushToken, 
+                                emp.push_token, 
                                 'Profissional Disponível!', 
-                                `${user.name} partilhou disponibilidade para trabalhos.`, 
+                                `${user.name} partilhou disponibilidade para trabalhos em ${user.city}.`, 
                                 { type: 'post' }
                             );
                         }
                     });
                 } catch(e) {
-                    console.warn('Network log on broadcast push:', e);
+                    // console.warn('Network log on broadcast push:', e);
                 }
             })();
 
             Alert.alert('Sucesso', 'Sua disponibilidade foi publicada!');
-            router.back();
+            if (router.canGoBack()) {
+                router.back();
+            } else {
+                router.replace('/(tabs)/home');
+            }
         } catch (error) {
             console.error('Erro ao publicar post:', error);
-            Alert.alert('Erro', 'Ocorreu um problema ao publicar. Tente novamente.');
+            Alert.alert('Erro', error.message || 'Ocorreu um problema ao publicar. Tente novamente.');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <KeyboardAvoidingView style={[{ flex: 1 }, Platform.OS === 'web' && { alignItems: 'center', backgroundColor: Colors.background }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={[{ flex: 1, width: '100%' }, Platform.OS === 'web' && { maxWidth: 600 }]}>
+        <KeyboardAvoidingView style={[{ flex: 1 }, Platform.OS === 'web' ? { alignItems: 'center', backgroundColor: Colors.background } : {}]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={[{ flex: 1, width: '100%' }, Platform.OS === 'web' ? { maxWidth: 600 } : {}]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
                         <Ionicons name="close" size={24} color={Colors.text} />
@@ -120,9 +139,21 @@ export default function CreatePost() {
                     <TouchableOpacity 
                         onPress={handleCreatePost} 
                         disabled={loading || !content.trim() || !category}
-                        style={[styles.publishBtn, (loading || !content.trim() || !category) && styles.publishBtnDisabled]}
+                        style={[
+                            styles.publishBtn, 
+                            (loading || !content.trim() || !category) ? styles.publishBtnDisabled : (Platform.OS === 'web' ? { boxShadow: '0 4px 12px rgba(0,0,0,0.1)' } : {})
+                        ]}
                     >
-                        {loading ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.publishBtnText}>Publicar</Text>}
+                        {loading ? (
+                            <ActivityIndicator color={Colors.white} size="small" />
+                        ) : (
+                            <Text style={[
+                                styles.publishBtnText, 
+                                (loading || !content.trim() || !category) && { color: Colors.textSecondary }
+                            ]}>
+                                Publicar
+                            </Text>
+                        )}
                     </TouchableOpacity>
                 </View>
 
@@ -166,7 +197,7 @@ export default function CreatePost() {
                         horizontal={Platform.OS !== 'web'} 
                         showsHorizontalScrollIndicator={Platform.OS === 'web'} 
                         style={styles.chipsScroll}
-                        contentContainerStyle={Platform.OS === 'web' && { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                        contentContainerStyle={Platform.OS === 'web' ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } : {}}
                     >
                         {PROFESSION_CATEGORIES.map(cat => (
                             <TouchableOpacity
@@ -179,14 +210,14 @@ export default function CreatePost() {
                         ))}
                     </ScrollView>
 
-                    {category && category !== 'Outro' && (
+                    {category !== '' && category !== 'Outro' && (
                         <>
                             <Text style={styles.sectionLabel}>Tipo de Trabalho / Especialização</Text>
                             <ScrollView 
                                 horizontal={Platform.OS !== 'web'} 
                                 showsHorizontalScrollIndicator={Platform.OS === 'web'} 
                                 style={styles.chipsScroll}
-                                contentContainerStyle={Platform.OS === 'web' && { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}
+                                contentContainerStyle={Platform.OS === 'web' ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } : {}}
                             >
                                 {JOBS_CATEGORIES_MAP[category]?.map(type => (
                                     <TouchableOpacity
@@ -242,17 +273,14 @@ export default function CreatePost() {
                     )}
                 </ScrollView>
 
-                <View style={[styles.toolbar, { opacity: 0.6 }]}>
+                <View style={styles.toolbar}>
                     <TouchableOpacity 
                         style={styles.toolbarBtn} 
-                        onPress={() => Alert.alert('Em Desenvolvimento', 'A funcionalidade de adicionar imagens estará disponível em breve.')}
+                        onPress={pickImage}
                     >
-                        <Ionicons name="image-outline" size={24} color={Colors.textLight} />
-                        <Text style={[styles.toolbarBtnText, { color: Colors.textLight }]}>Imagem (Em breve)</Text>
+                        <Ionicons name="image-outline" size={24} color={Colors.primary} />
+                        <Text style={styles.toolbarBtnText}>Adicionar Imagem</Text>
                     </TouchableOpacity>
-                    <Text style={{ fontSize: 10, color: Colors.textLight, marginLeft: 10, flex: 1 }}>
-                        O armazenamento de imagens está a ser configurado.
-                    </Text>
                 </View>
             </View>
         </KeyboardAvoidingView>
@@ -291,7 +319,20 @@ const styles = StyleSheet.create({
 
     imagePreviewContainer: { marginTop: Spacing.md, position: 'relative' },
     imagePreview: { width: '100%', height: 250, borderRadius: 12, backgroundColor: Colors.background },
-    removeImageBtn: { position: 'absolute', top: 10, right: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 5 },
+    removeImageBtn: { 
+        position: 'absolute', 
+        top: 10, 
+        right: 10, 
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 2 }, 
+            shadowOpacity: 0.3, 
+            shadowRadius: 3, 
+            elevation: 5 
+        })
+    },
     
     toolbar: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingBottom: Platform.OS === 'ios' ? 30 : Spacing.md },
     toolbarBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: Colors.primaryBg, borderRadius: 8 },

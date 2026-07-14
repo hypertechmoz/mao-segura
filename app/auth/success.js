@@ -22,7 +22,7 @@ export default function SuccessScreen() {
                 <Text style={styles.title}>Parabéns!</Text>
                 
                 <Text style={styles.subtitle}>
-                    Olá <Text style={{fontWeight: '700'}}>{firstName}</Text>, a tua conta foi criada com sucesso. Seja bem-vindo ao Trabalhe já!
+                    Olá <Text style={{fontWeight: '700'}}>{firstName}</Text>, a tua conta foi criada com sucesso. Seja bem-vindo ao Konekta!
                 </Text>
 
                 <TouchableOpacity 

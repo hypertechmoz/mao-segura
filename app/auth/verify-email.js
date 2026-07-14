@@ -15,7 +15,7 @@ export default function VerifyEmail() {
     useEffect(() => {
         // Redirect if verified
         if (user?.emailVerified) {
-            router.replace('/(tabs)/home');
+            router.replace('/auth/verify-success');
             return;
         }
 
@@ -28,7 +28,7 @@ export default function VerifyEmail() {
         const autoCheck = setInterval(async () => {
             const verified = await checkEmailVerification();
             if (verified) {
-                router.replace('/(tabs)/home');
+                router.replace('/auth/verify-success');
             }
         }, 5000);
 
@@ -43,8 +43,7 @@ export default function VerifyEmail() {
         try {
             const verified = await checkEmailVerification();
             if (verified) {
-                Alert.alert('Sucesso', 'Email verificado com sucesso!');
-                router.replace('/(tabs)/home');
+                router.replace('/auth/verify-success');
             } else {
                 Alert.alert('Aviso', 'O seu email ainda não foi verificado. Por favor, clique no link enviado para ' + user?.email + '. Verifique também a sua pasta de Lixo/Spam.');
             }

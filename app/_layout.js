@@ -9,8 +9,7 @@ import TermsModal from '../components/TermsModal';
 import { useFonts } from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 
-import { db } from '../services/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../services/supabase';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { GlobalAlerts } from '../components/GlobalAlerts';
 
@@ -46,10 +45,14 @@ export default function RootLayout() {
     useEffect(() => {
         const userId = user?.uid || user?.id;
         if (userId && expoPushToken && user.pushToken !== expoPushToken) {
-            // Save valid token to Firestore if different
-            updateDoc(doc(db, 'users', userId), {
-                pushToken: expoPushToken
-            }).catch(e => console.error('Erro ao guardar pushToken:', e));
+            // Save valid token to Supabase if different
+            supabase
+                .from('users')
+                .update({ pushToken: expoPushToken })
+                .eq('id', userId)
+                .then(({ error }) => {
+                    if (error) console.error('Erro ao guardar pushToken:', error);
+                });
             
             // Minimal optimistic update to avoid loop
             useAuthStore.setState({ user: { ...user, pushToken: expoPushToken }});

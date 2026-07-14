@@ -1,128 +1,114 @@
-import { db } from '../services/firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { supabase } from '../services/supabase';
 import { startOrGetConversation } from './chatHelper';
 
 /**
  * Cria um pedido de conexão/contacto na base de dados.
  */
 export async function sendConnectionRequest(user, targetId, metadata = {}) {
-    if (!user?.uid || !targetId) throw new Error('Utilizador ou destinatário inválido.');
-    if (user.uid === targetId) throw new Error('Não pode iniciar conversa consigo mesmo.');
+    const uid = user?.uid || user?.id;
+    if (!uid || !targetId) throw new Error('Utilizador ou destinatário inválido.');
+    if (uid === targetId) throw new Error('Não pode iniciar conversa consigo mesmo.');
 
-    const isWorker = user.role === 'WORKER';
-    
     // Check if request already exists
-    const reqQuery = query(
-        collection(db, 'connection_requests'),
-        where('sender_id', '==', user.uid),
-        where('receiver_id', '==', targetId),
-        where('status', '==', 'PENDING')
-    );
-    const snap = await getDocs(reqQuery);
+    const { data: existing } = await supabase
+        .from('connection_requests')
+        .select('id')
+        .eq('sender_id', uid)
+        .eq('receiver_id', targetId)
+        .eq('status', 'PENDING')
+        .maybeSingle();
     
-    if (!snap.empty) {
-        return snap.docs[0].id; // Already pending
+    if (existing) {
+        return existing.id;
     }
 
     // Prepare data
     const requestData = {
-        sender_id: user.uid,
+        sender_id: uid,
         sender_role: user.role,
         sender_name: user.name || 'Utilizador',
         receiver_id: targetId,
-        type: metadata.type || 'CONTACT', // CONTACT ou APPLY
+        type: metadata.type || 'CONTACT',
         job_id: metadata.job_id || null,
-        status: 'PENDING',
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp()
+        status: 'PENDING'
     };
 
-    const docRef = await addDoc(collection(db, 'connection_requests'), requestData);
+    const { data: newReq, error } = await supabase
+        .from('connection_requests')
+        .insert(requestData)
+        .select()
+        .single();
     
-    // Também podemos gravar uma notificação explícita ou usar a query em notifications.js
-    // Mas para manter compatibilidade, vamos criar um doc na subcoleção de notifications (se aplicável)
-    // No Trabalhe já, as notificações são criadas por triggers ou localmente.
-    
-    return docRef.id;
+    if (error) throw error;
+    return newReq.id;
 }
 
 /**
  * Aceita um pedido de conexão e abre a sala de chat.
  */
 export async function acceptConnectionRequest(requestId, user, senderId) {
-    // 1. Marcar como aceite
-    const reqRef = doc(db, 'connection_requests', requestId);
-    await updateDoc(reqRef, {
-        status: 'ACCEPTED',
-        updated_at: serverTimestamp()
-    });
+    const uid = user?.uid || user?.id;
 
-    // 2. Iniciar a conversa real
-    // Neste caso, quem iniciou a conversa original foi o senderId.
-    // Vamos buscar a role do sender
-    const senderSnap = await getDoc(doc(db, 'users', senderId));
-    const senderRole = senderSnap.exists() ? senderSnap.data().role : (user.role === 'WORKER' ? 'EMPLOYER' : 'WORKER');
-    
-    // Fake the user context to pretend the original sender called startOrGetConversation, 
-    // but actually we just call it.
-    // Notice startOrGetConversation signature: (user, targetId, metadata)
-    // It assumes `user` is the initiator. So we pass sender info as initiator.
-    const initiator = { uid: senderId, role: senderRole };
-    
-    const conversationId = await startOrGetConversation(initiator, user.uid, {
+    // Check request type
+    const { data: requestData } = await supabase
+        .from('connection_requests')
+        .select('type')
+        .eq('id', requestId)
+        .single();
+
+    // 1. Marcar como aceite
+    await supabase.from('connection_requests').update({
+        status: 'ACCEPTED',
+        updated_at: new Date().toISOString()
+    }).eq('id', requestId);
+
+    // 2. Iniciar a conversa real com o utilizador autenticado como remetente inicial
+    const conversationOwner = {
+        uid,
+        id: uid,
+        role: user.role,
+        name: user.name,
+    };
+
+    const conversationId = await startOrGetConversation(conversationOwner, senderId, {
         last_message: 'O seu pedido de contacto foi aceite!'
     });
 
     // 2.5 Ensure the conversation is authorized
-    await updateDoc(doc(db, 'chat_conversations', conversationId), {
+    await supabase.from('chat_conversations').update({
         is_authorized: true,
-        updated_at: serverTimestamp()
-    });
+        updated_at: new Date().toISOString()
+    }).eq('id', conversationId);
 
-    // 3. Adicional: Criar a conexão mútua (se implementado)
-    await addDoc(collection(db, 'connections'), {
-        user1_id: user.uid,
-        user2_id: senderId,
-        created_at: serverTimestamp()
-    });
+    // 3. Adicional: Criar a conexão mútua
+    if (requestData?.type === 'CONNECTION') {
+        await supabase.from('connections').insert({
+            user1_id: uid,
+            user2_id: senderId
+        });
+    }
 
     // 4. Criar notificação para quem enviou o pedido
     try {
-        await addDoc(collection(db, 'notifications'), {
+        await supabase.from('notifications').insert({
             user_id: senderId,
-            sender_id: user.uid, // Required by Firestore rules
+            sender_id: uid,
             title: 'Ligação Aceite! 🤝',
             description: `${user.name || 'Alguém'} aceitou o seu pedido de contacto. Já podem conversar no chat.`,
             type: 'CONNECTION_ACCEPTED',
-            read: false,
-            created_at: serverTimestamp(),
+            is_read: false,
             route: `/chat/${conversationId}`
         });
     } catch (e) {
         console.warn('Erro ao criar notificação de conexão aceite:', e);
     }
 
-    // 5. Enviar push notification ao remetente (se tiver token)
-    try {
-        if (senderSnap.exists() && senderSnap.data().pushToken) {
-            const { sendPushNotification } = await import('../services/notificationService');
-            await sendPushNotification(
-                senderSnap.data().pushToken,
-                'Ligação Aceite! 🤝',
-                `${user.name || 'Alguém'} aceitou o seu pedido de contacto.`
-            );
-        }
-    } catch (e) {
-        console.warn('Erro ao enviar push notification:', e);
-    }
-
     return conversationId;
 }
 
 export async function rejectConnectionRequest(requestId) {
-    const reqRef = doc(db, 'connection_requests', requestId);
-    await updateDoc(reqRef, {
+    await supabase.from('connection_requests').update({
         status: 'REJECTED',
-        updated_at: serverTimestamp()
-    });
+        updated_at: new Date().toISOString()
+    }).eq('id', requestId);
 }

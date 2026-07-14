@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Platform, Image, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
-import { db } from '../../services/firebase';
-import { collection, query, where, orderBy, getDocs, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,24 +17,20 @@ export default function ManageTestimonials() {
     const loadTestimonials = async () => {
         try {
             setLoading(true);
-            const q = query(
-                collection(db, 'testimonials'), 
-                where('status', '==', filter),
-                orderBy('created_at', 'desc')
-            );
-            const snap = await getDocs(q);
-            const data = [];
-            for (const d of snap.docs) {
-                const item = { id: d.id, ...d.data() };
-                if (item.user_id) {
-                   const uSnap = await getDoc(doc(db, 'users', item.user_id));
-                   if (uSnap.exists()) {
-                       item.user_photo = uSnap.data().profile_photo;
-                   }
-                }
-                data.push(item);
-            }
-            setTestimonials(data);
+            const { data, error } = await supabase
+                .from('testimonials')
+                .select('*, author:users!user_id(profile_photo)')
+                .eq('status', filter)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            const formattedData = data.map(item => ({
+                ...item,
+                user_photo: item.author?.profile_photo
+            }));
+            
+            setTestimonials(formattedData);
         } catch (err) {
             console.error('Error loading testimonials:', err);
             Alert.alert('Erro', 'Não foi possível carregar os depoimentos.');
@@ -55,11 +50,17 @@ export default function ManageTestimonials() {
 
     const handleAction = async (id, newStatus) => {
         try {
-            await updateDoc(doc(db, 'testimonials', id), {
-                status: newStatus,
-                updated_at: serverTimestamp(),
-                approved_by: user.uid
-            });
+            const { error } = await supabase
+                .from('testimonials')
+                .update({
+                    status: newStatus,
+                    updated_at: new Date().toISOString(),
+                    approved_by: user?.uid || user?.id
+                })
+                .eq('id', id);
+            
+            if (error) throw error;
+            
             Alert.alert('Sucesso', `Depoimento ${newStatus === 'APPROVED' ? 'aprovado' : 'rejeitado'} com sucesso.`);
             setTestimonials(prev => prev.filter(t => t.id !== id));
         } catch (err) {
@@ -100,7 +101,7 @@ export default function ManageTestimonials() {
             </View>
 
             <View style={styles.cardFooter}>
-                <Text style={styles.date}>{item.created_at?.toDate ? new Date(item.created_at.toDate()).toLocaleDateString() : 'Recent'}</Text>
+                <Text style={styles.date}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Recent'}</Text>
             </View>
 
             {filter === 'PENDING' && (
@@ -148,7 +149,7 @@ export default function ManageTestimonials() {
                 <ScrollView 
                     contentContainerStyle={styles.scrollContent}
                     refreshControl={
-                        <TextInput 
+                        <RefreshControl 
                             refreshing={refreshing}
                             onRefresh={() => { setRefreshing(true); loadTestimonials(); }}
                         />

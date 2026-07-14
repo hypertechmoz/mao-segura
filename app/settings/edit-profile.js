@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Switch, Platform, Image, Modal } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { db } from '../../services/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { uploadImage } from '../../services/storageService';
+import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
 import { Colors, Spacing, Fonts, JOB_TYPES, COMMON_SKILLS, PROFESSION_CATEGORIES, JOBS_CATEGORIES_MAP } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { decode } from 'base64-arraybuffer';
+import { handleError } from '../../utils/errorHandler';
 
 export default function EditProfile() {
     const router = useRouter();
     const { user, refreshUser, deleteAccount } = useAuthStore();
     const [showAvatarModal, setShowAvatarModal] = useState(false);
+    const [showPhotoOptions, setShowPhotoOptions] = useState(false);
     
     const AVATAR_STYLES = [
         { label: 'Pessoas', style: 'lorelei', seeds: [
@@ -39,84 +40,203 @@ export default function EditProfile() {
     );
     const [loading, setLoading] = useState(false);
     const [initialForm, setInitialForm] = useState(null);
+    const [profileExists, setProfileExists] = useState(false);
     const [showAllFields, setShowAllFields] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
     const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletePassword, setDeletePassword] = useState('');
     const [profilePhoto, setProfilePhoto] = useState(null);
     const [uploadingPhoto, setUploadingPhoto] = useState(false);
     
     const [form, setForm] = useState({
         name: '', document: '', province: '', city: '', bairro: '', addressDetails: '', companyName: '',
         professionCategory: '', customCategory: '',
-        workTypes: [], customWT: '', skills: [], tempSkill: '', availability: '', canSleepOnSite: false,
-        hasExperience: false, description: '',
+        workTypes: [], customWT: '', skills: [], tempSkill: '', availability: '', 
+        canSleepOnSite: null, hasExperience: null, description: '',
     });
 
-    useEffect(() => {
-        const loadData = async () => {
-            if (!user) return;
-            try {
-                const userSnap = await getDoc(doc(db, 'users', user.uid));
-                const userData = userSnap.exists() ? userSnap.data() : null;
+    useFocusEffect(
+        useCallback(() => {
+            const loadData = async () => {
+                const uid = user?.uid || user?.id;
+                if (!uid) return;
+                try {
+                    setLoading(true);
+                    const { data: userData, error: userError } = await supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', uid)
+                        .maybeSingle();
 
-                const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-                const profileSnap = await getDoc(doc(db, profileTable, user.uid));
-                const profileData = profileSnap.exists() ? profileSnap.data() : null;
+                    if (userError || !userData) {
+                        // User record in public.users doesn't exist yet (likely a new user)
+                        // Let's pull everything from metadata so they don't have to type again!
+                        const metadata = user?.user_metadata || {};
+                        const initialData = {
+                            name: metadata.name || '',
+                            province: metadata.province || '',
+                            city: metadata.city || '',
+                            bairro: metadata.bairro || '',
+                            phone: metadata.phone || '',
+                            document: '',
+                            professionCategory: metadata.role === 'EMPLOYER' ? '' : '',
+                            workTypes: [],
+                            skills: [],
+                            availability: '',
+                            description: ''
+                        };
+                        setForm(prev => ({ ...prev, ...initialData }));
+                        setInitialForm({}); // Still empty to allow the first save
+                        setLoading(false);
+                        return;
+                    }
 
-                if (userData) {
-                    const loadedWT = profileData?.work_types || [];
-                    const customWT = loadedWT.find(w => !JOB_TYPES.includes(w));
-                    const wts = loadedWT.filter(w => JOB_TYPES.includes(w));
-                    if (customWT) wts.push('Outro');
+                    // 2. Get profile data based on role
+                    const profileTable = userData.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
+                    const { data: profileData, error: profileError } = await supabase
+                        .from(profileTable)
+                        .select('*')
+                        .eq('user_id', uid)
+                        .maybeSingle();
 
-                    const loadedSkills = profileData?.skills || [];
-                    const customSkill = loadedSkills.find(s => !COMMON_SKILLS.includes(s));
-                    const sks = loadedSkills.filter(s => COMMON_SKILLS.includes(s));
-                    if (customSkill) sks.push('Outro');
+                    setProfileExists(!!profileData);
 
-                    const loadedCat = profileData?.profession_category || '';
-                    const isCustomCat = loadedCat && !PROFESSION_CATEGORIES.includes(loadedCat);
+                    if (userData) {
+                        const loadedWT = profileData?.work_types || [];
+                        const customWT = loadedWT.find(w => !JOB_TYPES.includes(w));
+                        const wts = loadedWT.filter(w => JOB_TYPES.includes(w));
+                        if (customWT) wts.push('Outro');
 
-                    setProfilePhoto(profileData?.profile_photo || userData?.profile_photo || null);
+                        const loadedSkills = profileData?.skills || [];
+                        const customSkill = loadedSkills.find(s => !COMMON_SKILLS.includes(s));
+                        const sks = loadedSkills.filter(s => COMMON_SKILLS.includes(s));
+                        if (customSkill) sks.push('Outro');
 
-                    const loadedForm = {
-                        name: userData.name || '',
-                        document: userData.document || '',
-                        province: userData.province || '',
-                        city: userData.city || '',
-                        bairro: userData.bairro || '',
-                        professionCategory: isCustomCat ? 'Outro' : loadedCat,
-                        customCategory: isCustomCat ? loadedCat : '',
-                        workTypes: wts,
-                        customWT: customWT || '',
-                        skills: profileData?.skills || [],
-                        tempSkill: '',
-                        availability: profileData?.availability || '',
-                        canSleepOnSite: profileData?.can_sleep_onsite || false,
-                        hasExperience: profileData?.has_experience || false,
-                        description: profileData?.description || '',
-                        companyName: profileData?.company_name || '',
-                        addressDetails: profileData?.address_details || ''
-                    };
-                    setForm(loadedForm);
-                    setInitialForm(loadedForm);
+                        const loadedCat = profileData?.profession_category || '';
+                        const isCustomCat = loadedCat && !PROFESSION_CATEGORIES.includes(loadedCat);
+
+                        setProfilePhoto(userData?.profile_photo || null);
+
+                        const loadedForm = {
+                            name: userData.name || '',
+                            document: userData.document || '',
+                            province: userData.province || '',
+                            city: userData.city || '',
+                            bairro: userData.bairro || '',
+                            professionCategory: isCustomCat ? 'Outro' : loadedCat,
+                            customCategory: isCustomCat ? loadedCat : '',
+                            workTypes: wts,
+                            customWT: customWT || '',
+                            skills: sks,
+                            tempSkill: customSkill || '',
+                            availability: profileData?.availability || '',
+                            canSleepOnSite: profileData?.can_sleep_on_site ?? null,
+                            hasExperience: profileData?.has_experience ?? null,
+                            description: profileData?.description || '',
+                            companyName: profileData?.company_name || '',
+                            addressDetails: profileData?.address_details || ''
+                        };
+                        setForm(loadedForm);
+                        setInitialForm(loadedForm);
+                    }
+                } catch (err) {
+                    handleError(err, 'Carregamento de Perfil');
+                } finally {
+                    setLoading(false);
                 }
-            } catch (err) {
-                console.error('Load profile error:', err);
-            }
-        };
-        loadData();
-    }, [user]);
+            };
+            loadData();
+        }, [user?.uid, user?.id])
+    );
 
-    const update = (field, value) => setForm({ ...form, [field]: value });
-
-    const pickProfilePhoto = () => {
-        setShowAvatarModal(true);
-    };
+    const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
     const selectAvatar = (avatarUrl) => {
         setProfilePhoto(avatarUrl);
         setShowAvatarModal(false);
+    };
+
+    const handlePickImage = async (useCamera = false) => {
+        try {
+            const { status } = useCamera 
+                ? await ImagePicker.requestCameraPermissionsAsync()
+                : await ImagePicker.requestMediaLibraryPermissionsAsync();
+            
+            if (status !== 'granted') {
+                useAlertStore.getState().showAlert('Permissão Negada', 'Precisamos de acesso para carregar a foto.', 'error');
+                return;
+            }
+
+            const result = useCamera
+                ? await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsEditing: true,
+                    aspect: [1, 1],
+                    quality: 0.7,
+                })
+                : await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    allowsEditing: true,
+                    aspect: [1, 1],
+                    quality: 0.7,
+                });
+
+            if (!result.canceled && result.assets && result.assets[0].uri) {
+                const imageUri = result.assets[0].uri;
+                await uploadImage(imageUri);
+            }
+        } catch (err) {
+            console.error('Pick image error:', err);
+        } finally {
+            setShowPhotoOptions(false);
+        }
+    };
+
+    const uploadImage = async (uri) => {
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
+
+        setUploadingPhoto(true);
+        try {
+            // Improved extension detection
+            let fileExt = uri.split('.').pop()?.toLowerCase() || 'png';
+            if (fileExt.includes('?')) fileExt = fileExt.split('?')[0];
+            if (fileExt.length > 4) fileExt = 'png'; // Fallback for blob URLs
+            
+            const fileName = `${uid}-${Date.now()}.${fileExt}`;
+            const filePath = `avatars/${fileName}`;
+
+            // Convert to base64
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            
+            const base64Promise = new Promise((resolve) => {
+                reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                reader.readAsDataURL(blob);
+            });
+            const base64 = await base64Promise;
+
+            const { data, error } = await supabase.storage
+                .from('profiles')
+                .upload(filePath, decode(base64), {
+                    contentType: `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`,
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('profiles')
+                .getPublicUrl(filePath);
+
+            setProfilePhoto(publicUrl);
+        } catch (err) {
+            console.error('Upload error:', err);
+            useAlertStore.getState().showAlert('Erro no Upload', 'Não foi possível carregar a imagem.', 'error');
+        } finally {
+            setUploadingPhoto(false);
+        }
     };
 
     const toggleWorkType = (type) => {
@@ -176,70 +296,96 @@ export default function EditProfile() {
     };
 
     const handleSave = async () => {
-        if (!user) return;
+        const uid = user?.uid || user?.id;
+        if (!uid) {
+            useAlertStore.getState().showAlert('Erro', 'Sessão inválida. Reinicie a app.', 'error');
+            return;
+        }
+        
+        // Fallback para o role (se o authStore ainda não tiver carregado corretamente)
+        const currentRole = user?.role || initialForm?.role || form.role || 'WORKER';
+
         setLoading(true);
+        console.log('[handleSave] Iniciando...', { uid, currentRole });
+
         try {
             // 1. Update User info
             const userUpdate = {
-                province: form.province,
-                city: form.city,
-                bairro: form.bairro,
-                profile_photo: profilePhoto // Save the selected avatar
+                profile_photo: profilePhoto 
             };
             
-            // Only update name if it wasn't set initially (implements immutability)
-            if (!initialForm?.name) userUpdate.name = form.name;
+            // Só atualiza os campos de localização/nome se eles vierem vazios (o que não deve acontecer se estiverem bloqueados)
+            if (!initialForm?.name && form.name) userUpdate.name = form.name;
+            if (!initialForm?.province && form.province) userUpdate.province = form.province;
+            if (!initialForm?.city && form.city) userUpdate.city = form.city;
+            if (!initialForm?.bairro && form.bairro) userUpdate.bairro = form.bairro;
 
-            await updateDoc(doc(db, 'users', user.uid), userUpdate);
+            console.log('[handleSave] Atualizando public.users:', userUpdate);
+            const { error: userError } = await supabase.from('users').update(userUpdate).eq('id', uid);
+            
+            if (userError) throw userError;
 
             // 2. Update Role-specific profile
-            let finalCategory = form.professionCategory === 'Outro' && form.customCategory.trim() 
+            let finalCategory = form.professionCategory === 'Outro' && form.customCategory?.trim() 
                 ? form.customCategory.trim() 
                 : form.professionCategory;
 
-            // Filter out 'Outro' and include any pending manual input
-            let finalWT = form.workTypes.filter(t => t !== 'Outro' && !!t);
-            if (form.workTypes.includes('Outro') && form.customWT.trim()) {
+            let finalWT = (form.workTypes || []).filter(t => t !== 'Outro' && !!t);
+            if ((form.workTypes || []).includes('Outro') && form.customWT?.trim()) {
                 finalWT.push(form.customWT.trim());
             }
             
-            let finalSkills = form.skills.filter(s => s !== 'Outro' && !!s);
-            if (form.skills.includes('Outro') && form.tempSkill.trim()) {
+            let finalSkills = (form.skills || []).filter(s => s !== 'Outro' && !!s);
+            if ((form.skills || []).includes('Outro') && form.tempSkill?.trim()) {
                 finalSkills.push(form.tempSkill.trim());
             }
 
-            const profileTable = user.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
-            const profilePayload = user.role === 'WORKER' ? {
-                user_id: user.uid,
-                profession_category: finalCategory,
-                work_types: Array.from(new Set(finalWT)),
-                skills: Array.from(new Set(finalSkills)),
-                availability: form.availability || null,
-                can_sleep_onsite: form.canSleepOnSite,
-                has_experience: form.hasExperience,
-                description: form.description
-            } : {
-                user_id: user.uid,
-                description: form.description,
-                company_name: form.companyName,
-                address_details: form.addressDetails
-            };
+            const profileTable = currentRole === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
+            
+            let profilePayload = {};
+            if (currentRole === 'WORKER') {
+                profilePayload = {
+                    user_id: uid,
+                    profession_category: finalCategory || null,
+                    work_types: Array.from(new Set(finalWT)),
+                    skills: Array.from(new Set(finalSkills)),
+                    availability: form.availability || null,
+                    can_sleep_on_site: form.canSleepOnSite,
+                    has_experience: form.hasExperience,
+                    description: form.description || null
+                };
+            } else {
+                profilePayload = {
+                    user_id: uid,
+                    description: form.description || null,
+                    company_name: form.companyName || null,
+                    address_details: form.addressDetails || null
+                };
+            }
 
-            await setDoc(doc(db, profileTable, user.uid), profilePayload, { merge: true });
+            console.log('[handleSave] Atualizando tabela de perfil:', profileTable, profilePayload);
+            const profileUpdatePayload = { ...profilePayload };
+            delete profileUpdatePayload.user_id;
+            const profileMutation = profileExists
+                ? supabase.from(profileTable).update(profileUpdatePayload).eq('user_id', uid)
+                : supabase.from(profileTable).insert(profilePayload);
+            const { error: profileError } = await profileMutation;
+            
+            if (profileError) throw profileError;
 
-            const { refreshUser } = useAuthStore.getState();
+            console.log('[handleSave] Fazendo refreshUser...');
             await refreshUser();
             
-            setSaveSuccess(true);
-            useAlertStore.getState().showAlert('Sucesso', 'O seu perfil foi atualizado.', 'success');
+            console.log('[handleSave] Concluído com Sucesso!');
             setTimeout(() => {
-                setSaveSuccess(false);
                 router.replace('/(tabs)/profile');
             }, 2500);
             
         } catch (err) {
-            useAlertStore.getState().showAlert('Erro', err.message, 'error');
+            console.error('[handleSave] Erro capturado:', err);
+            handleError(err, 'Guardar Perfil');
         } finally {
+            console.log('[handleSave] Finalizando (Loading = false)');
             setLoading(false);
         }
     };
@@ -247,51 +393,42 @@ export default function EditProfile() {
     const handleDeleteAccount = async () => {
         setLoading(true);
         try {
-            await deleteAccount();
+            await deleteAccount(deletePassword);
             setShowDeleteModal(false);
-            
-            useAlertStore.getState().showAlert('Sucesso', 'A sua conta foi apagada permanentemente.', 'success');
-            
-            if (Platform.OS === 'web') {
-                window.location.href = '/auth/choose-type';
-            } else {
-                router.replace('/auth/choose-type');
-            }
+            router.replace('/(auth)/login');
         } catch (err) {
-            console.error('Delete error:', err);
-            useAlertStore.getState().showAlert('Erro', 'Por proteção da conta, pode ser necessário voltar a fazer login antes de apagar a conta.', 'error');
+            handleError(err, 'Eliminar Conta');
             setLoading(false);
         }
     };
 
+    // Bloqueia sempre os campos imutáveis, mesmo se estiverem vazios. O preenchimento deve ser no registo.
     const isLocked = (field) => {
-        if (!initialForm) return false;
         const permanentFields = ['name', 'province', 'city', 'bairro'];
-        if (permanentFields.includes(field)) {
-            const val = initialForm[field];
-            if (val && val.toString().trim() !== '') return true;
-        }
-        return false;
+        return permanentFields.includes(field);
     };
 
+    // Só mostra o campo se estiver preenchido no initialForm ou se showAllFields for true.
     const shouldShow = (field) => {
         if (showAllFields) return true;
-        if (!initialForm) return true;
-        if (field === 'name' || field === 'document') return true; // Always show basic fields 
+        if (loading && !initialForm) return false; 
         
-        // Array or string checks
-        const initialVal = initialForm[field];
-        if (Array.isArray(initialVal)) {
-            return initialVal.length === 0;
+        const autoHideFields = ['name', 'province', 'city', 'bairro'];
+        
+        if (autoHideFields.includes(field)) {
+            const initialVal = initialForm ? initialForm[field] : null;
+            const isFilled = initialVal && String(initialVal).trim() !== '';
+            // Se já tem um valor inicial preenchido, oculta-o na vista simplificada
+            return !isFilled;
         }
-        return !initialVal; // show if falsy (empty or not set)
+
+        return true; 
     };
 
-    // Helpet to see if any non-essential field is hidden because it was already filled
-    const hasHiddenFields = initialForm && !showAllFields && Object.keys(initialForm).some(k => {
-        if (k === 'name' || k === 'document') return false;
-        if (Array.isArray(initialForm[k])) return initialForm[k].length > 0;
-        return !!initialForm[k];
+    // Helper to see if any field is hidden because it was already filled
+    const hasHiddenFields = initialForm && !showAllFields && ['name', 'province', 'city', 'bairro'].some(k => {
+        const val = initialForm[k];
+        return val && String(val).trim() !== '';
     });
 
     return (
@@ -308,21 +445,71 @@ export default function EditProfile() {
             <ScrollView contentContainerStyle={styles.content}>
                 {/* Foto de Perfil */}
                 <View style={styles.photoSection}>
-                    <TouchableOpacity onPress={pickProfilePhoto} style={styles.photoContainer}>
+                    <TouchableOpacity onPress={() => setShowPhotoOptions(true)} style={styles.photoContainer}>
                         {profilePhoto ? (
                             <Image source={{ uri: profilePhoto }} style={styles.photoImage} />
                         ) : (
                             <View style={styles.photoPlaceholder}>
                                 <Ionicons name="person" size={40} color={Colors.textLight} />
-                                <Text style={{ fontSize: 10, color: Colors.textLight, textAlign: 'center' }}>Escolher Avatar</Text>
+                                <Text style={{ fontSize: 10, color: Colors.textLight, textAlign: 'center' }}>Adicionar Foto</Text>
                             </View>
                         )}
-                        <View style={styles.photoBadge}>
-                            <Ionicons name="camera" size={16} color={Colors.white} />
-                        </View>
+                        {uploadingPhoto ? (
+                            <View style={[styles.photoBadge, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+                                <ActivityIndicator size="small" color={Colors.white} />
+                            </View>
+                        ) : (
+                            <View style={styles.photoBadge}>
+                                <Ionicons name="camera" size={16} color={Colors.white} />
+                            </View>
+                        )}
                     </TouchableOpacity>
-                    <Text style={styles.photoLabel}>Toque para escolher o seu avatar</Text>
+                    <Text style={styles.photoLabel}>Toque para mudar a sua foto de perfil</Text>
                 </View>
+
+                {/* Photo Options Modal */}
+                {showPhotoOptions && (
+                    <Modal visible={showPhotoOptions} transparent animationType="fade">
+                        <TouchableOpacity 
+                            style={styles.modalOverlay} 
+                            activeOpacity={1} 
+                            onPress={() => setShowPhotoOptions(false)}
+                        >
+                            <View style={styles.photoMenu}>
+                                <Text style={styles.photoMenuTitle}>Foto de Perfil</Text>
+                                
+                                <TouchableOpacity style={styles.photoMenuOption} onPress={() => handlePickImage(true)}>
+                                    <Ionicons name="camera-outline" size={24} color={Colors.primary} />
+                                    <Text style={styles.photoMenuText}>Tirar Foto</Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity style={styles.photoMenuOption} onPress={() => handlePickImage(false)}>
+                                    <Ionicons name="images-outline" size={24} color={Colors.primary} />
+                                    <Text style={styles.photoMenuText}>Escolher da Galeria</Text>
+                                </TouchableOpacity>
+                                
+                                <TouchableOpacity style={styles.photoMenuOption} onPress={() => {
+                                    setShowPhotoOptions(false);
+                                    setShowAvatarModal(true);
+                                }}>
+                                    <Ionicons name="happy-outline" size={24} color={Colors.primary} />
+                                    <Text style={styles.photoMenuText}>Escolher Avatar</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity 
+                                    style={[styles.photoMenuOption, { borderBottomWidth: 0 }]} 
+                                    onPress={() => {
+                                        setProfilePhoto(null);
+                                        setShowPhotoOptions(false);
+                                    }}
+                                >
+                                    <Ionicons name="trash-outline" size={24} color={Colors.error} />
+                                    <Text style={[styles.photoMenuText, { color: Colors.error }]}>Remover Foto</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </TouchableOpacity>
+                    </Modal>
+                )}
 
                 {/* Avatar Selection Modal */}
                 {showAvatarModal && (
@@ -330,9 +517,21 @@ export default function EditProfile() {
                         <View style={styles.avatarModal}>
                             <View style={styles.avatarModalHeader}>
                                 <Text style={styles.avatarModalTitle}>Escolha o seu Avatar</Text>
-                                <TouchableOpacity onPress={() => setShowAvatarModal(false)}>
-                                    <Ionicons name="close" size={24} color={Colors.text} />
-                                </TouchableOpacity>
+                                <View style={{flexDirection: 'row', alignItems: 'center', gap: 15}}>
+                                    <TouchableOpacity 
+                                        onPress={() => {
+                                            setProfilePhoto(null);
+                                            setShowAvatarModal(false);
+                                        }}
+                                        style={{flexDirection: 'row', alignItems: 'center'}}
+                                    >
+                                        <Ionicons name="trash-outline" size={18} color={Colors.error} style={{marginRight: 4}} />
+                                        <Text style={{color: Colors.error, fontWeight: '700', fontSize: 13}}>Remover</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setShowAvatarModal(false)}>
+                                        <Ionicons name="close" size={24} color={Colors.text} />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                             <ScrollView 
                                 contentContainerStyle={{ paddingBottom: 20 }} 
@@ -388,21 +587,42 @@ export default function EditProfile() {
             {shouldShow('province') && (
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Província</Text>
-                    <TextInput style={styles.input} value={form.province} onChangeText={(v) => update('province', v)} placeholder="Sua província" placeholderTextColor={Colors.textLight} />
+                    <TextInput 
+                        style={[styles.input, isLocked('province') && styles.inputDisabled]} 
+                        value={form.province} 
+                        onChangeText={(v) => update('province', v)} 
+                        editable={!isLocked('province')}
+                        placeholder="Sua província" 
+                        placeholderTextColor={Colors.textLight} 
+                    />
                 </View>
             )}
 
             {shouldShow('city') && (
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Cidade</Text>
-                    <TextInput style={styles.input} value={form.city} onChangeText={(v) => update('city', v)} placeholder="Sua cidade" placeholderTextColor={Colors.textLight} />
+                    <TextInput 
+                        style={[styles.input, isLocked('city') && styles.inputDisabled]} 
+                        value={form.city} 
+                        onChangeText={(v) => update('city', v)} 
+                        editable={!isLocked('city')}
+                        placeholder="Sua cidade" 
+                        placeholderTextColor={Colors.textLight} 
+                    />
                 </View>
             )}
 
             {shouldShow('bairro') && (
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Bairro</Text>
-                    <TextInput style={styles.input} value={form.bairro} onChangeText={(v) => update('bairro', v)} placeholder="Seu bairro" placeholderTextColor={Colors.textLight} />
+                    <TextInput 
+                        style={[styles.input, isLocked('bairro') && styles.inputDisabled]} 
+                        value={form.bairro} 
+                        onChangeText={(v) => update('bairro', v)} 
+                        editable={!isLocked('bairro')}
+                        placeholder="Seu bairro" 
+                        placeholderTextColor={Colors.textLight} 
+                    />
                 </View>
             )}
 
@@ -521,15 +741,22 @@ export default function EditProfile() {
                     {shouldShow('availability') && (
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Disponibilidade</Text>
-                            <View style={styles.optionRow}>
-                                {['DAILY', 'PERMANENT'].map((val) => (
+                            <View style={styles.chips}>
+                                {[
+                                    { id: 'FULL_TIME', label: 'Tempo Inteiro' },
+                                    { id: 'PART_TIME', label: 'Meio Tempo' },
+                                    { id: 'WEEKENDS', label: 'Fins de Semana' },
+                                    { id: 'FLEXIBLE', label: 'Flexível' },
+                                    { id: 'IMMEDIATE', label: 'Imediata' },
+                                    { id: 'TEMPORARY', label: 'Temporária' }
+                                ].map((opt) => (
                                     <TouchableOpacity
-                                        key={val}
-                                        style={[styles.option, form.availability === val && styles.optionActive]}
-                                        onPress={() => update('availability', val)}
+                                        key={opt.id}
+                                        style={[styles.chip, form.availability === opt.id && styles.chipActive]}
+                                        onPress={() => update('availability', opt.id)}
                                     >
-                                        <Text style={[styles.optionText, form.availability === val && styles.optionTextActive]}>
-                                            {val === 'DAILY' ? 'Diarista' : 'Permanente'}
+                                        <Text style={[styles.chipText, form.availability === opt.id && styles.chipTextActive]}>
+                                            {opt.label}
                                         </Text>
                                     </TouchableOpacity>
                                 ))}
@@ -538,16 +765,42 @@ export default function EditProfile() {
                     )}
 
                     {shouldShow('canSleepOnSite') && (
-                        <View style={styles.switchRow}>
-                            <Text style={styles.switchLabel}>Pode dormir no local</Text>
-                            <Switch value={form.canSleepOnSite} onValueChange={(v) => update('canSleepOnSite', v)} trackColor={{ true: Colors.primary }} />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Pode dormir no local?</Text>
+                            <View style={styles.optionRow}>
+                                <TouchableOpacity
+                                    style={[styles.option, form.canSleepOnSite === true && styles.optionActive]}
+                                    onPress={() => update('canSleepOnSite', true)}
+                                >
+                                    <Text style={[styles.optionText, form.canSleepOnSite === true && styles.optionTextActive]}>Sim</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.option, form.canSleepOnSite === false && styles.optionActive]}
+                                    onPress={() => update('canSleepOnSite', false)}
+                                >
+                                    <Text style={[styles.optionText, form.canSleepOnSite === false && styles.optionTextActive]}>Não</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
                     {shouldShow('hasExperience') && (
-                        <View style={styles.switchRow}>
-                            <Text style={styles.switchLabel}>Já trabalhou antes</Text>
-                            <Switch value={form.hasExperience} onValueChange={(v) => update('hasExperience', v)} trackColor={{ true: Colors.primary }} />
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Já trabalhou antes?</Text>
+                            <View style={styles.optionRow}>
+                                <TouchableOpacity
+                                    style={[styles.option, form.hasExperience === true && styles.optionActive]}
+                                    onPress={() => update('hasExperience', true)}
+                                >
+                                    <Text style={[styles.optionText, form.hasExperience === true && styles.optionTextActive]}>Sim</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.option, form.hasExperience === false && styles.optionActive]}
+                                    onPress={() => update('hasExperience', false)}
+                                >
+                                    <Text style={[styles.optionText, form.hasExperience === false && styles.optionTextActive]}>Não</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
                     )}
 
@@ -637,13 +890,24 @@ export default function EditProfile() {
                         </View>
                         <Text style={styles.modalTitle}>Apagar Conta?</Text>
                         <Text style={styles.modalSubtitle}>
-                            Esta ação é irreversível. Todos os seus dados, perfil e mensagens serão removidos permanentemente.
+                            Esta ação é irreversível. Por segurança, introduza a sua senha para confirmar.
                         </Text>
+
+                        <TextInput 
+                            style={[styles.input, { width: '100%', marginBottom: 20 }]}
+                            placeholder="Sua senha"
+                            secureTextEntry
+                            value={deletePassword}
+                            onChangeText={setDeletePassword}
+                        />
                         
                         <View style={styles.modalActions}>
                             <TouchableOpacity 
                                 style={styles.cancelBtn} 
-                                onPress={() => setShowDeleteModal(false)}
+                                onPress={() => {
+                                    setShowDeleteModal(false);
+                                    setDeletePassword('');
+                                }}
                                 disabled={loading}
                             >
                                 <Text style={styles.cancelBtnText}>Manter Conta</Text>
@@ -651,7 +915,7 @@ export default function EditProfile() {
                             <TouchableOpacity 
                                 style={[styles.submitBtn, { backgroundColor: Colors.error }]} 
                                 onPress={handleDeleteAccount}
-                                disabled={loading}
+                                disabled={loading || !deletePassword}
                             >
                                 {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.submitBtnText}>Sim, Apagar</Text>}
                             </TouchableOpacity>
@@ -740,6 +1004,42 @@ const styles = StyleSheet.create({
     modalActions: { flexDirection: 'row', gap: 12, width: '100%' },
     cancelBtn: { flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 12, backgroundColor: Colors.background },
     cancelBtnText: { color: Colors.textSecondary, fontWeight: '600' },
+    submitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    submitBtnText: { color: Colors.white, fontWeight: '700' },
+    
+    // Photo Menu Styles
+    photoMenu: {
+        backgroundColor: Colors.white,
+        borderRadius: 24,
+        padding: 24,
+        width: '90%',
+        maxWidth: 400,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+        elevation: 10,
+    },
+    photoMenuTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: Colors.text,
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    photoMenuOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight,
+        gap: 16,
+    },
+    photoMenuText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.text,
+    },
     submitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     submitBtnText: { color: Colors.white, fontWeight: '700' },
 });

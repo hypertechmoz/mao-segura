@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 export default function Register() {
     const router = useRouter();
     const { role } = useLocalSearchParams();
-    const { register, isLoading } = useAuthStore();
+    const { register, isAuthActionLoading } = useAuthStore();
 
     const [form, setForm] = useState({
         name: '',
@@ -242,16 +242,16 @@ export default function Register() {
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
             <Text style={{ fontSize: 12, color: Colors.textSecondary, textAlign: 'center', marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 10 }}>
-                Ao criar a sua conta, confirma novamente que leu e concorda em cumprir com as <Text style={{fontWeight: '700', color: Colors.primary}} onPress={() => router.push('/info/terms')}>Regras da Comunidade e Termos de Uso</Text>.
+                Ao criar a sua conta, confirma novamente que leu e concorda em cumprir com as <Text style={{fontWeight: '700', color: Colors.primary}} onPress={() => router.push('/info/terms')}>Regras da Comunidade e Termos de Uso.</Text>
             </Text>
 
             <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
+                style={[styles.button, isAuthActionLoading && styles.buttonDisabled]}
                 onPress={handleRegister}
-                disabled={isLoading}
+                disabled={isAuthActionLoading}
                 activeOpacity={0.8}
             >
-                {isLoading ? (
+                {isAuthActionLoading ? (
                     <ActivityIndicator color={Colors.white} />
                 ) : (
                     <Text style={styles.buttonText}>Criar Conta</Text>
