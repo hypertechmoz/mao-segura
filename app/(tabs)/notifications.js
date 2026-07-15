@@ -13,6 +13,7 @@ import { BackHandler } from 'react-native';
 
 function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
     const router = useRouter();
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const handlePress = async () => {
         try {
@@ -45,22 +46,26 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
 
                 {requiresAction && (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                        <TouchableOpacity onPress={async (e) => {
+                        <TouchableOpacity disabled={isProcessing} onPress={async (e) => {
                             e.stopPropagation();
+                            if (isProcessing) return;
+                            setIsProcessing(true);
                             try {
                                 const chatId = await acceptConnectionRequest(reqId, user, senderId);
                                 if (chatId) router.push(`/chat/${chatId}`);
-                            } catch(err) { console.error(err); }
-                        }} style={{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
-                            <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>
+                            } catch(err) { console.error(err); } finally { setIsProcessing(false); }
+                        }} style={[{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }, isProcessing && { opacity: 0.7 }]}>
+                            {isProcessing ? <ActivityIndicator size="small" color={Colors.white} /> : <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>}
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={async (e) => {
+                        <TouchableOpacity disabled={isProcessing} onPress={async (e) => {
                             e.stopPropagation();
+                            if (isProcessing) return;
+                            setIsProcessing(true);
                             try {
                                 await rejectConnectionRequest(reqId);
-                            } catch(err) { console.error(err); }
-                        }} style={{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }}>
-                            <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>
+                            } catch(err) { console.error(err); } finally { setIsProcessing(false); }
+                        }} style={[{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }, isProcessing && { opacity: 0.7 }]}>
+                            {isProcessing ? <ActivityIndicator size="small" color={Colors.textSecondary} /> : <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>}
                         </TouchableOpacity>
                     </View>
                 )}

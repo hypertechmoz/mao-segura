@@ -64,7 +64,7 @@ export default function Messages() {
             if (missingUids.length > 0) {
                 const { data: profiles } = await supabase
                     .from('users')
-                    .select('id, name, profile_photo, is_verified')
+                    .select('id, name, profile_photo, is_verified, is_premium')
                     .in('id', [...new Set(missingUids)]);
                 profiles?.forEach(p => profilesCache.current[p.id] = p);
             }
@@ -172,8 +172,8 @@ export default function Messages() {
                         </View>
                         <View style={styles.info}>
                             <View style={styles.nameRow}>
-                                <Text style={[styles.name, item.unread > 0 && { fontWeight: '800' }]}>{item.otherUser?.name}</Text>
-                                {item.otherUser?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                                <Text style={[styles.name, item.unread > 0 && { fontWeight: '800' }]} numberOfLines={1}>{item.otherUser?.name}</Text>
+                                {item.otherUser?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" />}
                             </View>
                             <Text style={[styles.lastMessage, item.unread > 0 && { color: Colors.text, fontWeight: '600' }]} numberOfLines={1}>
                                 {item.lastMessage || 'Sem mensagens'}

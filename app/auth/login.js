@@ -55,11 +55,6 @@ export default function Login() {
 
     return (
         <View style={styles.container}>
-            <View style={styles.topNav}>
-                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/')} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={Colors.text} />
-                </TouchableOpacity>
-            </View>
             <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
                     <View style={styles.logoBox}>

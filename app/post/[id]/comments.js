@@ -201,7 +201,6 @@ export default function Comments() {
                 <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/home')} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Comentários</Text>
                 <View style={{ width: 30 }} />
             </View>
 
@@ -224,6 +223,7 @@ export default function Comments() {
                                 }}
                             />}
                             <View style={styles.divider} />
+                            <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.text, marginHorizontal: 15, marginBottom: 10, marginTop: 5 }}>Comentários</Text>
                         </View>
                     )}
                     renderItem={renderComment}

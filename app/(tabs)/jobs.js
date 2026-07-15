@@ -249,7 +249,7 @@ export default function Jobs() {
                     )
                 )}
                 contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT }]}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} progressViewOffset={!isWeb ? HEADER_HEIGHT + 20 : 0} />}
             />
 
             {isEmployer && (

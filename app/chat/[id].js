@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { formatTime as formatTimeUtil } from '../../utils/profileUtils';
 
 import { sendPushNotification } from '../../services/notificationService';
@@ -87,8 +87,9 @@ export default function ChatScreen() {
         getReceiver();
 
         // Subscriptions
+        const channelId = `chat-${id}-${Date.now()}`;
         const convChannel = supabase
-            .channel(`chat-${id}`)
+            .channel(channelId)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations', filter: `id=eq.${id}` }, payload => {
                 if (payload.new) {
                     setIsAuthorized(payload.new.is_authorized !== false);
@@ -473,7 +474,10 @@ export default function ChatScreen() {
                         <Text style={styles.headerAvatarText}>{receiverProfile?.name?.[0] || name?.[0] || '?'}</Text>
                     )}
                 </View>
-                <Text style={styles.headerName}>{receiverProfile?.name || name || 'Conversa'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, paddingHorizontal: 12 }}>
+                    <Text style={styles.headerName} numberOfLines={1}>{receiverProfile?.name || name || 'Conversa'}</Text>
+                    {receiverProfile?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                </View>
             </View>
 
             <FlatList

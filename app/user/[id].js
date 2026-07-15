@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuthGuard } from '../../utils/useAuthGuard';
+import PostCard from '../../components/PostCard';
+import JobCard from '../../components/JobCard';
 
 export default function UserDetail() {
     const router = useRouter();
@@ -23,6 +25,25 @@ export default function UserDetail() {
     const [connectionsCount, setConnectionsCount] = useState(0);
     const [isConnected, setIsConnected] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
+    const [isProcessingChat, setIsProcessingChat] = useState(false);
+    
+    // Novas Tabs
+    const [activeTab, setActiveTab] = useState('SOBRE');
+    const [userPosts, setUserPosts] = useState([]);
+    const [userHistory, setUserHistory] = useState([]);
+    const [loadingPosts, setLoadingPosts] = useState(false);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = async () => {
+        setRefreshing(true);
+        await loadUser();
+        await loadReviews();
+        await checkConnection();
+        if (activeTab === 'POSTS') await loadPosts();
+        if (activeTab === 'HISTORICO') await loadHistory();
+        setRefreshing(false);
+    };
 
     const REPORT_REASONS = ['Perfil Falso', 'Comportamento Abusivo', 'Fraude ou Burla', 'Outro'];
 
@@ -147,56 +168,87 @@ export default function UserDetail() {
         }
     }, [user, id]);
 
+    const loadPosts = useCallback(async () => {
+        if (!id) return;
+        setLoadingPosts(true);
+        try {
+            const { data, error } = await supabase
+                .from('posts')
+                .select('*, author:users!inner(name, profile_photo, role, is_verified, is_premium)')
+                .eq('user_id', id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setUserPosts(data || []);
+        } catch (err) {
+            console.error('Error fetching posts:', err);
+        } finally {
+            setLoadingPosts(false);
+        }
+    }, [id]);
+
+    const loadHistory = useCallback(async () => {
+        if (!id || !profileUser) return;
+        setLoadingHistory(true);
+        try {
+            if (profileUser.role === 'WORKER') {
+                const { data, error } = await supabase
+                    .from('applications')
+                    .select('*, job:jobs(*, employer:users!employer_id(id,name,is_verified,is_premium))')
+                    .eq('worker_id', id)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setUserHistory(data?.map(app => app.job).filter(j => j != null) || []);
+            } else {
+                const { data, error } = await supabase
+                    .from('jobs')
+                    .select('*, employer:users!employer_id(id,name,is_verified,is_premium)')
+                    .eq('employer_id', id)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setUserHistory(data || []);
+            }
+        } catch (err) {
+            console.error('Error fetching history:', err);
+        } finally {
+            setLoadingHistory(false);
+        }
+    }, [id, profileUser]);
+
     useEffect(() => {
         loadUser();
         loadReviews();
         checkConnection();
     }, [loadUser, loadReviews, checkConnection]);
 
+    useEffect(() => {
+        if (activeTab === 'POSTS' && userPosts.length === 0) loadPosts();
+        if (activeTab === 'HISTORICO' && userHistory.length === 0) loadHistory();
+    }, [activeTab, loadPosts, loadHistory]);
+
     const handleChat = async () => {
         if (!requireAuth()) return;
-        
-        if (isConnected) {
-            try {
-                const isEmployer = user.role === 'EMPLOYER';
-                const q = query(
-                    collection(db, 'chat_conversations'), 
-                    where('employer_id', '==', isEmployer ? user.uid : id), 
-                    where('worker_id', '==', isEmployer ? id : user.uid)
-                );
-                const snap = await getDocs(q);
+        if (isProcessingChat) return;
 
-                let conversationId;
-                if (!snap.empty) {
-                    conversationId = snap.docs[0].id;
-                } else {
-                    const newRef = await addDoc(collection(db, 'chat_conversations'), {
-                        employer_id: isEmployer ? user.uid : id,
-                        worker_id: isEmployer ? id : user.uid,
-                        created_at: serverTimestamp(),
-                        updated_at: serverTimestamp(),
-                        last_message: 'Conectados',
-                        is_authorized: true,
-                        initiated_by: user.uid
-                    });
-                    conversationId = newRef.id;
-                }
+        setIsProcessingChat(true);
+        try {
+            if (isConnected) {
+                const { startOrGetConversation } = await import('../../utils/chatHelper');
+                const conversationId = await startOrGetConversation(user, id);
                 router.push({ pathname: `/chat/${conversationId}`, params: { name: profileUser.name } });
-            } catch (err) {
-                Alert.alert('Erro', err.message);
+            } else if (hasPendingRequest) {
+                Alert.alert("Aviso", "Já enviou um pedido de permissão para este utilizador.");
+            } else {
+                const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
+                await sendConnectionRequest(user, id, { type: 'CONNECTION' });
+                setHasPendingRequest(true);
+                Alert.alert("Pedido Enviado", "Será notificado quando o profissional aceitar o seu pedido para iniciar a conexão.");
             }
-        } else if (hasPendingRequest) {
-            Alert.alert("Aviso", "Já enviou um pedido de permissão para este utilizador.");
-        } else {
-            try {
-                import('../../utils/chatSecureHelper').then(async ({ sendConnectionRequest }) => {
-                    await sendConnectionRequest(user, id, { type: 'CONNECTION' });
-                    setHasPendingRequest(true);
-                    Alert.alert("Pedido Enviado", "Será notificado quando o profissional aceitar o seu pedido para iniciar a conexão.");
-                });
-            } catch (e) {
-                console.error(e);
-            }
+        } catch (e) {
+            console.error('Erro no handleChat:', e);
+            Alert.alert("Erro", "Não foi possível realizar a ação.");
+        } finally {
+            setIsProcessingChat(false);
         }
     };
 
@@ -207,7 +259,11 @@ export default function UserDetail() {
     if (!profileUser) return null;
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        <ScrollView 
+            style={styles.container} 
+            contentContainerStyle={styles.content}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        >
             <View style={styles.header}>
                 <View style={styles.avatarContainer}>
                     {profileUser.profile_photo ? (
@@ -217,14 +273,12 @@ export default function UserDetail() {
                             <Text style={styles.avatarInitial}>{profileUser.name?.[0] || '?'}</Text>
                         </View>
                     )}
-                    {profileUser.is_verified && (
-                        <View style={styles.verifiedBadge}>
-                            <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
-                        </View>
-                    )}
                 </View>
 
-                <Text style={styles.name}>{profileUser.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={styles.name}>{profileUser.name}</Text>
+                    {profileUser.is_verified && <MaterialIcons name="verified" size={18} color="#25D366" style={{ marginLeft: 6 }} />}
+                </View>
                 <Text style={styles.role}>{profileUser.role === 'EMPLOYER' ? 'Empregador' : (profileUser.work_types?.join(' & ') || profileUser.profession_category || 'Profissional em Geral')}</Text>
                 
                 <View style={styles.locationRow}>
@@ -275,69 +329,16 @@ export default function UserDetail() {
 
             </View>
 
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Sobre</Text>
-                <Text style={styles.description}>
-                    {profileUser.description || (profileUser.role === 'EMPLOYER' ? 'Este empregador não adicionou uma descrição.' : 'Este profissional ainda não adicionou uma descrição ao seu perfil.')}
-                </Text>
-            </View>
-
-            {profileUser.role === 'WORKER' && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Especialidades / Tipos de Trabalho</Text>
-                    <View style={styles.chips}>
-                        {profileUser.work_types?.length > 0 ? profileUser.work_types.map((type, index) => (
-                            <View key={index} style={styles.chip}>
-                                <Text style={styles.chipText}>{type}</Text>
-                            </View>
-                        )) : <Text style={styles.emptyText}>Nenhuma especialidade listada</Text>}
-                    </View>
-                </View>
-            )}
-
-            {profileUser.role === 'WORKER' && profileUser.skills && profileUser.skills.length > 0 && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Habilidades Adicionais</Text>
-                    <View style={styles.chips}>
-                        {profileUser.skills.map((skill, index) => (
-                            <View key={index} style={[styles.chip, { backgroundColor: Colors.info + '15' }]}>
-                                <Text style={[styles.chipText, { color: Colors.info }]}>{skill}</Text>
-                            </View>
-                        ))}
-                    </View>
-                </View>
-            )}
-
-            {profileUser.role === 'WORKER' && (
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Informações Adicionais</Text>
-                    <View style={styles.infoGrid}>
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoLabel}>Disponibilidade</Text>
-                            <Text style={styles.infoValue}>{profileUser.availability === 'DAILY' ? 'Diarista' : 'Permanente'}</Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoLabel}>Dorme no Local</Text>
-                            <Text style={styles.infoValue}>{profileUser.can_sleep_onsite ? 'Sim' : 'Não'}</Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoLabel}>Experiência</Text>
-                            <Text style={styles.infoValue}>{profileUser.has_experience ? 'Com Experiência' : 'Iniciante'}</Text>
-                        </View>
-                        <View style={styles.infoItem}>
-                            <Text style={styles.infoLabel}>Bairro</Text>
-                            <Text style={styles.infoValue}>{profileUser.bairro || 'Não informado'}</Text>
-                        </View>
-                    </View>
-                </View>
-            )}
-
             <View style={styles.actions}>
-                <TouchableOpacity style={styles.chatButton} onPress={handleChat} activeOpacity={0.8}>
-                    <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "paper-plane")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
-                    <Text style={styles.chatButtonText}>
-                        {isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Contactar')}
-                    </Text>
+                <TouchableOpacity style={[styles.chatButton, isProcessingChat && { opacity: 0.7 }]} onPress={handleChat} disabled={isProcessingChat}>
+                    {isProcessingChat ? (
+                        <ActivityIndicator size="small" color={Colors.white} />
+                    ) : (
+                        <>
+                            <Ionicons name={isConnected ? "chatbubbles" : (hasPendingRequest ? "time" : "chatbubble-ellipses")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
+                            <Text style={styles.chatButtonText}>{isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Contactar')}</Text>
+                        </>
+                    )}
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.reportBtn} onPress={() => setShowReportModal(true)}>
@@ -346,52 +347,164 @@ export default function UserDetail() {
                 </TouchableOpacity>
             </View>
 
-            {/* Reviews Section */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>Recomendações</Text>
-                    <Text style={styles.reviewCount}>{reviews.length}</Text>
-                </View>
-                
-                {loadingReviews ? (
-                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} />
-                ) : reviews.length > 0 ? (
-                    reviews.map((rev) => (
-                        <View key={rev.id} style={styles.reviewItem}>
-                            <View style={styles.reviewHeader}>
-                                <View style={styles.reviewerAvatar}>
-                                    {rev.reviewer_photo ? (
-                                        <Image source={{ uri: rev.reviewer_photo }} style={styles.reviewerAvatarImg} />
-                                    ) : (
-                                        <Text style={styles.reviewerInitial}>{rev.reviewer_name?.[0] || '?'}</Text>
-                                    )}
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.reviewerName}>{rev.reviewer_name}</Text>
-                                    <View style={styles.reviewStars}>
-                                        {[1,2,3,4,5].map(s => (
-                                            <Ionicons 
-                                                key={s} 
-                                                name={s <= rev.rating ? "star" : "star-outline"} 
-                                                size={12} 
-                                                color="#FFB800" 
-                                            />
-                                        ))}
-                                        <Text style={styles.reviewDate}>
-                                            • {rev.created_at?.seconds ? new Date(rev.created_at.seconds * 1000).toLocaleDateString('pt-MZ') : ''}
-                                        </Text>
+            {/* TABS */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity style={[styles.tab, activeTab === 'SOBRE' && styles.activeTab]} onPress={() => setActiveTab('SOBRE')}>
+                    <Text style={[styles.tabText, activeTab === 'SOBRE' && styles.activeTabText]}>Sobre</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, activeTab === 'POSTS' && styles.activeTab]} onPress={() => setActiveTab('POSTS')}>
+                    <Text style={[styles.tabText, activeTab === 'POSTS' && styles.activeTabText]}>Posts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, activeTab === 'HISTORICO' && styles.activeTab]} onPress={() => setActiveTab('HISTORICO')}>
+                    <Text style={[styles.tabText, activeTab === 'HISTORICO' && styles.activeTabText]}>Histórico</Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* TAB CONTENT: SOBRE */}
+            {activeTab === 'SOBRE' && (
+                <>
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Sobre</Text>
+                        <Text style={styles.description}>
+                            {profileUser.description || (profileUser.role === 'EMPLOYER' ? 'Este empregador não adicionou uma descrição.' : 'Este profissional ainda não adicionou uma descrição ao seu perfil.')}
+                        </Text>
+                    </View>
+
+                    {profileUser.role === 'WORKER' && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Especialidades / Tipos de Trabalho</Text>
+                            <View style={styles.chips}>
+                                {profileUser.work_types?.length > 0 ? profileUser.work_types.map((type, index) => (
+                                    <View key={index} style={styles.chip}>
+                                        <Text style={styles.chipText}>{type}</Text>
                                     </View>
+                                )) : <Text style={styles.emptyText}>Nenhuma especialidade listada</Text>}
+                            </View>
+                        </View>
+                    )}
+
+                    {profileUser.role === 'WORKER' && profileUser.skills && profileUser.skills.length > 0 && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Habilidades Adicionais</Text>
+                            <View style={styles.chips}>
+                                {profileUser.skills.map((skill, index) => (
+                                    <View key={index} style={[styles.chip, { backgroundColor: Colors.info + '15' }]}>
+                                        <Text style={[styles.chipText, { color: Colors.info }]}>{skill}</Text>
+                                    </View>
+                                ))}
+                            </View>
+                        </View>
+                    )}
+
+                    {profileUser.role === 'WORKER' && (
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Informações Adicionais</Text>
+                            <View style={styles.infoGrid}>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>Disponibilidade</Text>
+                                    <Text style={styles.infoValue}>{profileUser.availability === 'DAILY' ? 'Diarista' : 'Permanente'}</Text>
+                                </View>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>Dorme no Local</Text>
+                                    <Text style={styles.infoValue}>{profileUser.can_sleep_onsite ? 'Sim' : 'Não'}</Text>
+                                </View>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>Experiência</Text>
+                                    <Text style={styles.infoValue}>{profileUser.has_experience ? 'Com Experiência' : 'Iniciante'}</Text>
+                                </View>
+                                <View style={styles.infoItem}>
+                                    <Text style={styles.infoLabel}>Bairro</Text>
+                                    <Text style={styles.infoValue}>{profileUser.bairro || 'Não informado'}</Text>
                                 </View>
                             </View>
-                            {rev.comment ? (
-                                <Text style={styles.reviewComment}>{rev.comment}</Text>
-                            ) : null}
                         </View>
-                    ))
-                ) : (
-                    <Text style={styles.emptyReviews}>Nenhuma recomendação recebida.</Text>
-                )}
-            </View>
+                    )}
+
+                    {/* Reviews Section */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <Text style={styles.sectionTitle}>Recomendações</Text>
+                            <Text style={styles.reviewCount}>{reviews.length}</Text>
+                        </View>
+                        
+                        {loadingReviews ? (
+                            <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} />
+                        ) : reviews.length > 0 ? (
+                            reviews.map((rev) => (
+                                <View key={rev.id} style={styles.reviewItem}>
+                                    <View style={styles.reviewHeader}>
+                                        <View style={styles.reviewerAvatar}>
+                                            {rev.reviewer_photo ? (
+                                                <Image source={{ uri: rev.reviewer_photo }} style={styles.reviewerAvatarImg} />
+                                            ) : (
+                                                <Text style={styles.reviewerInitial}>{rev.reviewer_name?.[0] || '?'}</Text>
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.reviewerName}>{rev.reviewer_name}</Text>
+                                            <View style={styles.reviewStars}>
+                                                {[1,2,3,4,5].map(s => (
+                                                    <Ionicons 
+                                                        key={s} 
+                                                        name={s <= rev.rating ? "star" : "star-outline"} 
+                                                        size={12} 
+                                                        color="#FFB800" 
+                                                    />
+                                                ))}
+                                                <Text style={styles.reviewDate}>
+                                                    • {rev.created_at?.seconds ? new Date(rev.created_at.seconds * 1000).toLocaleDateString('pt-MZ') : ''}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                    </View>
+                                    {rev.comment ? (
+                                        <Text style={styles.reviewComment}>{rev.comment}</Text>
+                                    ) : null}
+                                </View>
+                            ))
+                        ) : (
+                            <Text style={styles.emptyReviews}>Nenhuma recomendação recebida.</Text>
+                        )}
+                    </View>
+                </>
+            )}
+
+            {/* TAB CONTENT: POSTS */}
+            {activeTab === 'POSTS' && (
+                <View style={{ paddingHorizontal: 0, marginTop: 10 }}>
+                    {loadingPosts ? (
+                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 20 }} />
+                    ) : userPosts.length > 0 ? (
+                        userPosts.map(post => (
+                            <PostCard key={post.id} post={post} />
+                        ))
+                    ) : (
+                        <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                            <Ionicons name="document-text-outline" size={48} color={Colors.border} />
+                            <Text style={{ color: Colors.textSecondary, marginTop: 10 }}>Nenhuma publicação encontrada.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
+            {/* TAB CONTENT: HISTORICO */}
+            {activeTab === 'HISTORICO' && (
+                <View style={{ paddingHorizontal: 15, marginTop: 10 }}>
+                    {loadingHistory ? (
+                        <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 20 }} />
+                    ) : userHistory.length > 0 ? (
+                        userHistory.map(job => (
+                            <JobCard key={job.id} job={job} />
+                        ))
+                    ) : (
+                        <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                            <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
+                            <Text style={{ color: Colors.textSecondary, marginTop: 10 }}>Nenhum histórico encontrado.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
 
             <Modal visible={showReportModal} transparent animationType="slide" onRequestClose={() => setShowReportModal(false)}>
                 <View style={styles.modalOverlay}>
@@ -448,23 +561,26 @@ const styles = StyleSheet.create({
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { 
         backgroundColor: Colors.white, padding: Spacing.xl, alignItems: 'center', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, 
-        elevation: 2, 
-        ...Platform.select({
-            web: { boxShadow: '0 2px 10px rgba(0,0,0,0.1)' },
-            default: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 10 }
-        })
+        shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4, zIndex: 10,
+        paddingTop: Platform.OS === 'ios' ? 60 : 40
     },
     avatarContainer: { position: 'relative', marginBottom: 16 },
-    avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.primaryBg, borderWidth: 3, borderColor: Colors.white },
-    avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
-    avatarInitial: { fontSize: 40, fontWeight: '800', color: Colors.primary },
-    verifiedBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: Colors.primary, borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.white },
-    name: { fontSize: 24, fontWeight: '800', color: Colors.text, marginBottom: 4 },
-    role: { fontSize: 14, color: Colors.primary, fontWeight: '600', marginBottom: 8 },
-    locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    locationText: { fontSize: 14, color: Colors.textSecondary },
-    section: { backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.lg, marginHorizontal: Spacing.md, marginTop: Spacing.md },
-    sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 12 },
+    avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: Colors.border, borderWidth: 3, borderColor: Colors.primary },
+    avatarPlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primaryBg },
+    avatarInitial: { fontSize: 40, fontWeight: '700', color: Colors.primary },
+    verifiedBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: Colors.primary, borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.white },
+    name: { fontSize: 24, fontWeight: '800', color: Colors.text, marginBottom: 4, textAlign: 'center' },
+    role: { fontSize: 15, color: Colors.primary, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
+    locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    locationText: { fontSize: 14, color: Colors.textSecondary, marginLeft: 6 },
+    tabContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15 },
+    tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
+    activeTab: { backgroundColor: Colors.primaryBg },
+    tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+    activeTabText: { color: Colors.primary },
+    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginTop: 15, padding: 20, borderRadius: 20 },
+    sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
     description: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: { backgroundColor: Colors.primaryBg, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },

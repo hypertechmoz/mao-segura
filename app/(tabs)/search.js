@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES, PROVINCES } from '../../constants';
@@ -15,6 +15,7 @@ export default function Search() {
     const [results, setResults] = useState([]);
     const [searched, setSearched] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
     const { user } = useAuthStore();
 
     useEffect(() => {
@@ -68,7 +69,17 @@ export default function Search() {
             console.error('Search error:', err);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
+    };
+
+    const onRefresh = () => {
+        if (!searchQuery.trim()) {
+            setRefreshing(false);
+            return;
+        }
+        setRefreshing(true);
+        performSearch(searchQuery.trim(), false);
     };
 
     const handleSearch = () => {
@@ -137,6 +148,7 @@ export default function Search() {
                 <FlatList
                     data={results}
                     keyExtractor={(item) => item.id}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
                     renderItem={({ item }) => (
                         activeTab === 'VAGAS' ? (
                             <TouchableOpacity

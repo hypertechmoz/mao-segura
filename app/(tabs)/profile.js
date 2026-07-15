@@ -308,9 +308,6 @@ export default function Profile() {
                             </View>
                         )}
                     </View>
-                    <Text style={styles.role}>
-                        {p?.role === 'WORKER' ? `${p?.workerProfile?.profession_category || 'Profissional'}` : p?.role === 'EMPLOYER' ? 'Cliente' : 'Utilizador'}
-                    </Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                         <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
                         <Text style={styles.location}>{p?.city || 'Moçambique'}, {p?.bairro || ''}</Text>
@@ -699,6 +696,11 @@ const styles = StyleSheet.create({
     progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
     section: { backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
     sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
+    tabsContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15 },
+    tabButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
+    tabButtonActive: { backgroundColor: Colors.primaryBg },
+    tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+    tabTextActive: { color: Colors.primary, fontWeight: '700' },
     infoRow: { marginBottom: Spacing.sm },
     infoLabel: { fontSize: Fonts.sizes.xs, color: Colors.textLight, fontWeight: '500', marginBottom: 2 },
     infoValue: { fontSize: Fonts.sizes.sm, color: Colors.text },

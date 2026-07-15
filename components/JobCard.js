@@ -26,7 +26,6 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                     <View style={{ flex: 1, justifyContent: 'center' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={styles.employerName}>{job.employer?.name || 'Cliente'}</Text>
-                            {job.employer?.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
                             {job.employer?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
                             <Text style={{ color: Colors.textLight, marginHorizontal: 4 }}>•</Text>
                             <Text style={styles.cardTime}>{formatTime(job.created_at)}</Text>

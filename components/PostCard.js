@@ -27,8 +27,9 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
     const [showOptions, setShowOptions] = useState(false);
     const [editModalVisible, setEditModalVisible] = useState(false);
     const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-    const [editContent, setEditContent] = useState(post?.content || '');
+    const [editContent, setEditContent] = useState(post.content || '');
     const [isSaving, setIsSaving] = useState(false);
+    const [imageModalVisible, setImageModalVisible] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteError, setDeleteError] = useState('');
     const isOwnPost = String(post.user_id) === String(user?.uid || user?.id);
@@ -164,12 +165,29 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
     };
 
     const postDate = formatTime(post.created_at);
-    const authorRole = post.user_role || post.author?.role;
-    const authorName = post.author?.name || post.author_name || 'Utilizador';
-    const authorPhoto = post.author?.profile_photo || post.author_photo;
+    const authorRole = post.user_role || post.author?.role || post.user?.role;
+    const authorName = post.author?.name || post.user?.name || post.author_name || 'Utilizador';
+    const authorPhoto = post.author?.profile_photo || post.user?.profile_photo || post.author_photo;
+    const isVerified = post.author?.is_verified || post.user?.is_verified;
+    const isPremium = post.author?.is_premium || post.user?.is_premium;
 
     const MAX_LENGTH = 150;
-    const contentText = post.content || '';
+    let contentText = post.content || '';
+    
+    // Extract tags from content
+    let tagsList = [];
+    const parts = contentText.split('\n\n');
+    if (parts.length > 1 && (parts[parts.length - 1].includes('  •  ') || parts[parts.length - 1].includes('📌') || parts[parts.length - 1].includes('🛠️'))) {
+        const rawTags = parts.pop();
+        contentText = parts.join('\n\n');
+        // Clean emojis and split by bullet
+        tagsList = rawTags
+            .replace(/[📌🛠️⏰]\s?/g, '')
+            .split('  •  ')
+            .map(t => t.trim())
+            .filter(t => t.length > 0);
+    }
+
     const shouldTruncate = contentText.length > MAX_LENGTH;
     const displayContent = isExpanded || !shouldTruncate ? contentText : `${contentText.slice(0, MAX_LENGTH)}...`;
 
@@ -190,15 +208,14 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                     <View style={styles.headerText}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={styles.authorName}>{authorName}</Text>
-                            {post.author?.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
-                            {post.author?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                            {isVerified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
                             {(user?.city && post.city && user.city.toLowerCase() === post.city.toLowerCase()) && (
                                 <View style={styles.proximityBadge}>
                                     <Text style={styles.proximityText}>Perto de si</Text>
                                 </View>
                             )}
                         </View>
-                        <Text style={styles.time}>{postDate} • {authorRole === 'WORKER' ? 'Profissional' : 'Empregador'}</Text>
+                        <Text style={styles.time}>{postDate}</Text>
                     </View>
                 </TouchableOpacity>
 
@@ -245,8 +262,20 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                     </View>
                 ) : null}
                 
+                {tagsList.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 15, paddingBottom: 10, gap: 8 }}>
+                        {tagsList.map((tag, idx) => (
+                            <View key={idx} style={{ backgroundColor: Colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <Text style={{ color: Colors.primary, fontSize: 12, fontWeight: '600' }}>{tag}</Text>
+                            </View>
+                        ))}
+                    </View>
+                )}
+                
                 {post.image_url && (
-                    <Image source={{ uri: post.image_url }} style={styles.image} resizeMode="cover" />
+                    <TouchableOpacity activeOpacity={0.9} onPress={() => setImageModalVisible(true)}>
+                        <Image source={{ uri: post.image_url }} style={styles.image} resizeMode="cover" />
+                    </TouchableOpacity>
                 )}
             </TouchableOpacity>
 
@@ -371,9 +400,27 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                     </View>
                 </View>
             </Modal>
+            <Modal
+                visible={imageModalVisible}
+                animationType="fade"
+                transparent={true}
+                onRequestClose={() => setImageModalVisible(false)}
+            >
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' }}>
+                    <TouchableOpacity 
+                        style={{ position: 'absolute', top: Platform.OS === 'ios' ? 50 : 20, right: 20, zIndex: 10, padding: 10 }} 
+                        onPress={() => setImageModalVisible(false)}
+                    >
+                        <Ionicons name="close-circle" size={36} color="#FFF" />
+                    </TouchableOpacity>
+                    {post.image_url && (
+                        <Image source={{ uri: post.image_url }} style={{ width: '100%', height: '100%', resizeMode: 'contain' }} />
+                    )}
+                </View>
+            </Modal>
         </View>
     );
-}
+};
 
 const styles = StyleSheet.create({
     card: {

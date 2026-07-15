@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Image, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { sendConnectionRequest, acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
@@ -20,85 +20,70 @@ export default function Network() {
     const [connectionsCount, setConnectionsCount] = useState(0);
     const [loading, setLoading] = useState(true);
     const [processingIds, setProcessingIds] = useState(new Set());
+    const [refreshing, setRefreshing] = useState(false);
+
+    const loadNetwork = React.useCallback(async () => {
+        const uid = user?.uid || user?.id;
+        if (!uid) return;
+        setLoading(true);
+        try {
+            const { data: recData } = await supabase.from('connection_requests').select('*').eq('receiver_id', uid).eq('status', 'PENDING');
+            setPendingRequests(recData || []);
+
+            const { data: sentData } = await supabase.from('connection_requests').select('receiver_id').eq('sender_id', uid).eq('status', 'PENDING');
+            const sentIds = new Set(sentData?.map(r => r.receiver_id) || []);
+            setSentRequestIds(sentIds);
+
+            const { data: connDataRaw } = await supabase.from('connections').select('user1_id, user2_id').or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
+
+            const connIds = new Set();
+            connDataRaw?.forEach(c => {
+                if (c.user1_id === uid) connIds.add(c.user2_id);
+                else connIds.add(c.user1_id);
+            });
+
+            if (connIds.size > 0) {
+                const { data: connUsers } = await supabase.from('users').select('*').in('id', Array.from(connIds).slice(0, 10));
+                setConnections(connUsers || []);
+            }
+            setConnectionsCount(connIds.size);
+
+            let suggestionsQuery = supabase.from('users').select('*').neq('id', uid).limit(50);
+            if (!user?.is_premium && user?.province) {
+                suggestionsQuery = suggestionsQuery.eq('province', user.province);
+            }
+            const { data: suggestionsRaw } = await suggestionsQuery;
+
+            const receivedIds = new Set(recData?.map(r => r.sender_id) || []);
+            const filtered = (suggestionsRaw || []).filter(s => !connIds.has(s.id) && !sentIds.has(s.id) && !receivedIds.has(s.id));
+            
+            filtered.sort((a, b) => {
+                if (a.is_premium === b.is_premium) return 0;
+                return a.is_premium ? -1 : 1;
+            });
+            
+            setSuggestions(filtered.slice(0, 10));
+        } catch (err) {
+            console.error("Error loading network:", err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, [user]);
+
+    const onRefresh = React.useCallback(() => {
+        setRefreshing(true);
+        loadNetwork();
+    }, [loadNetwork]);
 
     useEffect(() => {
         const uid = user?.uid || user?.id;
         if (!uid) return;
 
-        let channel;
-
-        const loadNetwork = async () => {
-            setLoading(true);
-            try {
-                // 1. Fetch Received pending requests
-                const { data: recData } = await supabase
-                    .from('connection_requests')
-                    .select('*')
-                    .eq('receiver_id', uid)
-                    .eq('status', 'PENDING');
-                setPendingRequests(recData || []);
-
-                // 2. Fetch Sent pending requests
-                const { data: sentData } = await supabase
-                    .from('connection_requests')
-                    .select('receiver_id')
-                    .eq('sender_id', uid)
-                    .eq('status', 'PENDING');
-                const sentIds = new Set(sentData?.map(r => r.receiver_id) || []);
-                setSentRequestIds(sentIds);
-
-                // 3. Fetch Connections
-                const { data: connDataRaw } = await supabase
-                    .from('connections')
-                    .select('user1_id, user2_id')
-                    .or(`user1_id.eq.${uid},user2_id.eq.${uid}`);
-
-                const connIds = new Set();
-                connDataRaw?.forEach(c => {
-                    if (c.user1_id === uid) connIds.add(c.user2_id);
-                    else connIds.add(c.user1_id);
-                });
-
-                if (connIds.size > 0) {
-                    const { data: connUsers } = await supabase
-                        .from('users')
-                        .select('*')
-                        .in('id', Array.from(connIds).slice(0, 10));
-                    setConnections(connUsers || []);
-                }
-                setConnectionsCount(connIds.size);
-
-                // 4. Fetch suggestions
-                let suggestionsQuery = supabase.from('users').select('*').neq('id', uid).limit(50);
-                if (!user?.is_premium && user?.province) {
-                    suggestionsQuery = suggestionsQuery.eq('province', user.province);
-                }
-                const { data: suggestionsRaw } = await suggestionsQuery;
-
-                const receivedIds = new Set(recData?.map(r => r.sender_id) || []);
-                const filtered = (suggestionsRaw || []).filter(s =>
-                    !connIds.has(s.id) && !sentIds.has(s.id) && !receivedIds.has(s.id)
-                );
-                
-                // Em Premium, não há limite de província. E se houver premium eles ficam primeiro na lista.
-                filtered.sort((a, b) => {
-                    if (a.is_premium === b.is_premium) return 0;
-                    return a.is_premium ? -1 : 1;
-                });
-                
-                setSuggestions(filtered.slice(0, 10));
-
-            } catch (err) {
-                console.error("Error loading network:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-
         loadNetwork();
 
         // Real-time for requests
-        channel = supabase.channel('network-requests')
+        let channel = supabase.channel('network-requests')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'connection_requests', filter: `receiver_id=eq.${uid}` }, () => loadNetwork())
             .subscribe();
 
@@ -153,7 +138,10 @@ export default function Network() {
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Minha Rede</Text>
             </View>
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView 
+                contentContainerStyle={styles.content}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+            >
 
                 {/* Pedidos Pendentes */}
                 <View style={styles.section}>
@@ -232,7 +220,10 @@ export default function Network() {
                                         )}
                                     </View>
                                     <View style={styles.listInfo}>
-                                        <Text style={styles.listName} numberOfLines={1}>{conn.name}</Text>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Text style={[styles.listName, { marginBottom: 0, flexShrink: 1 }]} numberOfLines={1}>{conn.name}</Text>
+                                            {conn.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                                        </View>
                                         <Text style={styles.listRole} numberOfLines={1}>
                                             {conn.role === 'WORKER' ? conn.profession_category || 'Profissional' : 'Cliente'}
                                         </Text>
@@ -268,7 +259,10 @@ export default function Network() {
                                     )}
                                 </View>
                                 <View style={styles.listInfo}>
-                                    <Text style={styles.listName} numberOfLines={1}>{sugg.name}</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={[styles.listName, { marginBottom: 0, flexShrink: 1 }]} numberOfLines={1}>{sugg.name}</Text>
+                                        {sugg.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                                    </View>
                                     <Text style={styles.listRole} numberOfLines={1}>
                                         {sugg.role === 'WORKER' ? sugg.profession_category || 'Profissional' : 'Cliente'}
                                     </Text>

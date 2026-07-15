@@ -66,12 +66,12 @@ export default function CreatePost() {
             
             // Construir tags com os dados adicionais para não perder informação
             const tags = [];
-            if (category) tags.push(`📌 ${category}`);
+            if (category) tags.push(`${category}`);
             
             const finalWorkType = (workType === 'Outro' ? customWorkType.trim() : workType);
-            if (finalWorkType) tags.push(`🛠️ ${finalWorkType}`);
+            if (finalWorkType) tags.push(`${finalWorkType}`);
             
-            if (availability) tags.push(`⏰ ${availability}`);
+            if (availability) tags.push(`${availability}`);
             
             // Se o utilizador tiver preenchido estes campos extras, adicionamos ao fim do texto
             if (tags.length > 0) {

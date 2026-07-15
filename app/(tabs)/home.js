@@ -373,7 +373,7 @@ export default function Home() {
 
             // [1] Posts - Com Paginação
             let postQuery = supabase.from('posts')
-                .select('*, author:users!inner(name, profile_photo, role, province, city)')
+                .select('*, author:users!inner(name, profile_photo, role, province, city, is_verified, is_premium)')
                 .order('created_at', { ascending: false })
                 .range(from, to);
             
@@ -810,7 +810,7 @@ export default function Home() {
                         </View>
                     )}
                     contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT + 16, paddingBottom: insets.bottom + 100 }]}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} progressViewOffset={!isWeb ? HEADER_HEIGHT + 20 : 0} />}
                     onEndReached={handleLoadMore}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={() => (
