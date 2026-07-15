@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Premium() {
     const { user } = useAuthStore();
     const [subscription, setSubscription] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [showPayment, setShowPayment] = useState(false);
+    const insets = useSafeAreaInsets();
 
     const fetchSubscription = async () => {
         const uid = user?.uid || user?.id;
@@ -51,7 +54,8 @@ export default function Premium() {
             const { refreshUser } = useAuthStore.getState();
             await refreshUser();
             await fetchSubscription();
-            Alert.alert('Sucesso', 'Subscrição Premium ativada!');
+            setShowPayment(false);
+            Alert.alert('Sucesso', 'Subscrição Konekta Plus ativada!');
         } catch (err) {
             Alert.alert('Erro', err.message);
         } finally {
@@ -62,7 +66,7 @@ export default function Premium() {
     const handleCancel = async () => {
         const uid = user?.uid || user?.id;
         if (!uid) return;
-        Alert.alert('Cancelar Premium', 'Tem certeza que deseja cancelar?', [
+        Alert.alert('Cancelar Plano', 'Tem certeza que deseja cancelar o Konekta Plus?', [
             { text: 'Não', style: 'cancel' },
             {
                 text: 'Sim, cancelar',
@@ -83,103 +87,164 @@ export default function Premium() {
         ]);
     };
 
-    const isPremium = subscription?.plan === 'PREMIUM';
+    const isPremium = subscription?.plan === 'PREMIUM' || user?.is_premium;
+
+    const renderFeature = (text, included, premiumOnly = false) => (
+        <View style={styles.featureRow}>
+            <Ionicons 
+                name={included ? "checkmark-circle" : "close-circle"} 
+                size={22} 
+                color={included ? (premiumOnly ? Colors.premium : Colors.success) : Colors.border} 
+            />
+            <Text style={[styles.featureText, !included && styles.featureTextDisabled, premiumOnly && styles.featureTextPremium]}>
+                {text}
+            </Text>
+        </View>
+    );
 
     return (
-        <View style={styles.container}>
-            <View style={styles.card}>
-                <View style={styles.crown}>
-                    <Ionicons name="trophy" size={32} color={Colors.premium} />
+        <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}>
+            
+            <View style={styles.header}>
+                <View style={styles.crownContainer}>
+                    <Ionicons name="diamond" size={36} color={Colors.white} />
                 </View>
-                <Text style={styles.title}>Konekta Premium</Text>
-                <Text style={styles.subtitle}>
-                    Destaque o seu perfil e tenha acesso a funcionalidades exclusivas
-                </Text>
+                <Text style={styles.mainTitle}>Escolha o seu plano</Text>
+                <Text style={styles.mainSubtitle}>Melhore a sua experiência e alcance mais clientes com o Konekta Plus.</Text>
+            </View>
 
-                <View style={styles.features}>
-                    <View style={styles.feature}>
-                        <Ionicons name="star" size={20} color={Colors.premium} style={styles.featureIcon} />
-                        <Text style={styles.featureText}>Perfil destacado nas pesquisas</Text>
+            {/* PLANO FREE */}
+            <View style={styles.cardsContainer}>
+                <View style={[styles.planCard, isPremium ? styles.planCardInactive : styles.planCardActive]}>
+                <View style={styles.planHeader}>
+                    <Text style={styles.planTitle}>Konekta Free</Text>
+                    {!isPremium && <View style={styles.currentBadge}><Text style={styles.currentBadgeText}>Plano Atual</Text></View>}
+                </View>
+                <Text style={styles.planPrice}>0 MT<Text style={styles.planPricePeriod}>/mês</Text></Text>
+                <Text style={styles.planDesc}>O essencial para começar a encontrar oportunidades na sua cidade.</Text>
+                
+                <View style={styles.featuresList}>
+                    {renderFeature("Perfil profissional básico", true)}
+                    {renderFeature("Acesso a vagas da sua cidade", true)}
+                    {renderFeature("Limite de 3 vagas/mês", true)}
+                    {renderFeature("Destaque nas pesquisas", false)}
+                    {renderFeature("Acesso a vagas de todo o país", false)}
+                    {renderFeature("Selo azul de Conta Oficial", false)}
+                </View>
+            </View>
+
+            {/* PLANO PLUS */}
+            <View style={[styles.planCard, styles.premiumCard, isPremium && styles.planCardActive]}>
+                <View style={styles.planHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekta Plus</Text>
+                        <MaterialIcons name="verified" size={20} color={Colors.white} />
                     </View>
-                    <View style={styles.feature}>
-                        <Ionicons name="bar-chart" size={20} color={Colors.info} style={styles.featureIcon} />
-                        <Text style={styles.featureText}>Estatísticas do perfil</Text>
-                    </View>
-                    <View style={styles.feature}>
-                        <Ionicons name="notifications" size={20} color={Colors.warning} style={styles.featureIcon} />
-                        <Text style={styles.featureText}>Alertas de vagas prioritários</Text>
-                    </View>
-                    <View style={styles.feature}>
-                        <Ionicons name="checkmark-circle" size={20} color={Colors.primary} style={styles.featureIcon} />
-                        <Text style={styles.featureText}>Selo Premium no perfil</Text>
-                    </View>
-                    <View style={styles.feature}>
-                        <Ionicons name="chatbubbles" size={20} color={Colors.primary} style={styles.featureIcon} />
-                        <Text style={styles.featureText}>Mensagens ilimitadas</Text>
-                    </View>
+                    {isPremium && <View style={[styles.currentBadge, { backgroundColor: Colors.white }]}><Text style={[styles.currentBadgeText, { color: Colors.premium }]}>Plano Atual</Text></View>}
+                </View>
+                <Text style={[styles.planPrice, { color: Colors.white }]}>500 MT<Text style={[styles.planPricePeriod, { color: 'rgba(255,255,255,0.7)' }]}>/mês</Text></Text>
+                <Text style={[styles.planDesc, { color: 'rgba(255,255,255,0.9)' }]}>Desbloqueie todo o potencial da plataforma sem limites geográficos.</Text>
+                
+                <View style={styles.featuresList}>
+                    {renderFeature("Tudo do plano Free", true, true)}
+                    {renderFeature("Acesso a vagas de TODO O PAÍS", true, true)}
+                    {renderFeature("Publicações e Vagas ILIMITADAS", true, true)}
+                    {renderFeature("Destaque absoluto nas pesquisas", true, true)}
+                    {renderFeature("Selo azul de Conta Oficial", true, true)}
+                    {renderFeature("Mensagens diretas ilimitadas", true, true)}
                 </View>
 
                 {isPremium ? (
-                    <View style={styles.activePlan}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
-                            <Text style={styles.activePlanText}>Plano Premium Ativo</Text>
-                        </View>
+                    <View style={styles.activePlanContainer}>
                         <Text style={styles.expiryText}>
-                            Expira em: {subscription.expires_at ? new Date(subscription.expires_at).toLocaleDateString('pt-MZ') : 'N/A'}
+                            Renova em: {subscription?.expires_at ? new Date(subscription.expires_at).toLocaleDateString('pt-MZ') : 'N/A'}
                         </Text>
                         <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                            <Text style={styles.cancelText}>Cancelar plano</Text>
+                            <Text style={styles.cancelText}>Cancelar Plano Plus</Text>
                         </TouchableOpacity>
                     </View>
                 ) : (
-                    <View style={styles.paymentOptions}>
-                        <Text style={styles.priceText}>500 MT/mês</Text>
-
-                        <TouchableOpacity
-                            style={[styles.payButton, styles.mpesaButton]}
-                            onPress={() => handleSubscribe('MPESA')}
-                            disabled={loading}
-                            activeOpacity={0.8}
-                        >
-                            {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.payButtonText}>Pagar com M-Pesa</Text>}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.payButton, styles.emolaButton]}
-                            onPress={() => handleSubscribe('EMOLA')}
-                            disabled={loading}
-                            activeOpacity={0.8}
-                        >
-                            {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.payButtonText}>Pagar com e-Mola</Text>}
-                        </TouchableOpacity>
+                    <View style={styles.subscribeContainer}>
+                        {!showPayment ? (
+                            <TouchableOpacity style={styles.btnStart} onPress={() => setShowPayment(true)}>
+                                <Text style={styles.btnStartText}>Começar Konekta Plus</Text>
+                                <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.paymentMethods}>
+                                <Text style={styles.paymentTitle}>Escolha como pagar:</Text>
+                                <TouchableOpacity
+                                    style={[styles.payButton, styles.mpesaButton]}
+                                    onPress={() => handleSubscribe('MPESA')}
+                                    disabled={loading}
+                                >
+                                    {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.payButtonText}>M-Pesa</Text>}
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.payButton, styles.emolaButton]}
+                                    onPress={() => handleSubscribe('EMOLA')}
+                                    disabled={loading}
+                                >
+                                    {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.payButtonText}>e-Mola</Text>}
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.btnBack} onPress={() => setShowPayment(false)}>
+                                    <Text style={styles.btnBackText}>Voltar</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </View>
                 )}
+                </View>
             </View>
-        </View>
+            
+        </ScrollView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background, padding: Spacing.md, ...(Platform.OS === 'web' ? { alignItems: 'center' } : {}) },
-    card: { backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.lg, alignItems: 'center', ...(Platform.OS === 'web' ? { maxWidth: 500, width: '100%' } : {}) },
-    crown: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.premium + '20', justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md },
+    container: { flex: 1, backgroundColor: Colors.background },
+    content: { padding: Spacing.md, ...(Platform.OS === 'web' ? { maxWidth: 900, alignSelf: 'center', width: '100%' } : {}) },
+    header: { alignItems: 'center', paddingVertical: Spacing.xl },
+    crownContainer: { width: 72, height: 72, borderRadius: 36, backgroundColor: Colors.premium, justifyContent: 'center', alignItems: 'center', marginBottom: Spacing.md, shadowColor: Colors.premium, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 10 },
+    mainTitle: { fontSize: 26, fontWeight: '800', color: Colors.text, marginBottom: 8, textAlign: 'center' },
+    mainSubtitle: { fontSize: Fonts.sizes.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: Spacing.lg },
+    
+    cardsContainer: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.lg, width: '100%', alignItems: 'stretch' },
+    planCard: { flex: Platform.OS === 'web' ? 1 : undefined, backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.borderLight, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+    planCardActive: { borderColor: Colors.primary, borderWidth: 2 },
+    planCardInactive: { opacity: 0.8 },
+    premiumCard: { backgroundColor: Colors.primary, borderColor: Colors.primary, shadowColor: Colors.primary, shadowOpacity: 0.2 },
+    
+    planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+    planTitle: { fontSize: 22, fontWeight: '800', color: Colors.text },
+    currentBadge: { backgroundColor: Colors.primaryBg, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+    currentBadgeText: { color: Colors.primary, fontSize: Fonts.sizes.xs, fontWeight: '700' },
+    
+    planPrice: { fontSize: 36, fontWeight: '900', color: Colors.text, marginBottom: Spacing.xs },
+    planPricePeriod: { fontSize: Fonts.sizes.md, fontWeight: '600', color: Colors.textSecondary },
+    planDesc: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginBottom: Spacing.xl, lineHeight: 20 },
+    
+    featuresList: { gap: 14 },
+    featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    featureText: { fontSize: Fonts.sizes.md, color: Colors.text, flex: 1, fontWeight: '500' },
+    featureTextDisabled: { color: Colors.textLight, textDecorationLine: 'line-through' },
+    featureTextPremium: { color: Colors.white, fontWeight: '700' },
 
-    title: { fontSize: Fonts.sizes.xl, fontWeight: '800', color: Colors.text, marginBottom: 4 },
-    subtitle: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: Spacing.lg },
-    features: { width: '100%', gap: 12, marginBottom: Spacing.lg },
-    feature: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    featureIcon: { width: 28, textAlign: 'center' },
-    featureText: { fontSize: Fonts.sizes.md, color: Colors.text },
-    activePlan: { width: '100%', alignItems: 'center' },
-    activePlanText: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.primary, marginBottom: 4 },
-    expiryText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginBottom: Spacing.md },
-    cancelButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 10, backgroundColor: Colors.error + '12' },
-    cancelText: { color: Colors.error, fontWeight: '600', fontSize: Fonts.sizes.sm },
-    paymentOptions: { width: '100%', alignItems: 'center', gap: 12 },
-    priceText: { fontSize: Fonts.sizes.xxl, fontWeight: '800', color: Colors.primary, marginBottom: 8 },
-    payButton: { width: '100%', borderRadius: 14, paddingVertical: 16, alignItems: 'center', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+    activePlanContainer: { marginTop: Spacing.xl, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)', paddingTop: Spacing.lg },
+    expiryText: { color: 'rgba(255,255,255,0.9)', fontSize: Fonts.sizes.sm, textAlign: 'center', marginBottom: Spacing.md },
+    cancelButton: { backgroundColor: 'rgba(255,255,255,0.15)', padding: 14, borderRadius: 12, alignItems: 'center' },
+    cancelText: { color: Colors.white, fontWeight: '600', fontSize: Fonts.sizes.sm },
+
+    subscribeContainer: { marginTop: Spacing.xl },
+    btnStart: { backgroundColor: Colors.white, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, borderRadius: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
+    btnStartText: { color: Colors.primary, fontSize: 16, fontWeight: '800' },
+
+    paymentMethods: { backgroundColor: 'rgba(255,255,255,0.1)', padding: Spacing.md, borderRadius: 16 },
+    paymentTitle: { color: Colors.white, fontSize: Fonts.sizes.sm, fontWeight: '600', marginBottom: Spacing.md, textAlign: 'center' },
+    payButton: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginBottom: Spacing.sm },
     mpesaButton: { backgroundColor: '#E60000' },
     emolaButton: { backgroundColor: '#FF6600' },
-    payButtonText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: '700' },
+    payButtonText: { color: Colors.white, fontSize: 15, fontWeight: '700' },
+    btnBack: { padding: Spacing.sm, alignItems: 'center', marginTop: 4 },
+    btnBackText: { color: 'rgba(255,255,255,0.8)', fontSize: Fonts.sizes.sm, fontWeight: '600' }
 });

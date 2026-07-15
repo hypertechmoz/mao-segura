@@ -69,20 +69,24 @@ export default function Network() {
                 setConnectionsCount(connIds.size);
 
                 // 4. Fetch suggestions
-                if (user.province) {
-                    const { data: suggestionsRaw } = await supabase
-                        .from('users')
-                        .select('*')
-                        .eq('province', user.province)
-                        .neq('id', uid)
-                        .limit(50);
-
-                    const receivedIds = new Set(recData?.map(r => r.sender_id) || []);
-                    const filtered = (suggestionsRaw || []).filter(s =>
-                        !connIds.has(s.id) && !sentIds.has(s.id) && !receivedIds.has(s.id)
-                    );
-                    setSuggestions(filtered.slice(0, 10));
+                let suggestionsQuery = supabase.from('users').select('*').neq('id', uid).limit(50);
+                if (!user?.is_premium && user?.province) {
+                    suggestionsQuery = suggestionsQuery.eq('province', user.province);
                 }
+                const { data: suggestionsRaw } = await suggestionsQuery;
+
+                const receivedIds = new Set(recData?.map(r => r.sender_id) || []);
+                const filtered = (suggestionsRaw || []).filter(s =>
+                    !connIds.has(s.id) && !sentIds.has(s.id) && !receivedIds.has(s.id)
+                );
+                
+                // Em Premium, não há limite de província. E se houver premium eles ficam primeiro na lista.
+                filtered.sort((a, b) => {
+                    if (a.is_premium === b.is_premium) return 0;
+                    return a.is_premium ? -1 : 1;
+                });
+                
+                setSuggestions(filtered.slice(0, 10));
 
             } catch (err) {
                 console.error("Error loading network:", err);

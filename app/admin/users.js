@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, TextInput, ScrollView, Modal, TouchableWithoutFeedback } from 'react-native';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -10,6 +10,13 @@ export default function AdminUsers() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState(null); // null = Dashboard, 'ALL' | 'WORKER' | 'EMPLOYER' = List
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalConfig, setModalConfig] = useState({ title: '', message: '', actionText: '', isDestructive: false, onConfirm: null, isAlert: false });
+
+  const showModal = (title, message, actionText, isDestructive, onConfirm, isAlert = false) => {
+    setModalConfig({ title, message, actionText, isDestructive, onConfirm, isAlert });
+    setModalVisible(true);
+  };
 
   const loadUsers = async () => {
     try {
@@ -51,33 +58,52 @@ export default function AdminUsers() {
     });
   }, [users, activeTab, searchQuery]);
 
+  const executeBan = async (id, currentStatus) => {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: !currentStatus })
+        .eq('id', id);
+      if (error) throw error;
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: !currentStatus } : u));
+    } catch (err) {
+      showModal('Erro', err.message, 'OK', true, null, true);
+    }
+  };
+
   const handleBan = async (id, currentStatus) => {
-    Alert.alert(
+    const actionText = currentStatus ? 'banir' : 'desbanir';
+    showModal(
       currentStatus ? 'Banir Utilizador' : 'Desbanir Utilizador',
-      `Tem a certeza que deseja ${currentStatus ? 'banir' : 'desbanir'} este utilizador?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Confirmar', 
-          onPress: async () => {
-            try {
-              const { error } = await supabase
-                .from('users')
-                .update({ is_active: !currentStatus })
-                .eq('id', id);
-              
-              if (error) throw error;
-              setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: !currentStatus } : u));
-            } catch (err) {
-              Alert.alert('Erro', err.message);
-            }
-          }
-        }
-      ]
+      `Tem a certeza que deseja ${actionText} este utilizador?`,
+      'Confirmar',
+      currentStatus,
+      () => executeBan(id, currentStatus)
     );
   };
 
-  const handleVerify = async (id) => {
+  const executeDelete = async (id) => {
+    try {
+      const { error } = await supabase.rpc('delete_user_and_data', { user_id_to_delete: id });
+      if (error) throw error;
+      setUsers(prev => prev.filter(u => u.id !== id));
+      showModal('Sucesso', 'Utilizador apagado com sucesso.', 'OK', false, null, true);
+    } catch (err) {
+      showModal('Erro ao apagar', err.message || 'Verifique se executou o script SQL no Supabase.', 'OK', true, null, true);
+    }
+  };
+
+  const handleDelete = async (id, userName) => {
+    showModal(
+      'Apagar Utilizador',
+      `Tem a certeza absoluta que deseja apagar o utilizador ${userName}? Esta ação irá apagar todos os dados associados e NÃO pode ser desfeita!`,
+      'Apagar',
+      true,
+      () => executeDelete(id)
+    );
+  };
+
+  const handleVerify = async (id, role) => {
     try {
       const { error: userError } = await supabase
         .from('users')
@@ -86,16 +112,35 @@ export default function AdminUsers() {
       
       if (userError) throw userError;
 
-      // Also update worker profile if it exists
-      await supabase
-        .from('worker_profiles')
-        .update({ verification_status: 'APPROVED' })
-        .eq('id', id);
+      // Update specific profile if applicable
+      if (role === 'WORKER') {
+        await supabase.from('worker_profiles').update({ verification_status: 'APPROVED' }).eq('user_id', id);
+      } else if (role === 'EMPLOYER') {
+        await supabase.from('employer_profiles').update({ verification_status: 'APPROVED' }).eq('user_id', id);
+      }
 
       setUsers(prev => prev.map(u => u.id === id ? { ...u, is_verified: true } : u));
-      Alert.alert('Sucesso', 'Utilizador verificado com sucesso.');
+      
+      showModal('Sucesso', 'Utilizador verificado com sucesso.', 'OK', false, null, true);
     } catch (err) {
-      Alert.alert('Erro', err.message);
+      showModal('Erro', err.message, 'OK', true, null, true);
+    }
+  };
+
+  const handleTogglePremium = async (id, currentStatus) => {
+    try {
+      const { error: userError } = await supabase
+        .from('users')
+        .update({ is_premium: !currentStatus })
+        .eq('id', id);
+      
+      if (userError) throw userError;
+
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, is_premium: !currentStatus } : u));
+      
+      showModal('Sucesso', !currentStatus ? 'Konekta Plus ativado com sucesso.' : 'Konekta Plus removido com sucesso.', 'OK', false, null, true);
+    } catch (err) {
+      showModal('Erro', err.message, 'OK', true, null, true);
     }
   };
 
@@ -210,7 +255,8 @@ export default function AdminUsers() {
               <View style={styles.info}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name}>{item.name}</Text>
-                  {item.is_verified && <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />}
+                  {item.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
+                  {item.is_verified && <MaterialIcons name="verified" size={16} color="#1D9BF0" style={{ marginLeft: 4 }} />}
                 </View>
                 <Text style={styles.meta}>{item.phone || 'Sem telefone'}</Text>
               </View>
@@ -239,12 +285,21 @@ export default function AdminUsers() {
             </View>
 
             <View style={styles.actions}>
-              {!item.is_verified && item.role === 'WORKER' && (
-                <TouchableOpacity style={[styles.actionBtn, styles.btnVerify]} onPress={() => handleVerify(item.id)}>
-                  <Ionicons name="checkmark" size={16} color={Colors.white} />
-                  <Text style={styles.btnTextWhite}>Verificar</Text>
+              {!item.is_verified && (
+                <TouchableOpacity style={[styles.actionBtn, styles.btnVerify]} onPress={() => handleVerify(item.id, item.role)}>
+                  <MaterialIcons name="verified" size={14} color={Colors.white} />
+                  <Text style={styles.btnTextWhite}>Verificar (Selo)</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity 
+                style={[styles.actionBtn, { backgroundColor: item.is_premium ? '#f44336' : '#FFD700' }]} 
+                onPress={() => handleTogglePremium(item.id, item.is_premium)}
+              >
+                <Ionicons name={item.is_premium ? "star-outline" : "star"} size={14} color={item.is_premium ? Colors.white : '#333'} />
+                <Text style={[styles.btnTextWhite, { color: item.is_premium ? Colors.white : '#333' }]}>
+                  {item.is_premium ? 'Remover Plus' : 'Dar Plus'}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionBtn, item.is_active !== false ? styles.btnBan : styles.btnUnban]}
                 onPress={() => handleBan(item.id, item.is_active !== false)}
@@ -254,10 +309,67 @@ export default function AdminUsers() {
                   {item.is_active !== false ? 'Banir' : 'Reativar'}
                 </Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.btnDelete]}
+                onPress={() => handleDelete(item.id, item.name)}
+              >
+                <Ionicons name="trash" size={14} color={Colors.error} />
+                <Text style={[styles.btnText, { color: Colors.error }]}>
+                  Apagar
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
       />
+
+      {/* Modal Customizado de Confirmação */}
+      <Modal
+        visible={modalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Ionicons 
+                    name={modalConfig.isDestructive ? "warning" : "information-circle"} 
+                    size={28} 
+                    color={modalConfig.isDestructive ? Colors.error : Colors.primary} 
+                  />
+                  <Text style={styles.modalTitle}>{modalConfig.title}</Text>
+                </View>
+                
+                <Text style={styles.modalMessage}>{modalConfig.message}</Text>
+                
+                <View style={styles.modalActions}>
+                  {!modalConfig.isAlert && (
+                    <TouchableOpacity 
+                      style={[styles.modalBtn, styles.modalBtnCancel]} 
+                      onPress={() => setModalVisible(false)}
+                    >
+                      <Text style={styles.modalBtnCancelText}>Cancelar</Text>
+                    </TouchableOpacity>
+                  )}
+                  
+                  <TouchableOpacity 
+                    style={[styles.modalBtn, { backgroundColor: modalConfig.isDestructive && !modalConfig.isAlert ? Colors.error : Colors.primary }]} 
+                    onPress={() => {
+                      setModalVisible(false);
+                      if (modalConfig.onConfirm) modalConfig.onConfirm();
+                    }}
+                  >
+                    <Text style={styles.modalBtnConfirmText}>{modalConfig.actionText}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -327,8 +439,21 @@ const styles = StyleSheet.create({
   btnTextWhite: { color: Colors.white, fontSize: 13, fontWeight: '800' },
   btnBan: { backgroundColor: Colors.error + '15' },
   btnUnban: { backgroundColor: Colors.info + '15' },
+  btnDelete: { backgroundColor: Colors.error + '15' },
   btnText: { fontSize: 13, fontWeight: '800' },
 
   emptyContainer: { alignItems: 'center', marginTop: 100 },
-  emptyText: { color: Colors.textLight, marginTop: 12, fontSize: Fonts.sizes.md, fontWeight: '600' }
+  emptyText: { color: Colors.textLight, marginTop: 12, fontSize: Fonts.sizes.md, fontWeight: '600' },
+  
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: Colors.white, borderRadius: 24, padding: 24, width: '100%', maxWidth: 400, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, elevation: 10 },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.text },
+  modalMessage: { fontSize: 15, color: Colors.textSecondary, lineHeight: 22, marginBottom: 24 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancel: { backgroundColor: Colors.borderLight },
+  modalBtnCancelText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '700' },
+  modalBtnConfirmText: { color: Colors.white, fontSize: 15, fontWeight: '800' }
 });

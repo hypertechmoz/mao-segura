@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { Colors, Spacing, Fonts } from '../constants';
 import { formatTime } from '../utils/profileUtils';
 
@@ -26,7 +26,8 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                     <View style={{ flex: 1, justifyContent: 'center' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={styles.employerName}>{job.employer?.name || 'Cliente'}</Text>
-                            {job.employer?.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 4 }} />}
+                            {job.employer?.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
+                            {job.employer?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
                             <Text style={{ color: Colors.textLight, marginHorizontal: 4 }}>•</Text>
                             <Text style={styles.cardTime}>{formatTime(job.created_at)}</Text>
                         </View>

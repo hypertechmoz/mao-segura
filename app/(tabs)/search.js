@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES, PROVINCES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
 import PostCard from '../../components/PostCard';
 
 export default function Search() {
@@ -14,6 +15,7 @@ export default function Search() {
     const [results, setResults] = useState([]);
     const [searched, setSearched] = useState(false);
     const [loading, setLoading] = useState(false);
+    const { user } = useAuthStore();
 
     useEffect(() => {
         if (q) {
@@ -39,14 +41,20 @@ export default function Search() {
             const table = activeTab === 'VAGAS' ? 'jobs' : 'posts';
 
             if (activeTab === 'VAGAS') {
-                query = supabase.from('jobs').select('*').eq('status', 'ACTIVE');
+                query = supabase.from('jobs').select('*, employer:users!employer_id(*)').eq('status', 'ACTIVE');
+                if (!user?.is_premium && user?.province) {
+                    query = query.eq('province', user.province);
+                }
                 if (isType) {
                     query = query.eq('type', searchTerm);
                 } else if (searchTerm) {
                     query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
                 }
             } else {
-                query = supabase.from('posts').select('*, user:user_id(*)');
+                query = supabase.from('posts').select('*, user:users!inner(*)');
+                if (!user?.is_premium && user?.province) {
+                    query = query.eq('user.province', user.province);
+                }
                 if (searchTerm) {
                     query = query.ilike('content', `%${searchTerm}%`);
                 }

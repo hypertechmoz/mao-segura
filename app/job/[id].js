@@ -4,7 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
 
@@ -313,7 +313,8 @@ export default function JobDetail() {
                     <View style={styles.empInfo}>
                         <View style={styles.empNameRow}>
                             <Text style={styles.empName}>{job.employer?.name}</Text>
-                            {job.employer?.isVerified && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}><Ionicons name="checkmark-circle" size={14} color={Colors.primary} /><Text style={styles.verified}>Verificado</Text></View>}
+                            {job.employer?.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
+                            {job.employer?.isVerified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
                         </View>
                         <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
                         <Text style={styles.empLocation}> {job.employer?.city}, {job.employer?.bairro || job.employer?.province}</Text>

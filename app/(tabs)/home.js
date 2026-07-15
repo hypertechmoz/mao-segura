@@ -354,7 +354,7 @@ export default function Home() {
                     .select('*, employer:users!employer_id(id, name, city, province, is_verified)')
                     .eq('status', 'ACTIVE');
 
-                if (user?.province) {
+                if (!user?.is_premium && user?.province) {
                     jobQuery = jobQuery.eq('province', user.province);
                 }
 
@@ -364,7 +364,7 @@ export default function Home() {
                     .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
                     .eq('role', 'WORKER');
 
-                if (user?.province) {
+                if (!user?.is_premium && user?.province) {
                     workerQuery = workerQuery.eq('province', user.province);
                 }
 
@@ -372,12 +372,17 @@ export default function Home() {
             }
 
             // [1] Posts - Com Paginação
-            queries.push(
-                supabase.from('posts')
-                    .select('*, author:users!user_id(name, profile_photo, role, province)')
-                    .order('created_at', { ascending: false })
-                    .range(from, to)
-            );
+            let postQuery = supabase.from('posts')
+                .select('*, author:users!inner(name, profile_photo, role, province, city)')
+                .order('created_at', { ascending: false })
+                .range(from, to);
+            
+            // Restrição Freemium: Apenas ver posts da mesma província
+            if (!user?.is_premium && user?.province) {
+                postQuery = postQuery.eq('author.province', user.province);
+            }
+            
+            queries.push(postQuery);
 
             // Pedidos específicos do utilizador (Apenas no carregamento inicial)
             if (user && uid && !isLoadMore) {
@@ -648,7 +653,13 @@ export default function Home() {
                                     ) : (
                                         (feedTab === 'POSTS' ? mixedFeed : jobs).map(item => {
                                             if ('user_id' in item) {
-                                                return <PostCard key={`post-${item.id}`} post={item} connectionStatusProp={actionedIds.get(item.user_id)} />;
+                                                return <PostCard 
+                                                    key={`post-${item.id}`} 
+                                                    post={item} 
+                                                    connectionStatusProp={actionedIds.get(item.user_id)} 
+                                                    onDelete={(id) => setPosts(prev => prev.filter(p => p.id !== id))}
+                                                    onUpdate={(id, content) => setPosts(prev => prev.map(p => p.id === id ? { ...p, content } : p))}
+                                                />;
                                             } else {
                                                 return (!user || user.role === 'WORKER')
                                                     ? <JobCard key={`job-${item.id}`} job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />
@@ -774,7 +785,13 @@ export default function Home() {
                     renderItem={({ item }) => {
                         if (feedTab === 'POSTS') {
                             if ('user_id' in item) {
-                                return <PostCard key={`post-${item.id}`} post={item} connectionStatusProp={actionedIds.get(item.user_id)} />;
+                                return <PostCard 
+                                    key={`post-${item.id}`} 
+                                    post={item} 
+                                    connectionStatusProp={actionedIds.get(item.user_id)}
+                                    onDelete={(id) => setPosts(prev => prev.filter(p => p.id !== id))}
+                                    onUpdate={(id, content) => setPosts(prev => prev.map(p => p.id === id ? { ...p, content } : p))}
+                                />;
                             } else {
                                 return (!user || user.role === 'WORKER')
                                     ? <JobCard job={item} onPress={handleContact} userLocation={user} isApplied={actionedIds.get(item.id)} />

@@ -4,13 +4,15 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { calculateCompleteness } from '../../utils/profileUtils';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { sendPushNotification } from '../../services/notificationService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import PostCard from '../../components/PostCard';
+import JobCard from '../../components/JobCard';
 
 export default function Profile() {
     const router = useRouter();
@@ -26,6 +28,14 @@ export default function Profile() {
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [processing, setProcessing] = useState(false);
+    
+    // Tab and Activity State
+    const [activeTab, setActiveTab] = useState('SOBRE');
+    const [userPosts, setUserPosts] = useState([]);
+    const [loadingPosts, setLoadingPosts] = useState(false);
+    const [userHistory, setUserHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    
     const insets = useSafeAreaInsets();
     const isWeb = Platform.OS === 'web';
 
@@ -52,7 +62,10 @@ export default function Profile() {
 
     const load = useCallback(async () => {
         const targetId = id || user?.uid || user?.id;
-        if (!targetId) return;
+        if (!targetId) {
+            setLoading(false);
+            return;
+        }
 
         try {
             setLoading(true);
@@ -125,6 +138,62 @@ export default function Profile() {
         }
     }, [user?.id, id]);
 
+    const loadPosts = useCallback(async () => {
+        const targetId = id || user?.uid || user?.id;
+        if (!targetId) return;
+        setLoadingPosts(true);
+        try {
+            const { data, error } = await supabase
+                .from('posts')
+                .select(`*, author:users!posts_user_id_fkey(name, role, profile_photo, is_verified, is_premium)`)
+                .eq('user_id', targetId)
+                .order('created_at', { ascending: false });
+            if (error) throw error;
+            setUserPosts(data || []);
+        } catch (err) {
+            console.error('Error fetching user posts:', err);
+        } finally {
+            setLoadingPosts(false);
+        }
+    }, [id, user?.uid, user?.id]);
+
+    const loadHistory = useCallback(async () => {
+        const targetId = id || user?.uid || user?.id;
+        if (!targetId || !user) return;
+        setLoadingHistory(true);
+        try {
+            if (user.role === 'WORKER') {
+                const { data, error } = await supabase
+                    .from('applications')
+                    .select(`
+                        id, status, created_at,
+                        job:jobs(*, employer:users!jobs_employer_id_fkey(name, profile_photo, is_verified, is_premium))
+                    `)
+                    .eq('worker_id', targetId)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setUserHistory(data || []);
+            } else {
+                const { data, error } = await supabase
+                    .from('jobs')
+                    .select(`*, employer:users!jobs_employer_id_fkey(name, profile_photo, is_verified, is_premium)`)
+                    .eq('employer_id', targetId)
+                    .order('created_at', { ascending: false });
+                if (error) throw error;
+                setUserHistory(data || []);
+            }
+        } catch (err) {
+            console.error('Error fetching user history:', err);
+        } finally {
+            setLoadingHistory(false);
+        }
+    }, [id, user?.uid, user?.id, user?.role]);
+
+    useEffect(() => {
+        if (activeTab === 'POSTS') loadPosts();
+        if (activeTab === 'HISTORICO') loadHistory();
+    }, [activeTab, loadPosts, loadHistory]);
+
     useFocusEffect(
         useCallback(() => {
             load();
@@ -132,7 +201,13 @@ export default function Profile() {
         }, [load, checkConnection])
     );
 
-    const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
+    const onRefresh = async () => { 
+        setRefreshing(true); 
+        await load(); 
+        if (activeTab === 'POSTS') await loadPosts();
+        if (activeTab === 'HISTORICO') await loadHistory();
+        setRefreshing(false); 
+    };
 
     const handleLogout = () => {
         const performLogout = async () => {
@@ -220,13 +295,13 @@ export default function Profile() {
                             <Text style={styles.avatarText}>{p?.name?.[0] || '?'}</Text>
                         )}
                     </View>
-                    <Text style={styles.name}>{p?.name}</Text>
-                    <View style={styles.badges}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Text style={[styles.name, { marginBottom: 0 }]}>{p?.name}</Text>
                         {p?.is_verified && (
-                            <View style={styles.badge}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Ionicons name="checkmark-circle" size={12} color={Colors.primary} /><Text style={styles.badgeText}>{t('common.verified')}</Text></View>
-                            </View>
+                            <MaterialIcons name="verified" size={24} color={Colors.primary} />
                         )}
+                    </View>
+                    <View style={styles.badges}>
                         {p?.is_premium && (
                             <View style={[styles.badge, styles.premiumBadge]}>
                                 <Text style={[styles.badgeText, styles.premiumText]}>⭐ {t('common.premium')}</Text>
@@ -258,7 +333,34 @@ export default function Profile() {
                     </View>
                 </View>
 
-                {completeness < 100 && isOwnProfile && (
+                {/* Tabs UI */}
+                <View style={styles.tabsContainer}>
+                    <TouchableOpacity 
+                        style={[styles.tabButton, activeTab === 'SOBRE' && styles.tabButtonActive]} 
+                        onPress={() => setActiveTab('SOBRE')}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'SOBRE' && styles.tabTextActive]}>Sobre</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                        style={[styles.tabButton, activeTab === 'POSTS' && styles.tabButtonActive]} 
+                        onPress={() => setActiveTab('POSTS')}
+                    >
+                        <Text style={[styles.tabText, activeTab === 'POSTS' && styles.tabTextActive]}>Posts</Text>
+                    </TouchableOpacity>
+                    {isOwnProfile && (
+                        <TouchableOpacity 
+                            style={[styles.tabButton, activeTab === 'HISTORICO' && styles.tabButtonActive]} 
+                            onPress={() => setActiveTab('HISTORICO')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'HISTORICO' && styles.tabTextActive]}>Histórico</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Tab Content: SOBRE */}
+                {activeTab === 'SOBRE' && (
+                    <View style={{ marginTop: Spacing.md }}>
+                        {completeness < 100 && isOwnProfile && (
                     <TouchableOpacity
                         style={styles.completeBanner}
                         onPress={() => router.push('/settings/edit-profile')}
@@ -478,6 +580,84 @@ export default function Profile() {
                             <Ionicons name="chatbubble-ellipses" size={22} color={Colors.white} style={{ marginRight: 8 }} />
                             <Text style={styles.chatButtonText}>Contactar {p?.role === 'WORKER' ? 'Profissional' : 'Cliente'}</Text>
                         </TouchableOpacity>
+                    </View>
+                )}
+                </View>
+                )}
+
+                {/* Tab Content: POSTS */}
+                {activeTab === 'POSTS' && (
+                    <View style={{ marginTop: Spacing.md, paddingHorizontal: Spacing.md }}>
+                        {loadingPosts ? (
+                            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+                        ) : userPosts.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="chatbubble-ellipses-outline" size={48} color={Colors.border} />
+                                <Text style={styles.emptyText}>Sem publicações ainda.</Text>
+                            </View>
+                        ) : (
+                            userPosts.map(post => (
+                                <PostCard 
+                                    key={post.id} 
+                                    post={post} 
+                                    connectionStatusProp={isConnected ? 'CONNECTED' : (hasPendingRequest ? 'PENDING' : null)}
+                                    onDelete={(id) => setUserPosts(prev => prev.filter(p => p.id !== id))}
+                                    onUpdate={(id, content) => setUserPosts(prev => prev.map(p => p.id === id ? { ...p, content } : p))}
+                                />
+                            ))
+                        )}
+                    </View>
+                )}
+
+                {/* Tab Content: HISTORICO */}
+                {activeTab === 'HISTORICO' && isOwnProfile && (
+                    <View style={{ marginTop: Spacing.md, paddingHorizontal: Spacing.md }}>
+                        {loadingHistory ? (
+                            <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 40 }} />
+                        ) : userHistory.length === 0 ? (
+                            <View style={styles.emptyContainer}>
+                                <Ionicons name="time-outline" size={48} color={Colors.border} />
+                                <Text style={styles.emptyText}>Nenhum histórico disponível.</Text>
+                            </View>
+                        ) : (
+                            p?.role === 'WORKER' ? (
+                                userHistory.map(app => (
+                                    <View key={app.id} style={styles.historyCard}>
+                                        <View style={[styles.historyStatusBadge, 
+                                            app.status === 'HIRED' ? { backgroundColor: Colors.success + '20' } : 
+                                            app.status === 'REJECTED' ? { backgroundColor: Colors.error + '20' } : 
+                                            { backgroundColor: Colors.warning + '20' }
+                                        ]}>
+                                            <Text style={[styles.historyStatusText,
+                                                app.status === 'HIRED' ? { color: Colors.success } : 
+                                                app.status === 'REJECTED' ? { color: Colors.error } : 
+                                                { color: Colors.warning }
+                                            ]}>
+                                                {app.status === 'HIRED' ? 'Contratado / Concluído' : app.status === 'REJECTED' ? 'Rejeitado' : 'Pendente'}
+                                            </Text>
+                                        </View>
+                                        {app.job && <JobCard job={app.job} hideActions={true} />}
+                                    </View>
+                                ))
+                            ) : (
+                                userHistory.map(job => (
+                                    <View key={job.id} style={styles.historyCard}>
+                                        <View style={[styles.historyStatusBadge, 
+                                            job.status === 'ACTIVE' ? { backgroundColor: Colors.success + '20' } : 
+                                            { backgroundColor: Colors.borderLight }
+                                        ]}>
+                                            <Text style={[styles.historyStatusText,
+                                                job.status === 'ACTIVE' ? { color: Colors.success } : 
+                                                { color: Colors.textSecondary }
+                                            ]}>
+                                                {job.status === 'ACTIVE' ? 'Vaga Ativa' : 'Encerrada'}
+                                            </Text>
+                                        </View>
+                                        <JobCard job={job} hideActions={true} />
+                                    </View>
+                                ))
+                            )
+                        )}
                     </View>
                 )}
             </Animated.ScrollView>

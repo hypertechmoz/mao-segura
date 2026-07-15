@@ -5,7 +5,7 @@ import { supabase } from '../../services/supabase';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
@@ -173,7 +173,7 @@ export default function Messages() {
                         <View style={styles.info}>
                             <View style={styles.nameRow}>
                                 <Text style={[styles.name, item.unread > 0 && { fontWeight: '800' }]}>{item.otherUser?.name}</Text>
-                                {item.otherUser?.is_verified && <Ionicons name="checkmark-circle" size={14} color={Colors.primary} style={{ marginLeft: 4 }} />}
+                                {item.otherUser?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
                             </View>
                             <Text style={[styles.lastMessage, item.unread > 0 && { color: Colors.text, fontWeight: '600' }]} numberOfLines={1}>
                                 {item.lastMessage || 'Sem mensagens'}

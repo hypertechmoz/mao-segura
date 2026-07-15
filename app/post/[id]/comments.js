@@ -27,7 +27,7 @@ export default function Comments() {
             // Fetch original post
             const { data: postData } = await supabase
                 .from('posts')
-                .select('*, user:user_id(*)')
+                .select('*, author:user_id(*)')
                 .eq('id', id)
                 .single();
             if (postData) setPost(postData);
@@ -198,7 +198,7 @@ export default function Comments() {
     return (
         <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/home')} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Comentários</Text>
@@ -216,13 +216,23 @@ export default function Comments() {
                     contentContainerStyle={styles.list}
                     ListHeaderComponent={() => (
                         <View style={{ marginBottom: Spacing.md }}>
-                            {post && <PostCard post={post} />}
+                            {post && <PostCard 
+                                post={post} 
+                                onDelete={() => {
+                                    if (router.canGoBack()) router.back();
+                                    else router.replace('/(tabs)/home');
+                                }}
+                            />}
                             <View style={styles.divider} />
                         </View>
                     )}
                     renderItem={renderComment}
                     ListEmptyComponent={() => (
-                        <Text style={styles.emptyText}>Sem comentários ainda. Seja o primeiro a comentar!</Text>
+                        <View style={{ paddingVertical: 60, alignItems: 'center', justifyContent: 'center' }}>
+                            <Ionicons name="chatbubble-ellipses-outline" size={48} color={Colors.border} style={{ marginBottom: 12 }} />
+                            <Text style={styles.emptyText}>Sem comentários ainda.</Text>
+                            <Text style={{ color: Colors.textSecondary, fontSize: 13, marginTop: 6, textAlign: 'center' }}>Seja o primeiro a comentar!</Text>
+                        </View>
                     )}
                 />
             )}
