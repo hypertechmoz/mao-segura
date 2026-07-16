@@ -7,7 +7,10 @@ import { Colors } from '../constants';
 import { useAuthStore } from '../store/authStore';
 import TermsModal from '../components/TermsModal';
 import { useFonts } from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import IoniconsFont from '@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf';
+import MaterialIconsFont from '@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf';
 
 import { supabase } from '../services/supabase';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -25,11 +28,14 @@ export default function RootLayout() {
     const user = useAuthStore(s => s.user);
     const { expoPushToken } = usePushNotifications();
     
+    // Load ALL icon font families. The key names here become the CSS
+    // font-family values in @font-face rules on web.
+    // We register both "MaterialIcons" and "Material Icons" (with space)
+    // because different parts of the library reference different names.
     const [fontsLoaded] = useFonts({
-        ...Ionicons.font,
-        ...(Platform.OS === 'web' ? {
-            'Ionicons': '/Ionicons.ttf',
-        } : {}),
+        'Ionicons': IoniconsFont,
+        'MaterialIcons': MaterialIconsFont,
+        'Material Icons': MaterialIconsFont,
     });
 
     useEffect(() => {
@@ -58,6 +64,30 @@ export default function RootLayout() {
             useAuthStore.setState({ user: { ...user, pushToken: expoPushToken }});
         }
     }, [user?.uid, user?.id, expoPushToken]);
+
+    // This guarantees the fonts are loaded in the browser immediately on web!
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const styleId = 'konekta-static-fonts';
+        if (!document.getElementById(styleId)) {
+            const style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                @font-face {
+                    font-family: "Ionicons";
+                    src: url(${IoniconsFont}) format("truetype");
+                }
+                @font-face {
+                    font-family: "MaterialIcons";
+                    src: url(${MaterialIconsFont}) format("truetype");
+                }
+                @font-face {
+                    font-family: "Material Icons";
+                    src: url(${MaterialIconsFont}) format("truetype");
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
 
     return (
         <>

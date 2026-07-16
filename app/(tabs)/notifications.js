@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 import { BackHandler } from 'react-native';
 
-function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user }) {
+function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user, onRead }) {
     const router = useRouter();
     const [isProcessing, setIsProcessing] = useState(false);
 
@@ -21,6 +21,7 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                 const docId = String(id).startsWith('notif-') ? id.replace('notif-', '') : id;
                 if (String(id).startsWith('notif-')) {
                     await supabase.from('notifications').update({ is_read: true }).eq('id', docId);
+                    if (onRead) onRead(id);
                 } 
             }
             if (route) router.push(route);
@@ -83,6 +84,10 @@ export default function Notifications() {
     const [notifications, setNotifications] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [initialLoading, setInitialLoading] = useState(true);
+
+    const handleRead = (id) => {
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, isNew: false } : n));
+    };
     
     // Pagination State
     const [page, setPage] = useState(0);
@@ -332,7 +337,7 @@ export default function Notifications() {
                         </View>
                     )
                 )}
-                renderItem={({ item }) => <NotificationItem {...item} />}
+                renderItem={({ item }) => <NotificationItem {...item} onRead={handleRead} />}
                 onEndReached={() => { if (hasMore && !loadingMore && !initialLoading) loadData(true); }}
                 onEndReachedThreshold={0.5}
                 ListFooterComponent={() => loadingMore ? <ActivityIndicator size="small" color={Colors.primary} style={{ marginVertical: 20 }} /> : null}

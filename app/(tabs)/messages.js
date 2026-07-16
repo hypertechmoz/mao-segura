@@ -42,54 +42,58 @@ export default function Messages() {
         const field = isWorker ? 'worker_id' : 'employer_id';
 
         const fetchConversations = async () => {
-            const { data: convDocs, error } = await supabase
-                .from('chat_conversations')
-                .select('*')
-                .eq(field, uid)
-                .order('updated_at', { ascending: false });
+            try {
+                const { data: convDocs, error } = await supabase
+                    .from('chat_conversations')
+                    .select('*')
+                    .eq(field, uid)
+                    .order('updated_at', { ascending: false });
 
-            if (error) {
-                console.error('Fetch conversations error:', error);
+                if (error) {
+                    console.error('Fetch conversations error:', error);
+                    return;
+                }
+
+                // Identify missing profiles and jobs
+                const otherUids = convDocs.map(c => isWorker ? c.employer_id : c.worker_id);
+                const jobIds = convDocs.map(c => c.job_id).filter(id => id);
+
+                const missingUids = otherUids.filter(id => id && !profilesCache.current[id]);
+                const missingJobIds = jobIds.filter(id => id && !jobsCache.current[id]);
+
+                if (missingUids.length > 0) {
+                    const { data: profiles } = await supabase
+                        .from('users')
+                        .select('id, name, profile_photo, is_verified, is_premium')
+                        .in('id', [...new Set(missingUids)]);
+                    profiles?.forEach(p => profilesCache.current[p.id] = p);
+                }
+
+                if (missingJobIds.length > 0) {
+                    const { data: jobs } = await supabase
+                        .from('jobs')
+                        .select('id, title')
+                        .in('id', [...new Set(missingJobIds)]);
+                    jobs?.forEach(j => jobsCache.current[j.id] = j.title);
+                }
+
+                const formatted = convDocs.map(conv => {
+                    const otherUid = isWorker ? conv.employer_id : conv.worker_id;
+                    return {
+                        id: conv.id,
+                        otherUser: profilesCache.current[otherUid] || { name: 'Utilizador', is_verified: false },
+                        lastMessage: conv.job_id ? (jobsCache.current[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Sem mensagens'),
+                        lastMessageAt: conv.updated_at,
+                        unread: conv.unread_count && conv.unread_count[uid] > 0 ? conv.unread_count[uid] : 0,
+                    };
+                });
+
+                setConversations(formatted);
+            } catch (err) {
+                console.error('Unhandled error in fetchConversations:', err);
+            } finally {
                 setInitialLoading(false);
-                return;
             }
-
-            // Identify missing profiles and jobs
-            const otherUids = convDocs.map(c => isWorker ? c.employer_id : c.worker_id);
-            const jobIds = convDocs.map(c => c.job_id).filter(id => id);
-
-            const missingUids = otherUids.filter(id => id && !profilesCache.current[id]);
-            const missingJobIds = jobIds.filter(id => id && !jobsCache.current[id]);
-
-            if (missingUids.length > 0) {
-                const { data: profiles } = await supabase
-                    .from('users')
-                    .select('id, name, profile_photo, is_verified, is_premium')
-                    .in('id', [...new Set(missingUids)]);
-                profiles?.forEach(p => profilesCache.current[p.id] = p);
-            }
-
-            if (missingJobIds.length > 0) {
-                const { data: jobs } = await supabase
-                    .from('jobs')
-                    .select('id, title')
-                    .in('id', [...new Set(missingJobIds)]);
-                jobs?.forEach(j => jobsCache.current[j.id] = j.title);
-            }
-
-            const formatted = convDocs.map(conv => {
-                const otherUid = isWorker ? conv.employer_id : conv.worker_id;
-                return {
-                    id: conv.id,
-                    otherUser: profilesCache.current[otherUid] || { name: 'Utilizador', is_verified: false },
-                    lastMessage: conv.job_id ? (jobsCache.current[conv.job_id] || 'Conversa sobre vaga') : (conv.last_message || 'Sem mensagens'),
-                    lastMessageAt: conv.updated_at,
-                    unread: conv.unread_count && conv.unread_count[uid] > 0 ? conv.unread_count[uid] : 0,
-                };
-            });
-
-            setConversations(formatted);
-            setInitialLoading(false);
         };
 
         fetchConversations();

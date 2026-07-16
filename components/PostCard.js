@@ -97,9 +97,10 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
         if (!requireAuth()) return;
         const uid = user?.uid || user?.id;
         if (uid === post.user_id) return;
+        const authorName = post.author?.name || post.user?.name || post.author_name || 'Utilizador';
 
         if (connectionStatus === 'CONNECTED' && conversationId) {
-            router.push(`/chat/${conversationId}`);
+            router.push({ pathname: `/chat/${conversationId}`, params: { name: authorName } });
             return;
         }
 
@@ -111,7 +112,7 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                 last_message: `Gostaria de falar sobre a sua publicação.` 
             });
             
-            router.push(`/chat/${convId}`);
+            router.push({ pathname: `/chat/${convId}`, params: { name: authorName } });
         } catch (error) {
             console.error('Error starting contact:', error);
         }

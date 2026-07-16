@@ -662,6 +662,14 @@ export default function ChatScreen() {
                     maxHeight={120}
                     maxLength={1000}
                     editable={isAuthorized}
+                    onKeyPress={(e) => {
+                        if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                            e.preventDefault();
+                            if (text.trim() && isAuthorized) {
+                                handleSend();
+                            }
+                        }
+                    }}
                 />
                 <TouchableOpacity
                     style={[styles.sendButton, (!text.trim() || !isAuthorized) && { opacity: 0.5 }]}

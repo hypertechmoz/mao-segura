@@ -32,7 +32,7 @@ export default function Onboarding() {
                 
                 <View style={styles.textSection}>
                     <Image 
-                        source={require('../assets/splash-icon.png')} 
+                        source={require('../assets/splash-icon.jpg')} 
                         style={styles.appIcon} 
                         resizeMode="contain" 
                     />

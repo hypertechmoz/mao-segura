@@ -25,6 +25,7 @@ export default function UserDetail() {
     const [connectionsCount, setConnectionsCount] = useState(0);
     const [isConnected, setIsConnected] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
+    const [pendingRequest, setPendingRequest] = useState(null);
     const [isProcessingChat, setIsProcessingChat] = useState(false);
     
     // Novas Tabs
@@ -93,7 +94,7 @@ export default function UserDetail() {
                 .from(profileTable)
                 .select('*')
                 .eq('user_id', id)
-                .single();
+                .maybeSingle();
             
             profileData = pData || {};
 
@@ -154,7 +155,10 @@ export default function UserDetail() {
                 .or(`and(sender_id.eq.${uid},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${uid})`)
                 .eq('status', 'PENDING');
 
-            if (reqs && reqs.length > 0) setHasPendingRequest(true);
+            if (reqs && reqs.length > 0) {
+                setHasPendingRequest(true);
+                setPendingRequest(reqs[0]);
+            }
 
             const { data: conns } = await supabase
                 .from('chat_conversations')
@@ -237,7 +241,19 @@ export default function UserDetail() {
                 const conversationId = await startOrGetConversation(user, id);
                 router.push({ pathname: `/chat/${conversationId}`, params: { name: profileUser.name } });
             } else if (hasPendingRequest) {
-                Alert.alert("Aviso", "Já enviou um pedido de permissão para este utilizador.");
+                const uid = user?.uid || user?.id;
+                const isReceiver = pendingRequest && pendingRequest.receiver_id === uid;
+                if (isReceiver) {
+                    const { acceptConnectionRequest } = await import('../../utils/chatSecureHelper');
+                    const chatId = await acceptConnectionRequest(pendingRequest.id, user, id);
+                    if (chatId) {
+                        setIsConnected(true);
+                        setHasPendingRequest(false);
+                        router.push({ pathname: `/chat/${chatId}`, params: { name: profileUser.name } });
+                    }
+                } else {
+                    Alert.alert("Aviso", "Já enviou um pedido de permissão para este utilizador.");
+                }
             } else {
                 const { sendConnectionRequest } = await import('../../utils/chatSecureHelper');
                 await sendConnectionRequest(user, id, { type: 'CONNECTION' });
@@ -296,8 +312,10 @@ export default function UserDetail() {
                             </View>
                         ) : hasPendingRequest ? (
                             <View style={{ backgroundColor: Colors.warning + '20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
-                                <Ionicons name="time" size={14} color={Colors.warning} style={{ marginRight: 4 }} />
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.warning }}>Ligação Pendente</Text>
+                                <Ionicons name={(pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? "person-add" : "time"} size={14} color={Colors.warning} style={{ marginRight: 4 }} />
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.warning }}>
+                                    {(pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? 'Recebeu um Pedido' : 'Ligação Pendente'}
+                                </Text>
                             </View>
                         ) : null}
                     </View>
@@ -335,8 +353,8 @@ export default function UserDetail() {
                         <ActivityIndicator size="small" color={Colors.white} />
                     ) : (
                         <>
-                            <Ionicons name={isConnected ? "chatbubbles" : (hasPendingRequest ? "time" : "chatbubble-ellipses")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
-                            <Text style={styles.chatButtonText}>{isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Contactar')}</Text>
+                            <Ionicons name={isConnected ? "chatbubbles" : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? "checkmark-circle" : "time") : "chatbubble-ellipses")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
+                            <Text style={styles.chatButtonText}>{isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? 'Aceitar Pedido' : 'Pedido Pendente') : 'Pedir para Contactar')}</Text>
                         </>
                     )}
                 </TouchableOpacity>

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -184,7 +185,10 @@ export const useAuthStore = create((set, get) => ({
                 email,
                 password,
                 options: {
-                    data: metadata
+                    data: metadata,
+                    emailRedirectTo: Platform.OS === 'web'
+                        ? `${window.location.origin}/auth/verify-email`
+                        : 'maosegura://auth/verify-email',
                 }
             });
 

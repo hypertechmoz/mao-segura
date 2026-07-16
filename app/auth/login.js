@@ -80,6 +80,7 @@ export default function Login() {
                                 autoComplete="email"
                                 value={email}
                                 onChangeText={setEmail}
+                                onSubmitEditing={handleLogin}
                             />
                         </View>
                     </View>
@@ -94,6 +95,7 @@ export default function Login() {
                                 secureTextEntry={!showPassword}
                                 value={password}
                                 onChangeText={setPassword}
+                                onSubmitEditing={handleLogin}
                             />
                             <TouchableOpacity
                                 style={styles.passwordToggle}

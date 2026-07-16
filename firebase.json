@@ -1,6 +1,5 @@
 {
   "hosting": {
-    "site": "trabalheja",
     "public": "dist",
     "ignore": [
       "firebase.json",
