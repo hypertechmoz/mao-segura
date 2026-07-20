@@ -7,6 +7,7 @@ import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../components/PostCard';
 import JobCard from '../../components/JobCard';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import WorkerCard from '../../components/WorkerCard';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
@@ -148,8 +149,9 @@ function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds })
                                     )}
                                 </TouchableOpacity>
                                 <View style={{ flex: 1 }}>
-                                    <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)}>
-                                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text }} numberOfLines={1}>{sugg.name}</Text>
+                                    <TouchableOpacity onPress={() => router.push(`/user/${sugg.id}`)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.text, flexShrink: 1 }} numberOfLines={1}>{sugg.name}</Text>
+                                        {(sugg.is_premium || sugg.is_verified) && <VerifiedBadge size={12} style={{ marginLeft: 4 }} />}
                                     </TouchableOpacity>
                                     <Text style={{ fontSize: 11, color: Colors.textSecondary }} numberOfLines={1}>
                                         {sugg.role === 'EMPLOYER' ? 'Cliente' : (sugg.profession_category || 'Profissional')}
@@ -531,19 +533,21 @@ export default function Home() {
         }, [authLoading, uid, userRole, userProvince, userCity])
     );
 
-    useEffect(() => {
-        // Handle back button on home to prevent app closing if user is on other tabs or nested
-        const backAction = () => {
-            if (feedTab !== 'POSTS') {
-                setFeedTab('POSTS');
-                return true;
-            }
-            return false; // Let default behavior happen (close app) if already on Home/POSTS
-        };
+    useFocusEffect(
+        useCallback(() => {
+            // Handle back button on home to prevent app closing if user is on other tabs or nested
+            const backAction = () => {
+                if (feedTab !== 'POSTS') {
+                    setFeedTab('POSTS');
+                    return true;
+                }
+                return false; // Let default behavior happen (close app) if already on Home/POSTS
+            };
 
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-        return () => backHandler.remove();
-    }, [feedTab]);
+            const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+            return () => backHandler.remove();
+        }, [feedTab])
+    );
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -927,7 +931,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: -2,
         right: -2,
-        backgroundColor: Colors.error,
+        backgroundColor: Colors.primary,
         borderRadius: 8,
         minWidth: 16,
         height: 16,
@@ -1133,7 +1137,7 @@ const webStyles = StyleSheet.create({
         position: 'absolute',
         top: -2,
         right: -2,
-        backgroundColor: Colors.error,
+        backgroundColor: Colors.primary,
         borderRadius: 8,
         minWidth: 16,
         height: 16,

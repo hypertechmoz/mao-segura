@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity, Platform, Alert, Modal, TextInput, ActivityIndicator } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Fonts } from '../constants';
 import { useRouter } from 'expo-router';
 import { supabase } from '../services/supabase';
+import VerifiedBadge from './VerifiedBadge';
 import { useAuthStore } from '../store/authStore';
 import { useAuthGuard } from '../utils/useAuthGuard';
 import { formatTime } from '../utils/profileUtils';
 import { sendPushNotification } from '../services/notificationService';
 import { startOrGetConversation } from '../utils/chatHelper';
+import { useAlertStore } from '../store/alertStore';
 
 export default function PostCard({ post, connectionStatusProp, onDelete, onUpdate }) {
     const router = useRouter();
@@ -88,8 +90,9 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
             }
         } catch (error) {
             console.error('Error toggling like:', error);
-            setIsLiked(isLiked);
-            setLikesCount(likesCount);
+            setIsLiked(initialLiked);
+            setLikesCount(initialLikesCount);
+            useAlertStore.getState().showAlert('Erro', 'Sessão expirada ou erro de rede. Tente novamente.', 'error');
         }
     };
 
@@ -100,7 +103,7 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
         const authorName = post.author?.name || post.user?.name || post.author_name || 'Utilizador';
 
         if (connectionStatus === 'CONNECTED' && conversationId) {
-            router.push({ pathname: `/chat/${conversationId}`, params: { name: authorName } });
+            router.push({ pathname: `/chat/${conversationId}`, params: { name: authorName, pending_post_id: post.id } });
             return;
         }
 
@@ -112,7 +115,7 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                 last_message: `Gostaria de falar sobre a sua publicação.` 
             });
             
-            router.push({ pathname: `/chat/${convId}`, params: { name: authorName } });
+            router.push({ pathname: `/chat/${convId}`, params: { name: authorName, pending_post_id: post.id } });
         } catch (error) {
             console.error('Error starting contact:', error);
         }
@@ -209,7 +212,7 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                     <View style={styles.headerText}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={styles.authorName}>{authorName}</Text>
-                            {isVerified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                            {(isPremium || isVerified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                             {(user?.city && post.city && user.city.toLowerCase() === post.city.toLowerCase()) && (
                                 <View style={styles.proximityBadge}>
                                     <Text style={styles.proximityText}>Perto de si</Text>

@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, AppState } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,13 +8,12 @@ import { useAuthStore } from '../store/authStore';
 import TermsModal from '../components/TermsModal';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import IoniconsFont from '@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf';
-import MaterialIconsFont from '@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/MaterialIcons.ttf';
 
 import { supabase } from '../services/supabase';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { GlobalAlerts } from '../components/GlobalAlerts';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Initialize i18n
 import '../utils/i18n';
@@ -30,12 +29,8 @@ export default function RootLayout() {
     
     // Load ALL icon font families. The key names here become the CSS
     // font-family values in @font-face rules on web.
-    // We register both "MaterialIcons" and "Material Icons" (with space)
-    // because different parts of the library reference different names.
     const [fontsLoaded] = useFonts({
         'Ionicons': IoniconsFont,
-        'MaterialIcons': MaterialIconsFont,
-        'Material Icons': MaterialIconsFont,
     });
 
     useEffect(() => {
@@ -65,6 +60,21 @@ export default function RootLayout() {
         }
     }, [user?.uid, user?.id, expoPushToken]);
 
+    // Handle AppState to automatically refresh Supabase token
+    useEffect(() => {
+        const subscription = AppState.addEventListener('change', (state) => {
+            if (state === 'active') {
+                supabase.auth.startAutoRefresh();
+            } else {
+                supabase.auth.stopAutoRefresh();
+            }
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, []);
+
     // This guarantees the fonts are loaded in the browser immediately on web!
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
         const styleId = 'konekta-static-fonts';
@@ -76,21 +86,13 @@ export default function RootLayout() {
                     font-family: "Ionicons";
                     src: url(${IoniconsFont}) format("truetype");
                 }
-                @font-face {
-                    font-family: "MaterialIcons";
-                    src: url(${MaterialIconsFont}) format("truetype");
-                }
-                @font-face {
-                    font-family: "Material Icons";
-                    src: url(${MaterialIconsFont}) format("truetype");
-                }
             `;
             document.head.appendChild(style);
         }
     }
 
     return (
-        <>
+        <SafeAreaProvider>
             <StatusBar style="dark" />
             <GlobalAlerts />
             <TermsModal />
@@ -130,6 +132,6 @@ export default function RootLayout() {
                 <Stack.Screen name="info/about" options={{ headerShown: false }} />
                 <Stack.Screen name="info/coming-soon" options={{ headerShown: false }} />
             </Stack>
-        </>
+        </SafeAreaProvider>
     );
 }

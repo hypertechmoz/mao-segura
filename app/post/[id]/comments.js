@@ -24,25 +24,35 @@ export default function Comments() {
         if (!id) return;
         
         const fetchPostAndComments = async () => {
-            // Fetch original post
-            const { data: postData } = await supabase
-                .from('posts')
-                .select('*, author:user_id(*)')
-                .eq('id', id)
-                .single();
-            if (postData) setPost(postData);
+            try {
+                const postPromise = supabase
+                    .from('posts')
+                    .select('*, author:user_id(*)')
+                    .eq('id', id)
+                    .single();
 
-            // Fetch comments
-            const { data: commentsData } = await supabase
-                .from('comments')
-                .select('*, author:user_id(id, name, profile_photo)')
-                .eq('post_id', id)
-                .order('created_at', { ascending: true });
-            
-            if (commentsData) {
-                setComments(commentsData);
+                const commentsPromise = supabase
+                    .from('comments')
+                    .select('*, author:user_id(id, name, profile_photo)')
+                    .eq('post_id', id)
+                    .order('created_at', { ascending: true });
+
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Timeout a carregar comentários')), 10000)
+                );
+
+                const [postRes, commentsRes] = await Promise.race([
+                    Promise.all([postPromise, commentsPromise]),
+                    timeoutPromise
+                ]);
+
+                if (postRes?.data) setPost(postRes.data);
+                if (commentsRes?.data) setComments(commentsRes.data);
+            } catch (err) {
+                console.warn('Erro ao carregar detalhes do post:', err);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         fetchPostAndComments();
@@ -196,7 +206,7 @@ export default function Comments() {
     };
 
     return (
-        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/home')} style={styles.backButton}>
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />

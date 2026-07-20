@@ -13,15 +13,23 @@ export default function ManageTestimonials() {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('PENDING'); // PENDING, APPROVED, REJECTED
     const [refreshing, setRefreshing] = useState(false);
+    const [selectedTestimonial, setSelectedTestimonial] = useState(null);
 
     const loadTestimonials = async () => {
         try {
             setLoading(true);
-            const { data, error } = await supabase
+            let query = supabase
                 .from('testimonials')
                 .select('*, author:users!user_id(profile_photo)')
-                .eq('status', filter)
                 .order('created_at', { ascending: false });
+                
+            if (filter === 'APPROVED') {
+                query = query.in('status', ['APPROVED', 'APPROVED_HOME', 'APPROVED_ONBOARDING', 'APPROVED_BOTH']);
+            } else {
+                query = query.eq('status', filter);
+            }
+            
+            const { data, error } = await query;
             
             if (error) throw error;
             
@@ -53,16 +61,15 @@ export default function ManageTestimonials() {
             const { error } = await supabase
                 .from('testimonials')
                 .update({
-                    status: newStatus,
-                    updated_at: new Date().toISOString(),
-                    approved_by: user?.uid || user?.id
+                    status: newStatus
                 })
                 .eq('id', id);
             
             if (error) throw error;
             
-            Alert.alert('Sucesso', `Depoimento ${newStatus === 'APPROVED' ? 'aprovado' : 'rejeitado'} com sucesso.`);
+            Alert.alert('Sucesso', `Depoimento atualizado com sucesso.`);
             setTestimonials(prev => prev.filter(t => t.id !== id));
+            setSelectedTestimonial(null);
         } catch (err) {
             console.error('Error updating testimonial:', err);
             Alert.alert('Erro', 'Não foi possível atualizar o depoimento.');
@@ -108,7 +115,7 @@ export default function ManageTestimonials() {
                 <View style={styles.actions}>
                     <TouchableOpacity 
                         style={[styles.actionButton, styles.approveButton]} 
-                        onPress={() => handleAction(item.id, 'APPROVED')}
+                        onPress={() => setSelectedTestimonial(item)}
                     >
                         <Ionicons name="checkmark" size={18} color={Colors.white} />
                         <Text style={styles.actionButtonText}>Aprovar</Text>
@@ -166,6 +173,32 @@ export default function ManageTestimonials() {
                         testimonials.map(renderItem)
                     )}
                 </ScrollView>
+            )}
+
+            {/* Location Selection Modal */}
+            {selectedTestimonial && (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }]}>
+                    <View style={{ backgroundColor: Colors.white, width: '80%', padding: Spacing.xl, borderRadius: 12 }}>
+                        <Text style={[styles.title, { marginBottom: Spacing.md, textAlign: 'center' }]}>Escolha o Local</Text>
+                        <Text style={[styles.subtitle, { marginBottom: Spacing.lg, textAlign: 'center' }]}>Onde deseja que o depoimento de {selectedTestimonial.name} apareça?</Text>
+                        
+                        <TouchableOpacity style={[styles.actionButton, styles.approveButton, { marginBottom: 12 }]} onPress={() => handleAction(selectedTestimonial.id, 'APPROVED_HOME')}>
+                            <Text style={styles.actionButtonText}>Tela Inicial (Site)</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[styles.actionButton, styles.approveButton, { marginBottom: 12, backgroundColor: Colors.primary }]} onPress={() => handleAction(selectedTestimonial.id, 'APPROVED_ONBOARDING')}>
+                            <Text style={styles.actionButtonText}>Tela Onboarding (App)</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={[styles.actionButton, styles.approveButton, { marginBottom: 12, backgroundColor: Colors.secondary }]} onPress={() => handleAction(selectedTestimonial.id, 'APPROVED_BOTH')}>
+                            <Text style={styles.actionButtonText}>Em Ambas as Telas</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[styles.actionButton, styles.rejectButton, { marginTop: 12 }]} onPress={() => setSelectedTestimonial(null)}>
+                            <Text style={[styles.actionButtonText, { color: Colors.error }]}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             )}
         </View>
     );

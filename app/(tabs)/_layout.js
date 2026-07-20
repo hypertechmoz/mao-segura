@@ -84,7 +84,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
     const navItems = [
         { label: t('tabs.home'), icon: 'home', route: '/home' },
         { label: 'Minha Rede', icon: 'people', route: '/network' },
-        { label: t('tabs.search'), icon: 'search', route: '/search' },
+        ...(isSmall ? [{ label: t('tabs.search'), icon: 'search', route: '/search' }] : []),
         { label: t('tabs.jobs'), icon: 'briefcase', route: '/jobs' },
         { label: t('tabs.messages'), icon: 'chatbubble-ellipses', route: '/messages' },
         { label: t('tabs.notifications'), icon: 'notifications', route: '/notifications' },
@@ -113,7 +113,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
                                 iconOnly={isSmall}
                             />
                         </TouchableOpacity>
-                        {!isMobile && (
+                        {!isSmall && (
                             <View style={[styles.webSearchBox, { zIndex: 9999 }]}>
                                 <Ionicons name="search" size={18} color="#C7C7C7" style={styles.webSearchIcon} />
                                 <TextInput
@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
         position: 'absolute',
         top: -4,
         right: -8,
-        backgroundColor: Colors.error,
+        backgroundColor: Colors.primary,
         borderRadius: 10,
         minWidth: 18,
         height: 18,
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
     webNavIconEmoji: { fontSize: 24 },
     webNavBadge: {
         position: 'absolute', top: -6, right: -10,
-        backgroundColor: Colors.error,
+        backgroundColor: Colors.primary,
         borderRadius: 9, minWidth: 18, height: 18,
         justifyContent: 'center', alignItems: 'center',
         paddingHorizontal: 4,

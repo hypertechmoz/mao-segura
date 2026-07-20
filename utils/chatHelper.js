@@ -18,15 +18,24 @@ export async function startOrGetConversation(user, targetId, metadata = {}) {
     const fieldSelf = isWorker ? 'worker_id' : 'employer_id';
     const fieldOther = isWorker ? 'employer_id' : 'worker_id';
 
-    // Verificar se já existe conversa
+    // Verificar se já existe conversa ignorando a posição worker/employer (previne duplicados)
     const { data: existing, error: fetchError } = await supabase
         .from('chat_conversations')
         .select('id')
-        .eq(fieldSelf, uid)
-        .eq(fieldOther, targetId)
+        .or(`and(employer_id.eq.${uid},worker_id.eq.${targetId}),and(employer_id.eq.${targetId},worker_id.eq.${uid})`)
         .maybeSingle();
 
     if (existing) {
+        // Se houver novo contexto (post_id ou job_id), atualizamos a conversa
+        if (metadata.post_id || metadata.job_id) {
+            await supabase
+                .from('chat_conversations')
+                .update({ 
+                    post_id: metadata.post_id || null, 
+                    job_id: metadata.job_id || null 
+                })
+                .eq('id', existing.id);
+        }
         return existing.id;
     }
 
@@ -62,8 +71,8 @@ export async function startOrGetConversation(user, targetId, metadata = {}) {
             content: convData.last_message,
             sender_id: uid,
             receiver_id: targetId,
-            // In the new schema, type might be inferred or we can add a column if needed
-            // For now, content is enough.
+            post_id: metadata.post_id || null,
+            job_id: metadata.job_id || null
         });
 
     if (msgError) console.warn('Error creating initial message:', msgError);

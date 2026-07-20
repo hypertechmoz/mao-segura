@@ -4,7 +4,8 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
+import { Ionicons } from '@expo/vector-icons';
 import { sendConnectionRequest, acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
@@ -83,19 +84,12 @@ export default function Network() {
         loadNetwork();
 
         // Real-time for requests
-        let channel = supabase.channel('network-requests')
+        let channel = supabase.channel(`network-requests-${Date.now()}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'connection_requests', filter: `receiver_id=eq.${uid}` }, () => loadNetwork())
             .subscribe();
 
-        const backAction = () => {
-            router.replace('/(tabs)/home');
-            return true;
-        };
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-
         return () => {
             supabase.removeChannel(channel);
-            backHandler.remove();
         };
     }, [user?.id]);
 
@@ -222,7 +216,7 @@ export default function Network() {
                                     <View style={styles.listInfo}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                             <Text style={[styles.listName, { marginBottom: 0, flexShrink: 1 }]} numberOfLines={1}>{conn.name}</Text>
-                                            {conn.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                                            {(conn.is_premium || conn.is_verified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                                         </View>
                                         <Text style={styles.listRole} numberOfLines={1}>
                                             {conn.role === 'WORKER' ? conn.profession_category || 'Profissional' : 'Cliente'}
@@ -261,7 +255,7 @@ export default function Network() {
                                 <View style={styles.listInfo}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                         <Text style={[styles.listName, { marginBottom: 0, flexShrink: 1 }]} numberOfLines={1}>{sugg.name}</Text>
-                                        {sugg.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                                        {(sugg.is_premium || sugg.is_verified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                                     </View>
                                     <Text style={styles.listRole} numberOfLines={1}>
                                         {sugg.role === 'WORKER' ? sugg.profession_category || 'Profissional' : 'Cliente'}

@@ -11,12 +11,14 @@ Nenhuma alteracao de codigo foi feita durante esta analise.
 
 O projeto e uma aplicacao Expo/React Native com versoes mobile e web, publicada em Firebase Hosting e usando Supabase como backend principal.
 
-Os problemas relatados parecem estar concentrados em quatro areas:
+Os problemas relatados parecem estar concentrados em seis areas:
 
 1. Layout mobile sem tratamento centralizado de safe area e teclado.
 2. Carregamento inconsistente de fontes de icones no build web de producao.
 3. Fluxos Supabase sem tratamento robusto de erro, timeout e sessao expirada.
 4. Premium parcialmente implementado, mas ainda com nomes antigos e estados inconsistentes.
+5. Edicao de perfil com fluxo instavel de foto no Android e valores incompatveis com constraints do banco.
+6. Chat/conversas com possivel duplicacao de conversas e estado de autorizacao inconsistente.
 
 ---
 
@@ -426,20 +428,434 @@ Mas ha inconsistencias:
 
 ---
 
-## 11. Ordem recomendada de execucao
+## 11. Edicao de perfil - foto no Android e erro ao guardar
+
+### Frase organizada do problema relatado
+
+Na versao Android, ao entrar em `Editar Perfil`, escolher a opcao para tirar uma foto no momento e confirmar o uso da foto, a aplicacao nao permanece na tela de edicao. Ela sai da tela de edicao e volta para a Home. Como resultado, a foto nao fica aplicada ao perfil.
+
+Tambem foi observado que, ao preencher todos os campos da edicao de perfil e tentar guardar, aparece um erro relacionado a tabela `worker_profiles`, informando que uma nova linha viola a constraint `worker_profiles_availability_check`.
+
+### Erro observado na imagem enviada
+
+Mensagem exibida:
+
+```text
+Guardar Perfil
+new row for relation "worker_profiles" violates check constraint "worker_profiles_availability_check"
+```
+
+### Evidencias encontradas no codigo
+
+Arquivo principal:
+
+- `app/settings/edit-profile.js`
+
+O fluxo de foto usa:
+
+```js
+ImagePicker.launchCameraAsync(...)
+```
+
+Depois de tirar ou escolher a foto, o app faz upload imediato para o Supabase Storage e apenas atualiza o estado local:
+
+```js
+setProfilePhoto(publicUrl)
+```
+
+O upload da foto nao chama `router.replace` nem deveria navegar sozinho.
+
+Porem a tela usa `useFocusEffect` para recarregar os dados sempre que a tela recebe foco:
+
+```js
+useFocusEffect(...)
+```
+
+No Android, abrir a camera tira a aplicacao do foco. Ao voltar da camera, a tela recebe foco novamente. Isso pode disparar `loadData()` e sobrescrever o estado local da edicao, incluindo a foto recem-selecionada, com os dados antigos vindos do banco.
+
+Tambem foi encontrado um redirecionamento global em `app/index.js`:
+
+```js
+if (user) {
+    return <Redirect href="/(tabs)/home" />;
+}
+```
+
+Se o Android recriar a Activity apos a camera, ou se o estado de navegacao for perdido durante o retorno da camera, a aplicacao pode voltar pelo fluxo inicial e cair na Home.
+
+### Causa provavel da foto voltar para Home
+
+A causa mais provavel e uma combinacao de comportamento Android com a implementacao atual:
+
+- a camera abre uma Activity externa;
+- ao retornar, a tela `edit-profile` recebe foco novamente;
+- `useFocusEffect` recarrega dados do perfil;
+- o estado local da foto pode ser substituido;
+- em alguns dispositivos, o processo pode ser recriado e o `Redirect` do `app/index.js` manda o utilizador autenticado para `/(tabs)/home`.
+
+Ou seja, o problema nao parece estar no botao da camera em si, mas na falta de protecao do estado da tela durante o retorno do ImagePicker no Android.
+
+### Solucao recomendada para a foto
+
+- Evitar recarregar automaticamente o perfil quando a tela recebe foco apos voltar da camera.
+- Usar uma flag, por exemplo `isPickingImageRef`, para impedir `loadData()` durante o retorno do ImagePicker.
+- Fechar o modal antes de abrir a camera.
+- Guardar temporariamente a imagem selecionada em estado local ate o utilizador clicar em `Guardar Alteracoes`.
+- Considerar fazer o upload apenas no momento de guardar, nao imediatamente apos tirar a foto.
+- Testar em Android real, porque o comportamento pode variar entre dispositivos.
+
+### Causa provavel do erro `worker_profiles_availability_check`
+
+Na tela `edit-profile`, os valores enviados para `availability` sao:
+
+```text
+FULL_TIME
+PART_TIME
+WEEKENDS
+FLEXIBLE
+IMMEDIATE
+TEMPORARY
+```
+
+Mas em outras partes do projeto aparecem valores diferentes para disponibilidade:
+
+```text
+DAILY
+TEMPORARY
+PERMANENT
+IMMEDIATE
+```
+
+Exemplos:
+
+- `constants/index.js` usa `DAILY`, `TEMPORARY`, `PERMANENT`.
+- `app/(tabs)/profile.js` espera `IMMEDIATE`, `TEMPORARY`, `DAILY`, `PERMANENT`.
+- `app/user/[id].js` compara `availability` com `DAILY`.
+- `app/settings/edit-profile.js` envia `FULL_TIME`, `PART_TIME`, `WEEKENDS`, `FLEXIBLE`, `IMMEDIATE`, `TEMPORARY`.
+
+Portanto, a tela de edicao esta provavelmente enviando valores que nao estao permitidos pela constraint `worker_profiles_availability_check` no Supabase.
+
+### Solucao recomendada para o erro de disponibilidade
+
+- Verificar no Supabase quais valores sao permitidos pela constraint `worker_profiles_availability_check`.
+- Padronizar os valores de disponibilidade em uma unica constante compartilhada.
+- Ajustar `app/settings/edit-profile.js` para enviar apenas valores aceitos pelo banco.
+- Atualizar as telas de perfil para exibirem os mesmos valores.
+- Se o produto realmente precisar de novos valores como `FULL_TIME`, `PART_TIME`, `WEEKENDS` e `FLEXIBLE`, entao a constraint do banco tambem deve ser atualizada.
+- Adicionar validacao antes de guardar, para impedir envio de valor invalido e mostrar mensagem clara ao utilizador.
+
+### Prioridade
+
+Alta.
+
+Este problema bloqueia a atualizacao completa do perfil e afeta diretamente a primeira experiencia do utilizador trabalhador.
+
+---
+
+## 12. Chat - conversa aparece bloqueada em Mensagens, mas desbloqueada via Notificacoes
+
+### Frase organizada do problema relatado
+
+Quando um utilizador aceita o pedido de contacto e autoriza a conversa, o outro utilizador recebe uma notificacao dizendo que o contacto foi aceite. Ao abrir a conversa pela notificacao, o chat aparece desbloqueado e mostra as mensagens corretamente.
+
+Porem, ao entrar pela aba `Mensagens`, a conversa com o mesmo utilizador ainda aparece bloqueada, como se estivesse aguardando autorizacao.
+
+Tambem foi relatado que, no Android, em alguns momentos o app fecha sozinho sem acao clara do utilizador.
+
+### Evidencias encontradas nas imagens
+
+As imagens mostram dois links de chat diferentes para o mesmo contacto `Elite Company`:
+
+```text
+/chat/5a4c38be-ba0c-431f-a9ba-66d091cc1fc2
+/chat/a5b837a1-2931-4473-9978-01e8631f8e18
+```
+
+Na primeira rota, o chat aparece bloqueado:
+
+```text
+Aguardando Autorizacao
+Chat bloqueado...
+```
+
+Na segunda rota, aberta pela notificacao, o chat aparece autorizado e mostra mensagens:
+
+```text
+O seu pedido de contacto foi aceite!
+oi
+ola
+```
+
+Isso indica que provavelmente existem duas linhas diferentes em `chat_conversations` para o mesmo par de utilizadores.
+
+### Evidencias encontradas no codigo
+
+Arquivos relevantes:
+
+- `app/(tabs)/messages.js`
+- `app/(tabs)/notifications.js`
+- `app/chat/[id].js`
+- `utils/chatHelper.js`
+- `utils/chatSecureHelper.js`
+- `components/PostCard.js`
+- `app/user/[id].js`
+
+Na aba `Mensagens`, a lista busca todas as conversas do utilizador e abre pelo `id` da conversa encontrada:
+
+```js
+router.push({ pathname: `/chat/${item.id}`, params: { name: item.otherUser?.name } })
+```
+
+Ela nao filtra apenas conversas autorizadas, nem tenta agrupar conversas duplicadas pelo par `worker_id` + `employer_id`.
+
+No helper `startOrGetConversation`, a busca por conversa existente usa `maybeSingle()`:
+
+```js
+.eq(fieldSelf, uid)
+.eq(fieldOther, targetId)
+.maybeSingle()
+```
+
+Se ja existirem duas conversas para o mesmo par, `maybeSingle()` pode falhar por haver mais de uma linha. O erro `fetchError` e capturado na variavel, mas nao e tratado. Nesse caso, o codigo continua e pode criar mais uma conversa.
+
+No helper `acceptConnectionRequest`, quando um pedido e aceite, o app chama `startOrGetConversation()` e depois marca a conversa retornada como autorizada:
+
+```js
+await supabase.from('chat_conversations').update({
+    is_authorized: true,
+    updated_at: new Date().toISOString()
+}).eq('id', conversationId);
+```
+
+A notificacao criada aponta diretamente para essa conversa autorizada:
+
+```js
+route: `/chat/${conversationId}`
+```
+
+Por isso a notificacao abre o chat correto, enquanto a aba Mensagens pode estar abrindo outra conversa antiga ainda bloqueada.
+
+### Causa provavel
+
+A causa mais provavel e duplicacao de conversas em `chat_conversations`.
+
+O sistema permite que exista mais de uma conversa para o mesmo par `worker_id` + `employer_id`, especialmente porque:
+
+- nao foi encontrada uma protecao visivel no frontend contra duplicatas;
+- nao ha evidencia no repositorio de uma constraint unica no banco;
+- `startOrGetConversation()` ignora `fetchError`;
+- a aba Mensagens lista conversas por `updated_at`, sem consolidar duplicatas;
+- a notificacao aponta para a conversa autorizada especifica, mas a aba Mensagens pode abrir a conversa pendente antiga.
+
+### Solucao recomendada
+
+- Criar uma constraint unica no Supabase para impedir duplicatas por par de utilizadores.
+- Definir uma regra clara para conversa unica:
+
+```text
+unique(worker_id, employer_id)
+```
+
+- Ajustar `startOrGetConversation()` para:
+  - tratar `fetchError`;
+  - se encontrar multiplas conversas, escolher a autorizada ou a mais recente;
+  - nao criar nova conversa quando ja existe uma pendente/autorizada para o mesmo par.
+- Criar rotina de limpeza/migracao para conversas duplicadas ja existentes.
+- Na aba `Mensagens`, priorizar conversas autorizadas quando houver duplicatas.
+- Ao aceitar um pedido, atualizar todas as conversas pendentes do mesmo par ou mesclar na conversa principal.
+- Garantir que `last_message`, `updated_at` e `unread_count` fiquem na conversa principal.
+
+### Prioridade
+
+Alta.
+
+Este bug quebra a confianca no chat, porque o utilizador recebe a confirmacao de contacto aceite, mas a entrada principal de mensagens continua mostrando a conversa como bloqueada.
+
+---
+
+## 13. Android - app fecha sozinho
+
+### Problema relatado
+
+No Android, em alguns momentos o app fecha sozinho, sem uma acao clara.
+
+### Evidencias encontradas no log `adblog.md`
+
+O log confirmou um crash real no Android.
+
+Horario do crash:
+
+```text
+07-17 19:27:02
+```
+
+Erro principal:
+
+```text
+FATAL EXCEPTION: mqt_v_native
+Process: com.maosegura.app
+com.facebook.react.common.JavascriptException:
+Error: cannot add `postgres_changes` callbacks for realtime:messages-list after `subscribe()`.
+```
+
+Componente indicado pelo stack trace:
+
+```text
+at Messages
+```
+
+Arquivo relacionado:
+
+```text
+app/(tabs)/messages.js
+```
+
+Logo antes do crash tambem aparece:
+
+```text
+E ReactNativeJS: Error: cannot add `postgres_changes` callbacks for realtime:messages-list after `subscribe()`.
+```
+
+Depois disso, o Android encerra o processo:
+
+```text
+Process : Sending signal. PID: 15318 SIG: 9
+```
+
+### Causa confirmada
+
+A causa principal do fechamento registrado no log e o canal realtime do Supabase na tela `Messages`.
+
+Em `app/(tabs)/messages.js`, o canal e criado com nome fixo:
+
+```js
+const channel = supabase.channel('messages-list')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => fetchConversations())
+    .subscribe();
+```
+
+O erro indica que o app tentou adicionar callbacks `postgres_changes` a um canal que ja estava subscrito.
+
+Isso pode acontecer quando:
+
+- a tela `Messages` monta mais de uma vez;
+- a navegacao preserva uma instancia anterior da tela;
+- o cleanup ainda nao removeu o canal antigo;
+- o mesmo nome de canal `messages-list` e reutilizado;
+- React Native/Expo Router reconecta efeitos durante navegacao ou retorno do background.
+
+Como esse erro nao e capturado, ele sobe como `JavascriptException` fatal e fecha o app Android.
+
+### Solucao recomendada para este crash
+
+- Usar nome de canal unico por utilizador e por montagem, por exemplo:
+
+```text
+messages-list-${uid}-${Date.now()}
+```
+
+- Antes de criar um canal novo, remover qualquer canal anterior guardado em `useRef`.
+- Evitar reutilizar o mesmo nome fixo `messages-list`.
+- Garantir que `.on(...)` seja sempre chamado antes de `.subscribe()`.
+- Garantir cleanup robusto com `supabase.removeChannel(channel)` no retorno do `useEffect`.
+- Opcionalmente, mover a subscription para um hook centralizado e impedir subscriptions duplicadas.
+
+### Outros erros observados no log
+
+Apos o crash principal, tambem aparecem erros como:
+
+```text
+TypeError: undefined is not a function
+at RootLayout
+at Profile
+```
+
+E erros nativos de UI:
+
+```text
+addViewAt: failed to insert view
+The specified child already has a parent
+```
+
+Esses erros podem ser consequencia do estado instavel causado pelo crash inicial, mas devem ser reavaliados depois de corrigir a subscription da tela `Messages`.
+
+Tambem apareceu aviso de notificacoes push:
+
+```text
+Erro ao obter token do Expo:
+Default FirebaseApp is not initialized in this process com.maosegura.app.
+```
+
+Isso indica que as credenciais/configuracao FCM para notificacoes Android ainda precisam ser revistas, mas esse aviso nao foi o causador direto do crash registrado.
+
+Tambem apareceu aviso do ImagePicker:
+
+```text
+[expo-image-picker] ImagePicker.MediaTypeOptions have been deprecated.
+```
+
+Esse aviso deve ser corrigido futuramente, mas tambem nao foi a causa direta do fechamento registrado.
+
+### Evidencias encontradas no codigo
+
+Nao ha logs nativos no repositorio que permitam confirmar a causa exata do fechamento. Para identificar a causa real, sera necessario capturar logs com `adb logcat`, EAS build logs ou adicionar Crashlytics/Sentry.
+
+Mesmo assim, existem pontos de risco:
+
+- `newArchEnabled: true` em `app.json`;
+- uso de `expo-notifications` no layout raiz;
+- uso de camera e selecao de imagem com upload e conversao para base64 em `app/settings/edit-profile.js`;
+- varias subscriptions realtime do Supabase;
+- chamadas async sem timeout em varias telas;
+- ausencia de Crashlytics ou ferramenta equivalente para capturar stack traces nativas.
+
+### Causas possiveis
+
+As causas mais provaveis precisam ser confirmadas por logs, mas os suspeitos principais sao:
+
+- crash nativo ao voltar da camera ou galeria;
+- consumo alto de memoria ao converter imagem para base64 antes do upload;
+- incompatibilidade ou instabilidade relacionada a `newArchEnabled`;
+- erro nativo de notificacoes push em Android;
+- estado de navegacao recriado apos app ir para segundo plano;
+- excecao nao capturada em algum fluxo async que deixa a UI inconsistente e fecha a Activity.
+
+Depois da leitura do `adblog.md`, a primeira correcao deve ser o canal realtime duplicado em `app/(tabs)/messages.js`.
+
+### Solucao recomendada
+
+- Capturar `adb logcat` durante o uso ate o app fechar.
+- Adicionar Crashlytics ou Sentry antes de novas publicacoes de teste.
+- Testar build Android com `newArchEnabled` ligado e desligado.
+- Evitar converter fotos grandes para base64; preferir upload por `FileSystem`/blob controlado ou compressao previa.
+- Revisar fluxos de camera, notificacoes e realtime subscriptions.
+- Adicionar tratamento global para erros nao capturados.
+
+### Prioridade
+
+Critica.
+
+Fechamento inesperado no Android foi confirmado como crash fatal causado por erro JavaScript nao tratado na tela `Messages`.
+
+---
+
+## 14. Ordem recomendada de execucao
 
 Quando as alteracoes forem autorizadas, a ordem recomendada e:
 
 1. Corrigir safe area e teclado no Android.
 2. Corrigir carregamento de fontes e icones no web build.
-3. Corrigir loading infinito com `try/catch/finally`, timeout e estados de erro.
-4. Auditar likes e comentarios no Supabase: RPCs, RLS e estrutura de dados.
-5. Normalizar Premium para `Konekt Mais`.
-6. Ajustar admin para atribuir Premium de forma completa.
-7. Criar componente unico para selos.
-8. Fazer auditoria de seguranca no Supabase.
-9. Corrigir textos com codificacao quebrada.
-10. Testar Android real e refresh direto em rotas de producao.
+3. Corrigir edicao de perfil: retorno da camera no Android e constraint de `availability`.
+4. Corrigir duplicacao de conversas e estado de autorizacao do chat.
+5. Investigar fechamento inesperado no Android com logs reais.
+6. Corrigir loading infinito com `try/catch/finally`, timeout e estados de erro.
+7. Auditar likes e comentarios no Supabase: RPCs, RLS e estrutura de dados.
+8. Normalizar Premium para `Konekt Mais`.
+9. Ajustar admin para atribuir Premium de forma completa.
+10. Criar componente unico para selos.
+11. Fazer auditoria de seguranca no Supabase.
+12. Corrigir textos com codificacao quebrada.
+13. Testar Android real e refresh direto em rotas de producao.
 
 ---
 
@@ -454,5 +870,9 @@ As causas mais provaveis sao:
 - chamadas Supabase sem timeout e sem tratamento robusto de erro;
 - cache local de usuario podendo divergir da sessao real;
 - Premium parcialmente implementado e com nomenclatura antiga.
+- edicao de perfil enviando valores de disponibilidade possivelmente incompatveis com o banco;
+- fluxo de camera no Android vulneravel a recarregamento da tela e perda de estado.
+- chat permitindo conversas duplicadas para o mesmo par de utilizadores;
+- app Android fechando sozinho sem logs nativos suficientes para confirmar a causa.
 
 A recomendacao e corrigir primeiro os problemas estruturais de layout, icones e loading, porque eles afetam a usabilidade geral. Depois disso, deve-se revisar a persistencia no Supabase e consolidar o Premium/Konekt Mais.

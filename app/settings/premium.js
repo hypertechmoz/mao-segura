@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, Pla
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Premium() {
@@ -55,7 +55,7 @@ export default function Premium() {
             await refreshUser();
             await fetchSubscription();
             setShowPayment(false);
-            Alert.alert('Sucesso', 'Subscrição Konekta Plus ativada!');
+            Alert.alert('Sucesso', 'Subscrição Konekt Mais ativada!');
         } catch (err) {
             Alert.alert('Erro', err.message);
         } finally {
@@ -66,7 +66,7 @@ export default function Premium() {
     const handleCancel = async () => {
         const uid = user?.uid || user?.id;
         if (!uid) return;
-        Alert.alert('Cancelar Plano', 'Tem certeza que deseja cancelar o Konekta Plus?', [
+        Alert.alert('Cancelar Plano', 'Tem certeza que deseja cancelar o Konekt Mais?', [
             { text: 'Não', style: 'cancel' },
             {
                 text: 'Sim, cancelar',
@@ -103,14 +103,14 @@ export default function Premium() {
     );
 
     return (
-        <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl }]}>
+        <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + Spacing.xl, paddingTop: Math.max(insets.top, 10) + Spacing.xl }]}>
             
             <View style={styles.header}>
                 <View style={styles.crownContainer}>
                     <Ionicons name="diamond" size={36} color={Colors.white} />
                 </View>
                 <Text style={styles.mainTitle}>Escolha o seu plano</Text>
-                <Text style={styles.mainSubtitle}>Melhore a sua experiência e alcance mais clientes com o Konekta Plus.</Text>
+                <Text style={styles.mainSubtitle}>Melhore a sua experiência e alcance mais clientes com o Konekt Mais.</Text>
             </View>
 
             {/* PLANO FREE */}
@@ -137,8 +137,8 @@ export default function Premium() {
             <View style={[styles.planCard, styles.premiumCard, isPremium && styles.planCardActive]}>
                 <View style={styles.planHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekta Plus</Text>
-                        <MaterialIcons name="verified" size={20} color={Colors.white} />
+                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekt Mais</Text>
+                        <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
                     </View>
                     {isPremium && <View style={[styles.currentBadge, { backgroundColor: Colors.white }]}><Text style={[styles.currentBadgeText, { color: Colors.premium }]}>Plano Atual</Text></View>}
                 </View>
@@ -167,7 +167,7 @@ export default function Premium() {
                     <View style={styles.subscribeContainer}>
                         {!showPayment ? (
                             <TouchableOpacity style={styles.btnStart} onPress={() => setShowPayment(true)}>
-                                <Text style={styles.btnStartText}>Começar Konekta Plus</Text>
+                                <Text style={styles.btnStartText}>Começar Konekt Mais</Text>
                                 <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
                             </TouchableOpacity>
                         ) : (
@@ -195,7 +195,35 @@ export default function Premium() {
                     </View>
                 )}
                 </View>
+
+            {/* PLANO MAX (Futuro / Lembrete) */}
+            <View style={[styles.planCard, styles.maxCard]}>
+                <View style={styles.planHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekta Max</Text>
+                        <Ionicons name="infinite" size={20} color={Colors.white} />
+                    </View>
+                    <View style={[styles.currentBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}><Text style={[styles.currentBadgeText, { color: Colors.white }]}>Em Breve</Text></View>
+                </View>
+                <Text style={[styles.planPrice, { color: Colors.white }]}>---<Text style={[styles.planPricePeriod, { color: 'rgba(255,255,255,0.7)' }]}>/mês</Text></Text>
+                <Text style={[styles.planDesc, { color: 'rgba(255,255,255,0.9)' }]}>Acesso total e absoluto. Seja cliente, profissional e empresa em simultâneo.</Text>
+                
+                <View style={styles.featuresList}>
+                    {renderFeature("Tudo do Konekt Mais", true, true)}
+                    {renderFeature("Seja Cliente e Profissional ao mesmo tempo", true, true)}
+                    {renderFeature("Criar e gerir Conta Empresarial", true, true)}
+                    {renderFeature("Interagir com qualquer utilizador (sem restrições)", true, true)}
+                    {renderFeature("Acesso Exclusivo a futuras funcionalidades", true, true)}
+                </View>
+
+                <View style={styles.subscribeContainer}>
+                    <TouchableOpacity style={[styles.btnStart, { backgroundColor: 'rgba(255,255,255,0.2)', elevation: 0, shadowOpacity: 0 }]} disabled={true}>
+                        <Text style={[styles.btnStartText, { color: Colors.white }]}>Indisponível no momento</Text>
+                    </TouchableOpacity>
+                </View>
+                </View>
             </View>
+
             
         </ScrollView>
     );
@@ -209,11 +237,12 @@ const styles = StyleSheet.create({
     mainTitle: { fontSize: 26, fontWeight: '800', color: Colors.text, marginBottom: 8, textAlign: 'center' },
     mainSubtitle: { fontSize: Fonts.sizes.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: Spacing.lg },
     
-    cardsContainer: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: Spacing.lg, width: '100%', alignItems: 'stretch' },
-    planCard: { flex: Platform.OS === 'web' ? 1 : undefined, backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.borderLight, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
+    cardsContainer: { flexDirection: Platform.OS === 'web' ? 'row' : 'column', flexWrap: Platform.OS === 'web' ? 'wrap' : 'nowrap', gap: Spacing.lg, width: '100%', alignItems: 'stretch', justifyContent: 'center', paddingBottom: Spacing.xl },
+    planCard: { flex: Platform.OS === 'web' ? 1 : undefined, minWidth: Platform.OS === 'web' ? 300 : '100%', backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, borderWidth: 1, borderColor: Colors.borderLight, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 },
     planCardActive: { borderColor: Colors.primary, borderWidth: 2 },
     planCardInactive: { opacity: 0.8 },
     premiumCard: { backgroundColor: Colors.primary, borderColor: Colors.primary, shadowColor: Colors.primary, shadowOpacity: 0.2 },
+    maxCard: { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A', shadowColor: '#000', shadowOpacity: 0.3 },
     
     planHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
     planTitle: { fontSize: 22, fontWeight: '800', color: Colors.text },

@@ -144,6 +144,17 @@ export default function Notifications() {
                 isNew: !d.is_read,
             })) || [];
 
+            // Mark all fetched explicit notifications as read to clear the badge
+            const unreadExplicitIds = explicit?.filter(n => !n.is_read).map(n => n.id) || [];
+            if (unreadExplicitIds.length > 0) {
+                supabase.from('notifications')
+                    .update({ is_read: true })
+                    .in('id', unreadExplicitIds)
+                    .then(({ error }) => {
+                        if (error) console.log('Error marking notifications as read:', error);
+                    });
+            }
+
             let connectionReqsFormatted = [];
             // Fetch connection requests only on the first page
             if (currentPage === 0) {
@@ -210,7 +221,7 @@ export default function Notifications() {
 
         // Subscribe to real-time changes
         const channel = supabase
-            .channel('notifications-changes')
+            .channel(`notifications-changes-${Date.now()}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, payload => {
                 const d = payload.new;
                 const newNotif = {
@@ -246,15 +257,8 @@ export default function Notifications() {
             })
             .subscribe();
 
-        const backAction = () => {
-            router.replace('/(tabs)/home');
-            return true;
-        };
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-
         return () => {
             supabase.removeChannel(channel);
-            backHandler.remove();
         };
     }, [user?.uid, user?.id]);
 

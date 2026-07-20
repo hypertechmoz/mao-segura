@@ -39,12 +39,12 @@ export default function WebLandingOrSplash() {
 
     useEffect(() => {
         const fetchTestimonials = async () => {
-            if (Platform.OS !== 'web' || user) return;
+            if (Platform.OS !== 'web') return;
             try {
                 const { data, error } = await supabase
                     .from('testimonials')
                     .select('*, author:users!user_id(profile_photo)')
-                    .eq('status', 'APPROVED')
+                    .in('status', ['APPROVED', 'APPROVED_HOME', 'APPROVED_BOTH'])
                     .order('created_at', { ascending: false })
                     .limit(6);
 

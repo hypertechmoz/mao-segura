@@ -4,7 +4,8 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { useTranslation } from 'react-i18next';
 import { calculateCompleteness } from '../../utils/profileUtils';
 import { useUnreadCount } from '../../utils/useUnreadCount';
@@ -297,8 +298,8 @@ export default function Profile() {
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                         <Text style={[styles.name, { marginBottom: 0 }]}>{p?.name}</Text>
-                        {p?.is_verified && (
-                            <MaterialIcons name="verified" size={24} color={Colors.primary} />
+                        {(p?.is_premium || p?.is_verified) && (
+                            <VerifiedBadge size={24} />
                         )}
                     </View>
                     <View style={styles.badges}>

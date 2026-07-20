@@ -4,7 +4,8 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
 
@@ -189,7 +190,7 @@ export default function JobDetail() {
                 job_id: id,
                 last_message: `Olá, tenho interesse na sua vaga de "${job.title}"`
             });
-            router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name } });
+            router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name, pending_job_id: id } });
         } catch (err) {
             Alert.alert('Erro', err.message);
         }
@@ -312,9 +313,8 @@ export default function JobDetail() {
                     </View>
                     <View style={styles.empInfo}>
                         <View style={styles.empNameRow}>
-                            <Text style={styles.empName}>{job.employer?.name}</Text>
-                            {job.employer?.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
-                            {job.employer?.isVerified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                            <Text style={styles.employerName} numberOfLines={1}>{job.employer?.name}</Text>
+                            {(job.employer?.is_premium || job.employer?.isVerified || job.employer?.is_verified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                         </View>
                         <Ionicons name="location-outline" size={14} color={Colors.textSecondary} />
                         <Text style={styles.empLocation}> {job.employer?.city}, {job.employer?.bairro || job.employer?.province}</Text>

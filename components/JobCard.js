@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Fonts } from '../constants';
 import { formatTime } from '../utils/profileUtils';
+import VerifiedBadge from './VerifiedBadge';
 
 export default function JobCard({ job, onPress, userLocation, isApplied }) {
     const router = useRouter();
@@ -25,8 +26,8 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                     </View>
                     <View style={{ flex: 1, justifyContent: 'center' }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={styles.employerName}>{job.employer?.name || 'Cliente'}</Text>
-                            {job.employer?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                            <Text style={styles.employerName} numberOfLines={1}>{job.employer?.name || 'Cliente'}</Text>
+                            {(job.employer?.is_premium || job.employer?.is_verified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                             <Text style={{ color: Colors.textLight, marginHorizontal: 4 }}>•</Text>
                             <Text style={styles.cardTime}>{formatTime(job.created_at)}</Text>
                         </View>
@@ -76,7 +77,7 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                         ]}
                         onPress={() => {
                             if (isApplied && isApplied !== 'PENDING' && isApplied !== 'AUTHORIZED') {
-                                router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name } });
+                                router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name, pending_job_id: job.id } });
                             } else if (isApplied === 'AUTHORIZED') {
                                 onPress('MESSAGE', job);
                             } else if (!isApplied) {

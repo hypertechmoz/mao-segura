@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, Image, Modal, TextInput, Platform, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import PostCard from '../../components/PostCard';
 import JobCard from '../../components/JobCard';
@@ -21,6 +23,7 @@ export default function UserDetail() {
     const [reportText, setReportText] = useState('');
     const [isReporting, setIsReporting] = useState(false);
     const [reviews, setReviews] = useState([]);
+    const insets = useSafeAreaInsets();
     const [loadingReviews, setLoadingReviews] = useState(false);
     const [connectionsCount, setConnectionsCount] = useState(0);
     const [isConnected, setIsConnected] = useState(false);
@@ -280,7 +283,20 @@ export default function UserDetail() {
             contentContainerStyle={styles.content}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
         >
-            <View style={styles.header}>
+            <TouchableOpacity 
+                style={[styles.backButton, { top: Math.max(insets.top, 10) + 10 }]} 
+                onPress={() => {
+                    if (router.canGoBack()) {
+                        router.back();
+                    } else {
+                        router.replace('/(tabs)/home');
+                    }
+                }}
+            >
+                <Ionicons name="arrow-back" size={24} color={Colors.text} />
+            </TouchableOpacity>
+
+            <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) + 20 }]}>
                 <View style={styles.avatarContainer}>
                     {profileUser.profile_photo ? (
                         <Image source={{ uri: profileUser.profile_photo }} style={styles.avatar} />
@@ -293,7 +309,7 @@ export default function UserDetail() {
 
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                     <Text style={styles.name}>{profileUser.name}</Text>
-                    {profileUser.is_verified && <MaterialIcons name="verified" size={18} color="#25D366" style={{ marginLeft: 6 }} />}
+                    {(profileUser.is_premium || profileUser.is_verified) && <VerifiedBadge size={18} style={{ marginLeft: 6 }} />}
                 </View>
                 <Text style={styles.role}>{profileUser.role === 'EMPLOYER' ? 'Empregador' : (profileUser.work_types?.join(' & ') || profileUser.profession_category || 'Profissional em Geral')}</Text>
                 
@@ -580,7 +596,17 @@ const styles = StyleSheet.create({
     header: { 
         backgroundColor: Colors.white, padding: Spacing.xl, alignItems: 'center', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, 
         shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4, zIndex: 10,
-        paddingTop: Platform.OS === 'ios' ? 60 : 40
+    },
+    backButton: {
+        position: 'absolute',
+        left: 16,
+        zIndex: 10,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     avatarContainer: { position: 'relative', marginBottom: 16 },
     avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: Colors.border, borderWidth: 3, borderColor: Colors.primary },
@@ -636,7 +662,6 @@ const styles = StyleSheet.create({
     modalSubmitBtn: { backgroundColor: Colors.primary, borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: Spacing.xl },
     modalSubmitText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
 
-    // Rating & Review Styles
     ratingSummary: { flexDirection: 'row', alignItems: 'center', marginTop: 12, backgroundColor: Colors.background, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
     starsRow: { flexDirection: 'row', alignItems: 'center', marginRight: 6 },
     ratingText: { fontSize: 13, fontWeight: '700', color: Colors.text },

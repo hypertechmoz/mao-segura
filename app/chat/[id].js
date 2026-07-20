@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
+import { Ionicons } from '@expo/vector-icons';
 import { formatTime as formatTimeUtil } from '../../utils/profileUtils';
 
 import { sendPushNotification } from '../../services/notificationService';
@@ -12,7 +13,7 @@ import { sendPushNotification } from '../../services/notificationService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ChatScreen() {
-    const { id, name } = useLocalSearchParams();
+    const { id, name, pending_post_id, pending_job_id } = useLocalSearchParams();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const { user } = useAuthStore();
@@ -31,6 +32,7 @@ export default function ChatScreen() {
     const [isAuthorized, setIsAuthorized] = useState(true);
     const [initiatedBy, setInitiatedBy] = useState(null);
     const [isAuthorizing, setIsAuthorizing] = useState(false);
+    const [replyContext, setReplyContext] = useState(null);
     const flatListRef = useRef(null);
 
     useEffect(() => {
@@ -59,6 +61,15 @@ export default function ChatScreen() {
                     .single();
 
                 if (userData) setReceiverProfile(userData);
+
+                // Fetch context
+                if (pending_post_id) {
+                    const { data: post } = await supabase.from('posts').select('*, author:users!inner(name, profile_photo)').eq('id', pending_post_id).single();
+                    if (post) setReplyContext({ type: 'post', data: post });
+                } else if (pending_job_id) {
+                    const { data: job } = await supabase.from('jobs').select('*, employer:users!employer_id(name, profile_photo)').eq('id', pending_job_id).single();
+                    if (job) setReplyContext({ type: 'job', data: job });
+                }
 
                 // Check for active contract
                 const isEmployer = user.role === 'EMPLOYER';
@@ -95,8 +106,21 @@ export default function ChatScreen() {
                     setIsAuthorized(payload.new.is_authorized !== false);
                 }
             })
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, payload => {
-                setMessages(prev => [...prev, payload.new]);
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${id}` }, async payload => {
+                if (payload.new.post_id || payload.new.job_id) {
+                    const { data } = await supabase.from('messages').select('*, post:posts(id, content, category, image_url, author:users(name)), job:jobs(id, title, city, type, employer:users(name))').eq('id', payload.new.id).single();
+                    if (data) {
+                        setMessages(prev => {
+                            if (!prev.find(m => m.id === data.id)) return [...prev, data];
+                            return prev;
+                        });
+                        return;
+                    }
+                }
+                setMessages(prev => {
+                    if (!prev.find(m => m.id === payload.new.id)) return [...prev, payload.new];
+                    return prev;
+                });
             })
             .subscribe();
 
@@ -104,7 +128,7 @@ export default function ChatScreen() {
         const fetchMessages = async () => {
             const { data } = await supabase
                 .from('messages')
-                .select('*')
+                .select('*, post:posts(id, content, category, image_url, author:users(name)), job:jobs(id, title, city, type, employer:users(name))')
                 .eq('conversation_id', id)
                 .order('created_at', { ascending: true });
             if (data) setMessages(data);
@@ -124,13 +148,18 @@ export default function ChatScreen() {
         setText('');
 
         try {
-            await supabase.from('messages').insert({
+            const payload = {
                 conversation_id: id,
                 sender_id: uid,
                 receiver_id: receiverId,
                 content: sentText,
                 read: false
-            });
+            };
+            if (replyContext?.type === 'post') payload.post_id = replyContext.data.id;
+            if (replyContext?.type === 'job') payload.job_id = replyContext.data.id;
+
+            await supabase.from('messages').insert(payload);
+            setReplyContext(null); // Limpa o contexto após enviar
 
             // Update conversation
             const { data: conv } = await supabase.from('chat_conversations').select('unread_count').eq('id', id).single();
@@ -451,7 +480,7 @@ export default function ChatScreen() {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
             <View style={[styles.headerBar, { paddingTop: insets.top + 10 }]}>
@@ -460,7 +489,7 @@ export default function ChatScreen() {
                         if (router.canGoBack()) {
                             router.back();
                         } else {
-                            router.replace('/(tabs)/home');
+                            router.replace('/(tabs)/messages');
                         }
                     }}
                     style={{ marginRight: 12 }}
@@ -476,7 +505,7 @@ export default function ChatScreen() {
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 1, paddingHorizontal: 12 }}>
                     <Text style={styles.headerName} numberOfLines={1}>{receiverProfile?.name || name || 'Conversa'}</Text>
-                    {receiverProfile?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" style={{ marginLeft: 4 }} />}
+                    {(receiverProfile?.is_premium || receiverProfile?.is_verified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
                 </View>
             </View>
 
@@ -484,6 +513,23 @@ export default function ChatScreen() {
                 ref={flatListRef}
                 data={messages}
                 keyExtractor={(item, index) => item.id || index.toString()}
+                ListHeaderComponent={() => (
+                    <View>
+
+                        {messages.filter(m => m.sender_id !== 'system' && m.sender_id !== '00000000-0000-0000-0000-000000000000').length <= 1 && isAuthorized && (
+                            <View style={styles.suggestionsContainer}>
+                                <Text style={styles.suggestionsTitle}>Sugestões de Mensagem</Text>
+                                <View style={styles.suggestionsScroll}>
+                                    {['Olá, tenho interesse!', 'Podemos falar sobre a vaga?', 'Gostaria de saber mais detalhes.'].map((sugg, i) => (
+                                        <TouchableOpacity key={i} style={styles.suggestionBtn} onPress={() => setText(sugg)}>
+                                            <Text style={styles.suggestionText}>{sugg}</Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                )}
                 renderItem={({ item }) => {
                     const mine = isMyMessage(item);
                     const isSystem = item.sender_id === 'system' || item.type === 'system';
@@ -498,6 +544,22 @@ export default function ChatScreen() {
 
                     return (
                         <View style={[styles.messageBubble, mine ? styles.myMessage : styles.otherMessage]}>
+                            {(item.post || item.job) && (
+                                <View style={[styles.replyReference, mine ? styles.myReplyReference : styles.otherReplyReference]}>
+                                    <View style={[styles.replyReferenceTypeBar, mine ? {backgroundColor: 'rgba(255,255,255,0.4)'} : {backgroundColor: Colors.primary}]} />
+                                    <View style={styles.replyReferenceContent}>
+                                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
+                                            <Ionicons name={item.post ? "document-text" : "briefcase"} size={12} color={mine ? 'rgba(255,255,255,0.8)' : Colors.primary} />
+                                            <Text style={[styles.replyReferenceType, mine ? {color: 'rgba(255,255,255,0.8)'} : {color: Colors.primary}]}>
+                                                {item.post ? 'Post' : 'Vaga'}
+                                            </Text>
+                                        </View>
+                                        <Text style={[styles.replyReferenceTitle, mine ? {color: Colors.white} : {color: Colors.text}]} numberOfLines={1}>
+                                            {item.post ? (item.post.content?.substring(0, 30) + '...') : item.job.title}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
                             <Text style={[styles.messageText, mine ? styles.myMessageText : styles.otherMessageText]}>
                                 {item.content}
                             </Text>
@@ -651,6 +713,25 @@ export default function ChatScreen() {
                 </View>
             </Modal>
 
+            {replyContext && (
+                <View style={styles.replyPreviewContainer}>
+                    <View style={styles.replyPreviewContent}>
+                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
+                            <Ionicons name={replyContext.type === 'post' ? "document-text" : "briefcase"} size={12} color={Colors.primary} />
+                            <Text style={styles.replyPreviewType}>
+                                {replyContext.type === 'post' ? 'Post' : 'Vaga'}
+                            </Text>
+                        </View>
+                        <Text style={styles.replyPreviewTitle} numberOfLines={1}>
+                            {replyContext.type === 'post' ? (replyContext.data.content?.substring(0, 30) + '...') : replyContext.data.title}
+                        </Text>
+                    </View>
+                    <TouchableOpacity style={styles.replyPreviewClose} onPress={() => setReplyContext(null)}>
+                        <Ionicons name="close-circle" size={20} color={Colors.textSecondary} />
+                    </TouchableOpacity>
+                </View>
+            )}
+
             <View style={[styles.inputBar, !isAuthorized && styles.inputDisabled, { paddingBottom: Math.max(insets.bottom, 8) }]}>
                 <TextInput
                     style={[styles.textInput, !isAuthorized && { backgroundColor: '#f1f1f1' }]}
@@ -724,6 +805,21 @@ const styles = StyleSheet.create({
     sendText: { color: Colors.white, fontSize: 20 },
     empty: { flex: 1, alignItems: 'center', paddingVertical: 60 },
     emptyText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, textAlign: 'center' },
+
+    replyReference: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 8, marginBottom: 6, overflow: 'hidden' },
+    myReplyReference: { backgroundColor: 'rgba(255,255,255,0.2)' },
+    otherReplyReference: { backgroundColor: 'rgba(0,0,0,0.05)' },
+    replyReferenceTypeBar: { width: 4 },
+    replyReferenceContent: { paddingHorizontal: 8, paddingVertical: 6, flex: 1 },
+    replyReferenceType: { fontSize: 10, fontWeight: '700', marginLeft: 4 },
+    replyReferenceTitle: { fontSize: 12 },
+
+    replyPreviewContainer: { flexDirection: 'row', backgroundColor: '#F0F2F5', marginHorizontal: 10, padding: 10, borderTopLeftRadius: 10, borderTopRightRadius: 10, borderLeftWidth: 4, borderLeftColor: Colors.primary, alignItems: 'center' },
+    replyPreviewContent: { flex: 1 },
+    replyPreviewType: { fontSize: 11, fontWeight: '700', color: Colors.primary, marginLeft: 4 },
+    replyPreviewTitle: { fontSize: 13, color: Colors.text, marginTop: 2 },
+    replyPreviewClose: { padding: 4 },
+
 
     // Contract System
     contractBar: {
@@ -799,4 +895,20 @@ const styles = StyleSheet.create({
     authRejectBtn: { flex: 1, borderWidth: 1, borderColor: Colors.border, paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
     authRejectText: { color: Colors.textSecondary, fontWeight: '600' },
     inputDisabled: { opacity: 0.8 },
+
+    // Context Card
+    contextCard: { backgroundColor: Colors.white, borderRadius: 12, padding: 12, margin: 16, marginBottom: 8, borderWidth: 1, borderColor: Colors.borderLight, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowOffset: { width: 0, height: 2 }, shadowRadius: 4 },
+    contextHeader: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8, textTransform: 'uppercase' },
+    contextBody: { flexDirection: 'row', alignItems: 'center' },
+    contextAvatar: { width: 40, height: 40, borderRadius: 20, marginRight: 12 },
+    contextInfo: { flex: 1 },
+    contextTitle: { fontSize: 14, fontWeight: '700', color: Colors.text, marginBottom: 2 },
+    contextSubtitle: { fontSize: 12, color: Colors.textSecondary },
+
+    // Suggestions
+    suggestionsContainer: { marginHorizontal: 16, marginBottom: 16, marginTop: 8 },
+    suggestionsTitle: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8 },
+    suggestionsScroll: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    suggestionBtn: { backgroundColor: Colors.primaryBg, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary + '30' },
+    suggestionText: { color: Colors.primary, fontSize: 13, fontWeight: '600' }
 });

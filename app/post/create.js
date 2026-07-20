@@ -129,7 +129,7 @@ export default function CreatePost() {
     };
 
     return (
-        <KeyboardAvoidingView style={[{ flex: 1 }, Platform.OS === 'web' ? { alignItems: 'center', backgroundColor: Colors.background } : {}]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={[{ flex: 1 }, Platform.OS === 'web' ? { alignItems: 'center', backgroundColor: Colors.background } : {}]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={[{ flex: 1, width: '100%' }, Platform.OS === 'web' ? { maxWidth: 600 } : {}]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>

@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, TextInput, ScrollView, Modal, TouchableWithoutFeedback } from 'react-native';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
@@ -138,7 +139,7 @@ export default function AdminUsers() {
 
       setUsers(prev => prev.map(u => u.id === id ? { ...u, is_premium: !currentStatus } : u));
       
-      showModal('Sucesso', !currentStatus ? 'Konekta Plus ativado com sucesso.' : 'Konekta Plus removido com sucesso.', 'OK', false, null, true);
+      showModal('Sucesso', !currentStatus ? 'Konekt Mais ativado com sucesso.' : 'Konekt Mais removido com sucesso.', 'OK', false, null, true);
     } catch (err) {
       showModal('Erro', err.message, 'OK', true, null, true);
     }
@@ -255,8 +256,7 @@ export default function AdminUsers() {
               <View style={styles.info}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name}>{item.name}</Text>
-                  {item.is_premium && <Ionicons name="star" size={14} color="#FFD700" style={{ marginLeft: 4 }} />}
-                  {item.is_verified && <MaterialIcons name="verified" size={16} color="#1D9BF0" style={{ marginLeft: 4 }} />}
+                  {(item.is_premium || item.is_verified) && <VerifiedBadge size={16} style={{ marginLeft: 4 }} />}
                 </View>
                 <Text style={styles.meta}>{item.phone || 'Sem telefone'}</Text>
               </View>
@@ -287,7 +287,7 @@ export default function AdminUsers() {
             <View style={styles.actions}>
               {!item.is_verified && (
                 <TouchableOpacity style={[styles.actionBtn, styles.btnVerify]} onPress={() => handleVerify(item.id, item.role)}>
-                  <MaterialIcons name="verified" size={14} color={Colors.white} />
+                  <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
                   <Text style={styles.btnTextWhite}>Verificar (Selo)</Text>
                 </TouchableOpacity>
               )}
@@ -295,9 +295,9 @@ export default function AdminUsers() {
                 style={[styles.actionBtn, { backgroundColor: item.is_premium ? '#f44336' : '#FFD700' }]} 
                 onPress={() => handleTogglePremium(item.id, item.is_premium)}
               >
-                <Ionicons name={item.is_premium ? "star-outline" : "star"} size={14} color={item.is_premium ? Colors.white : '#333'} />
+                <Ionicons name={item.is_premium ? "close-circle-outline" : "star"} size={14} color={item.is_premium ? Colors.white : '#333'} />
                 <Text style={[styles.btnTextWhite, { color: item.is_premium ? Colors.white : '#333' }]}>
-                  {item.is_premium ? 'Remover Plus' : 'Dar Plus'}
+                  {item.is_premium ? 'Remover Mais' : 'Dar Mais'}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity

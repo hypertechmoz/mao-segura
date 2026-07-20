@@ -4,8 +4,9 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
-import { Colors, Spacing, Fonts } from '../../constants';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import VerifiedBadge from '../../components/VerifiedBadge';
+import { Colors, Fonts, Spacing } from '../../constants';
+import { Ionicons } from '@expo/vector-icons';
 import { formatTime, formatRelativeTime } from '../../utils/profileUtils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
@@ -99,19 +100,12 @@ export default function Messages() {
         fetchConversations();
 
         // Real-time subscription
-        const channel = supabase.channel('messages-list')
+        const channel = supabase.channel(`messages-list-${Date.now()}`)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => fetchConversations())
             .subscribe();
 
-        const backAction = () => {
-            router.replace('/(tabs)/home');
-            return true;
-        };
-        const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-
         return () => {
             supabase.removeChannel(channel);
-            backHandler.remove();
         };
     }, [user?.id]);
 
@@ -177,7 +171,7 @@ export default function Messages() {
                         <View style={styles.info}>
                             <View style={styles.nameRow}>
                                 <Text style={[styles.name, item.unread > 0 && { fontWeight: '800' }]} numberOfLines={1}>{item.otherUser?.name}</Text>
-                                {item.otherUser?.is_verified && <MaterialIcons name="verified" size={14} color="#25D366" />}
+                                {(item.otherUser?.is_premium || item.otherUser?.is_verified) && <VerifiedBadge size={14} />}
                             </View>
                             <Text style={[styles.lastMessage, item.unread > 0 && { color: Colors.text, fontWeight: '600' }]} numberOfLines={1}>
                                 {item.lastMessage || 'Sem mensagens'}
