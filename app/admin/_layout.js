@@ -27,6 +27,8 @@ export default function AdminLayout() {
       <Stack.Screen name="index" options={{ title: 'Painel de Controlo' }} />
       <Stack.Screen name="users" options={{ title: 'Gerir Utilizadores' }} />
       <Stack.Screen name="reports" options={{ title: 'Denúncias' }} />
+      <Stack.Screen name="stats/monthly" options={{ headerShown: false }} />
+      <Stack.Screen name="stats/provinces" options={{ headerShown: false }} />
     </Stack>
   );
 }

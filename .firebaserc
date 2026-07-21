@@ -1,5 +1,8 @@
 {
   "projects": {
-    "default": "konekta-app-29404"
-  }
+    "default": "morstar-konekta",
+    "production": "morstar-konekta"
+  },
+  "targets": {},
+  "etags": {}
 }

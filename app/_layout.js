@@ -91,6 +91,10 @@ export default function RootLayout() {
         }
     }
 
+    if (!fontsLoaded) {
+        return null;
+    }
+
     return (
         <SafeAreaProvider>
             <StatusBar style="dark" />
@@ -114,6 +118,8 @@ export default function RootLayout() {
                 <Stack.Screen name="auth/login" options={{ title: 'Entrar' }} />
                 <Stack.Screen name="auth/verify-email" options={{ headerShown: false }} />
                 <Stack.Screen name="auth/forgot-password" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/update-password" options={{ headerShown: false }} />
+                <Stack.Screen name="auth/verify-2fa" options={{ headerShown: false }} />
                 <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
                 <Stack.Screen name="job/[id]" options={{ title: 'Detalhes da Vaga' }} />
                 <Stack.Screen name="job/create" options={{ headerShown: false }} />
@@ -123,6 +129,7 @@ export default function RootLayout() {
                 <Stack.Screen name="auth/success" options={{ headerShown: false }} />
                 <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
                 <Stack.Screen name="settings/edit-profile" options={{ title: 'Editar Perfil' }} />
+                <Stack.Screen name="settings/security" options={{ headerShown: false }} />
                 <Stack.Screen name="settings/complete-profile" options={{ title: 'Completar Perfil' }} />
                 <Stack.Screen name="settings/premium" options={{ title: 'Premium' }} />
                 <Stack.Screen name="info/terms" options={{ headerShown: false }} />

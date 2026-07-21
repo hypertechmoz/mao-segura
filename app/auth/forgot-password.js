@@ -21,7 +21,11 @@ export default function ForgotPassword() {
 
         try {
             setErrorMsg('');
-            await requestPasswordReset(email.trim());
+            const redirectUrl = Platform.OS === 'web'
+                ? `${window.location.origin}/auth/update-password`
+                : 'maosegura://auth/update-password';
+                
+            await requestPasswordReset(email.trim(), redirectUrl);
             setSent(true);
         } catch (err) {
             setErrorMsg(err.message || 'Erro ao enviar email de recuperação.');

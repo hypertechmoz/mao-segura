@@ -23,6 +23,7 @@ export default function Register() {
     const [showProvinces, setShowProvinces] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: '', color: Colors.textLight });
+    const [termsAccepted, setTermsAccepted] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
     const updateField = (field, value) => {
@@ -36,17 +37,18 @@ export default function Register() {
             setPasswordStrength({ score: 0, label: '', color: Colors.textLight });
             return;
         }
-        if (pass.length >= 6) score++;
-        if (/[A-Z]/.test(pass)) score++;
-        if (/[0-9]/.test(pass)) score++;
-        if (/[^A-Za-z0-9]/.test(pass)) score++;
+        
+        if (pass.length >= 8) score++; // Mínimo 8 caracteres
+        if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score++; // Letras maiúsculas e minúsculas
+        if (/[0-9]/.test(pass)) score++; // Pelo menos um número
+        if (/[^A-Za-z0-9]/.test(pass)) score++; // Caractere especial
 
         const levels = [
             { label: 'Muito curta', color: Colors.error },
             { label: 'Fraca', color: '#FF9800' },
             { label: 'Média', color: '#FFC107' },
-            { label: 'Forte', color: '#4CAF50' },
-            { label: 'Muito Forte', color: '#2E7D32' },
+            { label: 'Quase lá', color: '#8BC34A' },
+            { label: 'Forte', color: '#2E7D32' },
         ];
         setPasswordStrength({ score, ...levels[score] });
     };
@@ -63,13 +65,23 @@ export default function Register() {
             return;
         }
 
+        if (name.trim().split(/\s+/).length < 2) {
+            Alert.alert('Atenção', 'Por favor, insira o seu nome completo (nome e apelido).');
+            return;
+        }
+
         if (!validateEmail(email)) {
             Alert.alert('Atenção', 'Introduza um endereço de email válido');
             return;
         }
 
-        if (password.length < 6) {
-            Alert.alert('Atenção', 'A senha deve ter pelo menos 6 caracteres');
+        if (passwordStrength.score < 4) {
+            Alert.alert('Segurança Insuficiente', 'A sua palavra-passe deve ser Forte. Cumpra com as recomendações de segurança (mín. 8 caracteres, maiúsculas, minúsculas, números e símbolos).');
+            return;
+        }
+
+        if (!termsAccepted) {
+            Alert.alert('Atenção', 'É obrigatório aceitar os Termos e Condições para criar uma conta.');
             return;
         }
 
@@ -97,7 +109,11 @@ export default function Register() {
             <Text style={styles.heading}>
                 {role === 'EMPLOYER' ? 'Criar conta de Cliente' : 'Criar conta de Profissional'}
             </Text>
-            <Text style={styles.subheading}>Preencha os dados abaixo. Nome e localização ficam associados ao seu perfil e ajudam clientes e profissionais a encontrá-lo.</Text>
+            <Text style={styles.subheading}>
+                Preencha os dados abaixo. Nome e localização ficam associados ao seu perfil e ajudam clientes e profissionais a encontrá-lo.
+                {'\n\n'}
+                <Text style={{fontWeight: '700', color: Colors.error}}>Nota Importante:</Text> Insira os seus dados reais. O seu Nome completo e Email <Text style={{fontWeight: '700'}}>não poderão ser modificados</Text> no futuro por questões de segurança.
+            </Text>
 
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Nome completo *</Text>
@@ -184,9 +200,10 @@ export default function Register() {
                 )}
 
                 <View style={styles.recommendations}>
-                    <Text style={styles.recText}>• Use pelo menos 6 caracteres</Text>
-                    <Text style={styles.recText}>• Inclua letras maiúsculas e números</Text>
-                    <Text style={styles.recText}>• Use símbolos (!@#$) para uma palavra-passe mais forte</Text>
+                    <Text style={styles.recText}>• No mínimo 8 caracteres</Text>
+                    <Text style={styles.recText}>• Pelo menos uma letra Maiúscula e uma minúscula</Text>
+                    <Text style={styles.recText}>• Pelo menos um número</Text>
+                    <Text style={styles.recText}>• Use símbolos (ex: ! @ # $ % &) para máxima segurança</Text>
                 </View>
             </View>
 
@@ -241,14 +258,22 @@ export default function Register() {
 
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
-            <Text style={{ fontSize: 12, color: Colors.textSecondary, textAlign: 'center', marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 10 }}>
-                Ao criar a sua conta, confirma novamente que leu e concorda em cumprir com as <Text style={{fontWeight: '700', color: Colors.primary}} onPress={() => router.push('/info/terms')}>Regras da Comunidade e Termos de Uso.</Text>
-            </Text>
+            <View style={styles.termsContainer}>
+                <TouchableOpacity 
+                    style={[styles.checkbox, termsAccepted && styles.checkboxChecked]} 
+                    onPress={() => setTermsAccepted(!termsAccepted)}
+                >
+                    {termsAccepted && <Ionicons name="checkmark" size={16} color={Colors.white} />}
+                </TouchableOpacity>
+                <Text style={styles.termsText}>
+                    Confirmo que li e aceito as <Text style={styles.termsLink} onPress={() => router.push('/info/terms')}>Regras da Comunidade e Termos de Uso.</Text>
+                </Text>
+            </View>
 
             <TouchableOpacity
-                style={[styles.button, isAuthActionLoading && styles.buttonDisabled]}
+                style={[styles.button, (isAuthActionLoading || !termsAccepted || passwordStrength.score < 4) && styles.buttonDisabled]}
                 onPress={handleRegister}
-                disabled={isAuthActionLoading}
+                disabled={isAuthActionLoading || !termsAccepted || passwordStrength.score < 4}
                 activeOpacity={0.8}
             >
                 {isAuthActionLoading ? (
@@ -362,4 +387,9 @@ const styles = StyleSheet.create({
     strengthLabel: { fontSize: 12, fontWeight: '600' },
     recommendations: { marginTop: 12, padding: 12, backgroundColor: Colors.background, borderRadius: 8 },
     recText: { fontSize: 11, color: Colors.textSecondary, marginBottom: 2 },
+    termsContainer: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 4 },
+    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
+    checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    termsText: { flex: 1, fontSize: 13, color: Colors.textSecondary },
+    termsLink: { fontWeight: '700', color: Colors.primary },
 });

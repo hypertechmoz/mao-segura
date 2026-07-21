@@ -35,8 +35,13 @@ export default function Login() {
 
         try {
             setErrorMsg('');
-            await loginWithPassword(email.trim(), password);
-            router.replace('/(tabs)/home');
+            const res = await loginWithPassword(email.trim(), password);
+            
+            if (res?.requires2FA) {
+                router.replace(`/auth/verify-2fa?email=${encodeURIComponent(res.email)}`);
+            } else {
+                router.replace('/(tabs)/home');
+            }
         } catch (err) {
             setErrorMsg(err.message || 'Erro ao entrar');
             Alert.alert('Erro', err.message || 'Dados incorretos');

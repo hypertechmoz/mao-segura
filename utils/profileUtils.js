@@ -71,3 +71,30 @@ export function formatRelativeTime(date) {
 export function formatTime(date) {
     return formatRelativeTime(date);
 }
+
+/**
+ * Mascara um email por razões de segurança (ex: hyp***@gmail.com)
+ *
+ * @param {string} email 
+ * @returns {string}
+ */
+export function maskEmail(email) {
+    if (!email) return '';
+    const parts = email.split('@');
+    if (parts.length !== 2) return email;
+    
+    const [name, domain] = parts;
+    if (name.length <= 2) {
+        return `${name}***@${domain}`;
+    }
+    
+    const firstPart = name.substring(0, 3);
+    const lastChar = name.substring(name.length - 1);
+    
+    // Se for muito curto, apenas 3 chars + ***
+    if (name.length <= 4) {
+        return `${firstPart}***@${domain}`;
+    }
+    
+    return `${firstPart}***${lastChar}@${domain}`;
+}

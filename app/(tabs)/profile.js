@@ -456,6 +456,11 @@ export default function Profile() {
                             <Text style={styles.menuText}>{t('common.edit_profile')}</Text>
                             <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
                         </TouchableOpacity>
+                        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings/security')}>
+                            <Ionicons name="shield-checkmark-outline" size={20} color={Colors.success} style={{ marginRight: Spacing.sm }} />
+                            <Text style={styles.menuText}>Segurança e Privacidade</Text>
+                            <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />
+                        </TouchableOpacity>
                         <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/settings/premium')}>
                             <Ionicons name="star-outline" size={20} color={Colors.premium} style={{ marginRight: Spacing.sm }} />
                             <Text style={styles.menuText}>{t('common.premium')}</Text>

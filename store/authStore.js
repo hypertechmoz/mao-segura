@@ -139,6 +139,7 @@ export const useAuthStore = create((set, get) => ({
                 id: uid,
                 email: user.email,
                 emailVerified: !!user.email_confirmed_at,
+                user_metadata: user.user_metadata || {},
                 ...userData,
                 ...profileData,
                 profileId: profileRecord?.id || null,
@@ -224,11 +225,28 @@ export const useAuthStore = create((set, get) => ({
             });
 
             if (error) throw error;
+            
+            // Check if 2FA is enabled in metadata
+            const userMetadata = data.user?.user_metadata || {};
+            if (userMetadata.email_2fa_enabled) {
+                // Sign out immediately to clear session, we will login via OTP
+                await supabase.auth.signOut();
+                
+                // Send OTP to email
+                const { error: otpError } = await supabase.auth.signInWithOtp({ email });
+                if (otpError) throw otpError;
+                
+                return { requires2FA: true, email };
+            }
+
             await get().refreshUser(data.user);
             return { user: get().user };
         } catch (error) {
             if (error.message === 'Invalid login credentials') {
                 throw new Error('Email ou senha incorretos.');
+            }
+            if (error.message.includes('For security purposes')) {
+                throw new Error('Por segurança, aguarde alguns segundos antes de pedir outro código.');
             }
             throw error;
         } finally {
@@ -236,10 +254,58 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
-    requestPasswordReset: async (email) => {
+    verify2FACode: async (email, code) => {
         set({ isAuthActionLoading: true });
         try {
-            const { error } = await supabase.auth.resetPasswordForEmail(email);
+            const { data, error } = await supabase.auth.verifyOtp({
+                email,
+                token: code,
+                type: 'email',
+            });
+            if (error) throw error;
+            
+            await get().refreshUser(data.user);
+            return { user: get().user };
+        } catch (error) {
+            if (error.message.includes('Token has expired or is invalid')) {
+                throw new Error('O código é inválido ou já expirou.');
+            }
+            throw error;
+        } finally {
+            set({ isAuthActionLoading: false });
+        }
+    },
+    
+    toggle2FA: async (enabled) => {
+        set({ isAuthActionLoading: true });
+        try {
+            const { data, error } = await supabase.auth.updateUser({
+                data: { email_2fa_enabled: enabled }
+            });
+            if (error) throw error;
+            await get().refreshUser(data.user);
+        } catch (error) {
+            throw error;
+        } finally {
+            set({ isAuthActionLoading: false });
+        }
+    },
+
+    requestPasswordReset: async (email, redirectUrl) => {
+        set({ isAuthActionLoading: true });
+        try {
+            const options = redirectUrl ? { redirectTo: redirectUrl } : {};
+            const { error } = await supabase.auth.resetPasswordForEmail(email, options);
+            if (error) throw error;
+        } finally {
+            set({ isAuthActionLoading: false });
+        }
+    },
+
+    updatePassword: async (newPassword) => {
+        set({ isAuthActionLoading: true });
+        try {
+            const { error } = await supabase.auth.updateUser({ password: newPassword });
             if (error) throw error;
         } finally {
             set({ isAuthActionLoading: false });
