@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Platform, AppState } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -8,7 +8,7 @@ import { useAuthStore } from '../store/authStore';
 import TermsModal from '../components/TermsModal';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import IoniconsFont from '@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { supabase } from '../services/supabase';
 import { usePushNotifications } from '../hooks/usePushNotifications';
@@ -29,8 +29,9 @@ export default function RootLayout() {
     
     // Load ALL icon font families. The key names here become the CSS
     // font-family values in @font-face rules on web.
-    const [fontsLoaded] = useFonts({
-        'Ionicons': IoniconsFont,
+    const [fontsLoaded, fontError] = useFonts({
+        ...Ionicons.font,
+        ...MaterialIcons.font,
     });
 
     useEffect(() => {
@@ -38,10 +39,10 @@ export default function RootLayout() {
     }, []);
 
     useEffect(() => {
-        if (!isLoading && fontsLoaded) {
+        if (!isLoading && (fontsLoaded || fontError)) {
             SplashScreen.hideAsync().catch(() => {});
         }
-    }, [isLoading, fontsLoaded]);
+    }, [isLoading, fontsLoaded, fontError]);
 
     useEffect(() => {
         const userId = user?.uid || user?.id;
@@ -75,24 +76,12 @@ export default function RootLayout() {
         };
     }, []);
 
-    // This guarantees the fonts are loaded in the browser immediately on web!
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        const styleId = 'konekta-static-fonts';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-                @font-face {
-                    font-family: "Ionicons";
-                    src: url(${IoniconsFont}) format("truetype");
-                }
-            `;
-            document.head.appendChild(style);
-        }
-    }
-
-    if (!fontsLoaded) {
-        return null;
+    if (!fontsLoaded && !fontError) {
+        return (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.white }}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
     }
 
     return (

@@ -500,7 +500,7 @@ export default function Profile() {
                         </TouchableOpacity>
                         {/* Admin Dashboard */}
                         {(user?.role === 'ADMIN' || user?.email?.toLowerCase() === 'fernandopinto@gmail.com' || user?.email?.toLowerCase() === 'frennadopinto@gmil.com') && isOwnProfile && (
-                            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/admin/users')}>
+                            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/admin')}>
                                 <Ionicons name="shield-checkmark-outline" size={20} color={Colors.primary} style={{ marginRight: Spacing.sm }} />
                                 <Text style={styles.menuText}>Dashboard do Administrador</Text>
                                 <Ionicons name="chevron-forward" size={18} color={Colors.textLight} />

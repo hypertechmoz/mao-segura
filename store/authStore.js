@@ -326,13 +326,18 @@ export const useAuthStore = create((set, get) => ({
 
     checkEmailVerification: async () => {
         try {
-            // Use getSession instead of getUser to avoid 403 Forbidden
-            // getSession() will refresh the local state and we can check the user from there
-            const { data: { session }, error } = await supabase.auth.getSession();
+            // refreshSession will force a network request and update local state with email_confirmed_at if verified
+            const { data, error } = await supabase.auth.refreshSession();
 
-            if (error || !session?.user) return false;
+            let user = data?.session?.user;
+            
+            if (!user) {
+                // Fallback to getUser if refreshSession returns null (e.g. token expired but user still exists)
+                const { data: userData } = await supabase.auth.getUser();
+                user = userData?.user;
+            }
 
-            const user = session.user;
+            if (!user) return false;
 
             if (user?.email_confirmed_at) {
                 // If confirmed, refresh our enriched profile

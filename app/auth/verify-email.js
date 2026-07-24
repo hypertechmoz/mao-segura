@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
+import { useAlertStore } from '../../store/alertStore';
 
 export default function VerifyEmail() {
     const router = useRouter();
     const { user, checkEmailVerification, resendVerificationEmail, logout } = useAuthStore();
+    const { showAlert } = useAlertStore();
     const [checking, setChecking] = useState(false);
     const [resending, setResending] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(60);
@@ -45,13 +47,13 @@ export default function VerifyEmail() {
             if (verified) {
                 router.replace('/auth/verify-success');
             } else {
-                Alert.alert('Aviso', 'O seu email ainda não foi verificado. Por favor, clique no link enviado para ' + user?.email + '. Verifique também a sua pasta de Lixo/Spam.');
+                showAlert('Aviso', 'O seu email ainda não foi verificado. Por favor, clique no link enviado para ' + user?.email + '. Verifique também a sua pasta de Lixo/Spam.', 'warning');
             }
         } catch (err) {
             if (err.message?.includes('rede') || err.message?.includes('ligação')) {
-                Alert.alert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet.');
+                showAlert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet.', 'error');
             } else {
-                Alert.alert('Erro', 'Ocorreu um erro ao verificar o email. Tente novamente.');
+                showAlert('Erro', 'Ocorreu um erro ao verificar o email. Tente novamente.', 'error');
             }
         } finally {
             setChecking(false);
@@ -64,12 +66,12 @@ export default function VerifyEmail() {
         try {
             await resendVerificationEmail();
             setSecondsLeft(60);
-            Alert.alert('Sucesso', 'Email de verificação reenviado!');
+            showAlert('Sucesso', 'Email de verificação reenviado!', 'success');
         } catch (err) {
             if (err.message?.includes('ligação') || err.message?.includes('rede')) {
-                Alert.alert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet e tente novamente.');
+                showAlert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet e tente novamente.', 'error');
             } else {
-                Alert.alert('Erro', 'Não foi possível reenviar o email no momento. Por favor, tente novamente mais tarde.');
+                showAlert('Erro', 'Não foi possível reenviar o email no momento. Por favor, tente novamente mais tarde.', 'error');
             }
         } finally {
             setResending(false);
