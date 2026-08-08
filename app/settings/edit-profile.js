@@ -589,7 +589,7 @@ export default function EditProfile() {
                     <View style={styles.missingPhoneBanner}>
                         <Ionicons name="information-circle" size={22} color={Colors.primary} style={{ marginRight: 10 }} />
                         <Text style={styles.missingPhoneText}>
-                            Por favor, complete o seu número de telefone para permitir que empregadores e trabalhadores entrem em contacto.
+                            Por favor, complete o seu perfil para que seja mais fácil conectar-se com outros usuários.
                         </Text>
                     </View>
                 )}

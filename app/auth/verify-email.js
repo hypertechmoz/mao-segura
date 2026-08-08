@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
@@ -12,12 +13,25 @@ import FloatingSupportButton from '../../components/FloatingSupportButton';
 
 export default function VerifyEmail() {
     const router = useRouter();
+    const params = useLocalSearchParams();
     const insets = useSafeAreaInsets();
     const { user, checkEmailVerification, resendVerificationEmail } = useAuthStore();
     const { showAlert } = useAlertStore();
     const [checking, setChecking] = useState(false);
     const [resending, setResending] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(60);
+    const [emailAddress, setEmailAddress] = useState(params?.email || user?.email || '');
+
+    useEffect(() => {
+        const resolveEmail = async () => {
+            if (!emailAddress) {
+                const stored = await AsyncStorage.getItem('konekta_pending_verify_email');
+                if (stored) setEmailAddress(stored);
+                else if (user?.email) setEmailAddress(user.email);
+            }
+        };
+        resolveEmail();
+    }, [user, params?.email]);
 
     useEffect(() => {
         if (user?.emailVerified) {
@@ -49,7 +63,7 @@ export default function VerifyEmail() {
             if (verified) {
                 router.replace('/auth/verify-success');
             } else {
-                showAlert('Aviso', 'O seu email ainda não foi verificado. Por favor, clique no link enviado para ' + user?.email + '. Verifique também a sua pasta de Lixo/Spam.', 'warning');
+                showAlert('Aviso', 'O seu email ainda não foi verificado. Por favor, clique no link enviado para ' + (emailAddress || 'o seu endereço de email') + '. Verifique também a sua pasta de Lixo/Spam.', 'warning');
             }
         } catch (err) {
             if (err.message?.includes('rede') || err.message?.includes('ligação')) {
@@ -66,17 +80,15 @@ export default function VerifyEmail() {
         if (secondsLeft > 0) return;
         setResending(true);
         try {
-            await resendVerificationEmail();
+            await resendVerificationEmail(emailAddress);
             setSecondsLeft(60);
-            showAlert('Sucesso', 'Email de verificação reenviado!', 'success');
+            showAlert('Sucesso', 'Email de verificação reenviado com sucesso para ' + (emailAddress || 'o seu email') + '!', 'success');
         } catch (err) {
             const msg = err.message || '';
             if (msg.includes('ligação') || msg.includes('rede')) {
                 showAlert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet e tente novamente.', 'error');
             } else if (msg.includes('security') || msg.includes('segurança') || msg.includes('rate')) {
                 showAlert('Aguarde', 'Por segurança, aguarde alguns segundos antes de pedir outro email.', 'warning');
-            } else if (msg.includes('Sessão')) {
-                showAlert('Sessão expirada', msg, 'warning');
             } else {
                 showAlert('Erro', msg || 'Não foi possível reenviar o email no momento. Por favor, tente novamente mais tarde.', 'error');
             }
@@ -90,7 +102,7 @@ export default function VerifyEmail() {
     };
 
     const openEmailSupport = () => {
-        const message = `Olá! Não recebi o email de verificação da minha conta Konekta (${user?.email || 'sem email'}). Podem ajudar?`;
+        const message = `Olá! Não recebi o email de verificação da minha conta Konekta (${emailAddress || 'sem email'}). Podem ajudar?`;
         Linking.openURL(`https://wa.me/258843623989?text=${encodeURIComponent(message)}`).catch(() => {});
     };
 
@@ -104,7 +116,7 @@ export default function VerifyEmail() {
                 <Text style={styles.title}>Verifique o seu Email</Text>
                 <Text style={styles.description}>
                     Enviamos um link de verificação para:{"\n"}
-                    <Text style={{ fontWeight: '700', color: Colors.text }}>{user?.email}</Text>
+                    <Text style={{ fontWeight: '700', color: Colors.text }}>{emailAddress || user?.email || 'o seu endereço de email'}</Text>
                 </Text>
                 <Text style={styles.subDescription}>
                     Por favor, abra o seu email e clique no link para ativar a sua conta.{"\n"}

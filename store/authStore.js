@@ -99,22 +99,54 @@ export const useAuthStore = create((set, get) => ({
             const uid = user.id;
 
             // 1. Fetch base metadata from Users table
-            const { data: userData, error: userError } = await supabase
+            let { data: userData, error: userError } = await supabase
                 .from('users')
                 .select('*')
                 .eq('id', uid)
-                .maybeSingle(); // maybeSingle handles "not found" without error 406/404
+                .maybeSingle();
 
             if (userError) {
                 console.warn('Profile fetch warning:', userError.message);
-                // Don't throw, just set loading false. The user record might not be ready yet.
-                set({ isLoading: false });
-                return;
             }
 
+            // Fallback for OAuth / un-triggered users if public.users record does not exist yet
             if (!userData) {
-                set({ isLoading: false });
-                return;
+                console.log('[refreshUser] public.users row missing for user. Creating auto-profile...');
+                const metaName = user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Utilizador';
+                const metaPhoto = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
+                const metaRole = user.user_metadata?.role || 'WORKER';
+                const metaPhone = user.user_metadata?.phone || null;
+                const metaProvince = user.user_metadata?.province || null;
+                const metaCity = user.user_metadata?.city || null;
+                const metaBairro = user.user_metadata?.bairro || null;
+
+                const fallbackUser = {
+                    id: uid,
+                    name: metaName,
+                    role: metaRole,
+                    phone: metaPhone,
+                    province: metaProvince,
+                    city: metaCity,
+                    bairro: metaBairro,
+                    is_active: true,
+                    is_verified: false,
+                    is_premium: false,
+                    profile_photo: metaPhoto,
+                    created_at: new Date().toISOString(),
+                };
+
+                const { data: insertedUser, error: insertError } = await supabase
+                    .from('users')
+                    .upsert(fallbackUser)
+                    .select('*')
+                    .maybeSingle();
+
+                if (!insertError && insertedUser) {
+                    userData = insertedUser;
+                } else {
+                    console.warn('[refreshUser] Auto-profile creation warning:', insertError?.message);
+                    userData = fallbackUser;
+                }
             }
 
             // 2. Fetch role-specific profile data
@@ -180,6 +212,12 @@ export const useAuthStore = create((set, get) => ({
 
             if (normalizedPhone) {
                 metadata.phone = normalizedPhone;
+            }
+
+            // Persist pending verification email so resend works without active session
+            if (email) {
+                await AsyncStorage.setItem('konekta_pending_verify_email', email);
+                set({ pendingVerifyEmail: email });
             }
 
             // SignUp with metadata - the database trigger handle_new_user() 
@@ -339,25 +377,38 @@ export const useAuthStore = create((set, get) => ({
 
     checkEmailVerification: async () => {
         try {
-            // refreshSession will force a network request and update local state with email_confirmed_at if verified
-            const { data, error } = await supabase.auth.refreshSession();
+            const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('konekta_pending_verify_email'));
+            const targetEmail = get().user?.email || pendingEmail;
 
+            // 1. First check directly via RPC if the email has been confirmed in auth.users
+            if (targetEmail) {
+                const { data: isConfirmed } = await supabase.rpc('is_email_confirmed', { check_email: targetEmail });
+                if (isConfirmed === true) {
+                    const { data: userData } = await supabase.auth.getUser();
+                    if (userData?.user) {
+                        await get().refreshUser(userData.user);
+                    } else {
+                        await get().refreshUser({ id: get().user?.id, email: targetEmail, email_confirmed_at: new Date().toISOString() });
+                    }
+                    const enriched = get().user;
+                    if (enriched) sendWelcomeEmailOnce(enriched).catch(() => {});
+                    return true;
+                }
+            }
+
+            // 2. Refresh session fallback
+            const { data } = await supabase.auth.refreshSession();
             let user = data?.session?.user;
             
             if (!user) {
-                // Fallback to getUser if refreshSession returns null (e.g. token expired but user still exists)
                 const { data: userData } = await supabase.auth.getUser();
                 user = userData?.user;
             }
 
-            if (!user) return false;
-
             if (user?.email_confirmed_at) {
                 await get().refreshUser(user);
                 const enriched = get().user;
-                if (enriched?.emailVerified) {
-                    sendWelcomeEmailOnce(enriched).catch(() => {});
-                }
+                if (enriched) sendWelcomeEmailOnce(enriched).catch(() => {});
                 return true;
             }
             return false;
@@ -367,11 +418,19 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
-    resendVerificationEmail: async () => {
+    resendVerificationEmail: async (overrideEmail = null) => {
         const storeUser = get().user;
-        const { data: { user } } = await supabase.auth.getUser();
-        const email = user?.email || storeUser?.email;
-        if (!email) throw new Error('Sessão expirada. Faça login novamente.');
+        const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('konekta_pending_verify_email'));
+        let email = overrideEmail || storeUser?.email || pendingEmail;
+
+        if (!email) {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user?.email) email = user.email;
+            } catch (_) {}
+        }
+
+        if (!email) throw new Error('Não foi possível identificar o seu email de registo. Por favor, tente novamente ou fale com o suporte.');
 
         const { error } = await supabase.auth.resend({
             type: 'signup',
