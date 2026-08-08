@@ -211,7 +211,7 @@ export default function AdminUsers() {
   // === DASHBOARD VIEW ===
   if (activeTab === null) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.dashboardContainer}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.dashboardContainer, { paddingTop: Math.max(insets.top, 24), paddingBottom: Math.max(insets.bottom, 24) }]}>
         <Text style={styles.dashboardTitle}>Painel de Categorias</Text>
         <Text style={styles.dashboardSubtitle}>Selecione o grupo que deseja analisar</Text>
 
@@ -283,7 +283,7 @@ export default function AdminUsers() {
   // === LIST VIEW ===
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.listHeaderRow}>
           <TouchableOpacity style={styles.btnBackToDash} onPress={() => { setActiveTab(null); setSearchQuery(''); }}>
             <Ionicons name="grid" size={20} color={Colors.primary} />
