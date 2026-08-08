@@ -52,7 +52,8 @@
     "postcss": "^8.5.10"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.2"
+    "@babel/core": "^7.25.2",
+    "babel-preset-expo": "^57.0.6"
   },
   "private": true
 }
