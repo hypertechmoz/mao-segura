@@ -87,6 +87,8 @@ export default function ChatScreen() {
 
                 // Clear unread count
                 if (convData.unread_count && convData.unread_count[uid] > 0) {
+                    const unreadAmount = convData.unread_count[uid];
+                    useUnreadStore.getState().clearUnreadForConversation(unreadAmount);
                     const newUnread = { ...convData.unread_count, [uid]: 0 };
                     await supabase.from('chat_conversations').update({
                         unread_count: newUnread

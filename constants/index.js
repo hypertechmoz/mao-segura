@@ -126,8 +126,7 @@ export const COMMON_SKILLS = [
 ];
 
 export const PROVINCES = [
-    'Maputo Cidade',
-    'Maputo Província',
+    'Maputo',
     'Gaza',
     'Inhambane',
     'Sofala',
@@ -140,8 +139,7 @@ export const PROVINCES = [
 ];
 
 export const PROVINCE_CITIES = {
-    'Maputo Cidade': ['Maputo', 'KaMpfumo', 'Nlhamankulu', 'KaMaxakeni', 'KaMavota', 'KaMubukwana', 'KaTembe', 'KaNyaka'],
-    'Maputo Província': ['Matola', 'Boane', 'Marracuene', 'Manhiça', 'Namaacha', 'Moamba', 'Magude', 'Matutuíne'],
+    'Maputo': ['Maputo', 'Matola', 'Boane', 'Marracuene', 'Manhiça', 'Namaacha', 'Moamba', 'KaMpfumo', 'Nlhamankulu', 'KaMaxakeni', 'KaMavota', 'KaMubukwana', 'KaTembe', 'KaNyaka', 'Magude', 'Matutuíne'],
     'Gaza': ['Xai-Xai', 'Chókwè', 'Bilene', 'Chibuto', 'Mabalane', 'Mandlakazi', 'Massingir', 'Chigubo'],
     'Inhambane': ['Inhambane', 'Maxixe', 'Vilankulo', 'Inharrime', 'Massinga', 'Zavala', 'Homoíne', 'Jangamo', 'Mabote'],
     'Sofala': ['Beira', 'Dondo', 'Nhamatanda', 'Caia', 'Gorongosa', 'Marromeu', 'Búzi', 'Chibabava', 'Machanga', 'Cheringoma', 'Muanza'],

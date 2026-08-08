@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandWordmark from '../components/BrandWordmark';
 import { supabase } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import ScreenSafeArea from '../components/ScreenSafeArea';
 
 const { width, height } = Dimensions.get('window');
 
@@ -50,8 +51,8 @@ export default function Onboarding() {
     };
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <ScreenSafeArea style={styles.container} edges={['top', 'bottom']}>
+            <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
             
             {/* Background removed as requested */}
             <View style={styles.contentContainer}>
@@ -114,7 +115,7 @@ export default function Onboarding() {
                     </TouchableOpacity>
                 </View>
             </View>
-        </View>
+        </ScreenSafeArea>
     );
 }
 

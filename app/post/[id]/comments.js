@@ -8,6 +8,8 @@ import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../../components/PostCard';
 import { sendPushNotification } from '../../../services/notificationService';
 
+import { getMockPostById } from '../../../utils/mockData';
+
 export default function Comments() {
     const { id } = useLocalSearchParams();
     const router = useRouter();
@@ -23,6 +25,17 @@ export default function Comments() {
     useEffect(() => {
         if (!id) return;
         
+        // Handle mock posts
+        if (String(id).startsWith('mock-')) {
+            const mockP = getMockPostById(id);
+            if (mockP) {
+                setPost(mockP);
+                setComments(mockP.comments || []);
+            }
+            setLoading(false);
+            return;
+        }
+
         const fetchPostAndComments = async () => {
             try {
                 const postPromise = supabase
@@ -71,6 +84,24 @@ export default function Comments() {
         if (!newComment.trim() || !user) return;
         const uid = user.uid || user.id;
         setSubmitting(true);
+        
+        // Handle mock post comment addition locally
+        if (String(id).startsWith('mock-') || post?.is_mock) {
+            const tempComment = {
+                id: 'temp-' + Date.now(),
+                post_id: id,
+                user_id: uid,
+                author: { id: uid, name: user.name || 'Você', profile_photo: user.profile_photo },
+                content: newComment.trim(),
+                created_at: new Date().toISOString()
+            };
+            setComments(prev => [...prev, tempComment]);
+            if (post) setPost(prev => ({ ...prev, comments_count: (prev?.comments_count || 0) + 1 }));
+            setNewComment('');
+            setReplyingTo(null);
+            setSubmitting(false);
+            return;
+        }
         
         try {
             await supabase.from('comments').insert({

@@ -1,57 +1,64 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, Fonts } from '../../constants';
+import FloatingSupportButton from '../../components/FloatingSupportButton';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 
 export default function ChooseType() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
 
     const handleSelect = (type) => {
         router.push({ pathname: '/auth/register', params: { role: type } });
     };
 
     return (
-        <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Como deseja usar{'\n'}o Konekta?</Text>
-                <Text style={styles.subtitle}>Escolha o tipo de conta que melhor se adequa a si.</Text>
-            </View>
+        <ScreenSafeArea style={{ flex: 1 }}>
+            <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={[styles.container, { paddingBottom: Spacing.xxl + insets.bottom }]}>
+                <View style={styles.header}>
+                    <Text style={styles.title}>Como deseja usar{'\n'}o Konekta?</Text>
+                    <Text style={styles.subtitle}>Escolha o tipo de conta que melhor se adequa a si.</Text>
+                </View>
 
-            <View style={styles.cards}>
-                <TouchableOpacity
-                    style={styles.card}
-                    onPress={() => handleSelect('WORKER')}
-                    activeOpacity={0.8}
-                >
-                    <Image source={require('../../assets/images/cook.png')} style={styles.cardImage} resizeMode="cover" />
-                    <Text style={styles.cardTitle}>Sou um Profissional</Text>
-                    <Text style={styles.cardDescription}>
-                        Quero encontrar trabalho, criar o meu perfil profissional e candidatar-me a vagas.
-                    </Text>
-                    <View style={styles.noteBox}>
-                        <Text style={styles.noteText}>• Pode candidatar-se a vagas{'\n'}• Não pode publicar vagas</Text>
-                    </View>
+                <View style={styles.cards}>
+                    <TouchableOpacity
+                        style={styles.card}
+                        onPress={() => handleSelect('WORKER')}
+                        activeOpacity={0.8}
+                    >
+                        <Image source={require('../../assets/images/cook.png')} style={styles.cardImage} resizeMode="cover" />
+                        <Text style={styles.cardTitle}>Sou um Profissional</Text>
+                        <Text style={styles.cardDescription}>
+                            Quero encontrar trabalho, criar o meu perfil profissional e candidatar-me a vagas.
+                        </Text>
+                        <View style={styles.noteBox}>
+                            <Text style={styles.noteText}>• Pode candidatar-se a vagas{'\n'}• Não pode publicar vagas</Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={[styles.card, styles.cardEmployer]}
+                        onPress={() => handleSelect('EMPLOYER')}
+                        activeOpacity={0.8}
+                    >
+                        <Image source={require('../../assets/images/plumber.png')} style={styles.cardImage} resizeMode="cover" />
+                        <Text style={styles.cardTitle}>Sou um Cliente</Text>
+                        <Text style={styles.cardDescription}>
+                            Quero publicar vagas, encontrar profissionais e gerir contratações.
+                        </Text>
+                        <View style={styles.noteBox}>
+                            <Text style={styles.noteText}>• Pode publicar vagas e contratar{'\n'}• Não pode candidatar-se</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.loginLink}>
+                    <Text style={styles.loginText}>Já tenho uma conta? <Text style={styles.loginBold}>Entrar</Text></Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                    style={[styles.card, styles.cardEmployer]}
-                    onPress={() => handleSelect('EMPLOYER')}
-                    activeOpacity={0.8}
-                >
-                    <Image source={require('../../assets/images/plumber.png')} style={styles.cardImage} resizeMode="cover" />
-                    <Text style={styles.cardTitle}>Sou um Cliente</Text>
-                    <Text style={styles.cardDescription}>
-                        Quero publicar vagas, encontrar profissionais e gerir contratações.
-                    </Text>
-                    <View style={styles.noteBox}>
-                        <Text style={styles.noteText}>• Pode publicar vagas e contratar{'\n'}• Não pode candidatar-se</Text>
-                    </View>
-                </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.loginLink}>
-                <Text style={styles.loginText}>Já tenho uma conta? <Text style={styles.loginBold}>Entrar</Text></Text>
-            </TouchableOpacity>
-        </ScrollView>
+            </ScrollView>
+            <FloatingSupportButton bottomOffset={Math.max(insets.bottom, 16) + 16} />
+        </ScreenSafeArea>
     );
 }
 
@@ -60,7 +67,7 @@ const styles = StyleSheet.create({
         flexGrow: 1,
         backgroundColor: Colors.background,
         paddingHorizontal: Spacing.lg,
-        paddingTop: 80,
+        paddingTop: Spacing.xl,
         paddingBottom: 40,
         ...(Platform.OS === 'web' ? { maxWidth: 500, alignSelf: 'center', width: '100%' } : {}),
     },

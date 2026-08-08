@@ -1,7 +1,9 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getEmailRedirectTo } from '../utils/authRedirect';
+import { sendWelcomeEmailOnce } from '../services/emailService';
 
 const PERSISTENCE_KEY = 'mao_segura_user_session';
 let hasInitializedAuthStore = false;
@@ -187,9 +189,7 @@ export const useAuthStore = create((set, get) => ({
                 password,
                 options: {
                     data: metadata,
-                    emailRedirectTo: Platform.OS === 'web'
-                        ? `${window.location.origin}/auth/verify-email`
-                        : 'maosegura://auth/verify-email',
+                    emailRedirectTo: getEmailRedirectTo(),
                 }
             });
 
@@ -313,14 +313,27 @@ export const useAuthStore = create((set, get) => ({
     },
 
     logout: async () => {
-        set({ user: null, session: null, isLoading: false, isAuthActionLoading: false });
         try {
-            await AsyncStorage.removeItem(PERSISTENCE_KEY);
-            // Sign out locally only to prevent hanging the auth queue on slow networks
-            await supabase.auth.signOut({ scope: 'local' });
-        } catch (error) { // DO NOT throw error; allow the local logout to succeed even if backend signout fails
+            set({ isAuthActionLoading: true });
+            
+            // 1. Reset unread counts store and remove any active realtime subscriptions
+            try {
+                const { useUnreadStore } = require('../utils/useUnreadCount');
+                useUnreadStore.getState().reset();
+            } catch (e) {}
+
+            // 2. Remove persisted user session
+            await AsyncStorage.removeItem(PERSISTENCE_KEY).catch(() => {});
+
+            // 3. Clear auth store state before signing out of Supabase
+            set({ user: null, session: null, isLoading: false, isAuthActionLoading: false });
+
+            // 4. Sign out locally without hanging or crashing
+            await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        } catch (error) {
+            console.warn('Logout warning:', error);
         } finally {
-            set({ isLoading: false, isAuthActionLoading: false });
+            set({ user: null, session: null, isLoading: false, isAuthActionLoading: false });
         }
     },
 
@@ -340,8 +353,11 @@ export const useAuthStore = create((set, get) => ({
             if (!user) return false;
 
             if (user?.email_confirmed_at) {
-                // If confirmed, refresh our enriched profile
                 await get().refreshUser(user);
+                const enriched = get().user;
+                if (enriched?.emailVerified) {
+                    sendWelcomeEmailOnce(enriched).catch(() => {});
+                }
                 return true;
             }
             return false;
@@ -352,12 +368,20 @@ export const useAuthStore = create((set, get) => ({
     },
 
     resendVerificationEmail: async () => {
+        const storeUser = get().user;
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Sessão expirada");
-        await supabase.auth.resend({
+        const email = user?.email || storeUser?.email;
+        if (!email) throw new Error('Sessão expirada. Faça login novamente.');
+
+        const { error } = await supabase.auth.resend({
             type: 'signup',
-            email: user.email,
+            email,
+            options: {
+                emailRedirectTo: getEmailRedirectTo(),
+            },
         });
+
+        if (error) throw error;
     },
 
     deleteAccount: async (password) => {
@@ -395,19 +419,45 @@ export const useAuthStore = create((set, get) => ({
         }
     },
 
+
+
     signInWithGoogle: async () => {
         set({ isAuthActionLoading: true });
         try {
+            const redirectTo =
+                Platform.OS === 'web' && typeof window !== 'undefined'
+                    ? `${window.location.origin}/(tabs)/home`
+                    : 'maosegura://home';
+
+            console.log('[signInWithGoogle] Starting Google OAuth, redirectTo:', redirectTo);
+
             const { data, error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: 'maosegura://home',
-                    skipBrowserRedirect: false,
+                    redirectTo,
+                    skipBrowserRedirect: Platform.OS !== 'web',
                 }
             });
-            if (error) throw error;
+
+            if (error) {
+                console.error('[signInWithGoogle] Supabase Error:', error);
+                throw error;
+            }
+
+            console.log('[signInWithGoogle] OAuth Data:', data);
+
+            if (Platform.OS === 'web') {
+                if (data?.url) {
+                    window.location.href = data.url;
+                }
+            } else {
+                if (data?.url) {
+                    await Linking.openURL(data.url);
+                }
+            }
             return data;
         } catch (error) {
+            console.error('[signInWithGoogle] Catch error:', error);
             throw error;
         } finally {
             set({ isAuthActionLoading: false });

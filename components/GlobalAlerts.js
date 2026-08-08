@@ -4,6 +4,18 @@ import { Colors } from '../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+const ALERT_COLORS = {
+    success: Colors.primary,
+    error: Colors.error,
+    warning: '#D97706',
+};
+
+const ALERT_ICONS = {
+    success: 'checkmark-circle',
+    error: 'alert-circle',
+    warning: 'warning',
+};
+
 export function GlobalAlerts() {
     const alerts = useAlertStore(state => state.alerts);
     const removeAlert = useAlertStore(state => state.removeAlert);
@@ -13,22 +25,22 @@ export function GlobalAlerts() {
 
     return (
         <View style={[styles.container, { top: insets.top + 10, pointerEvents: 'box-none' }]}>
-            {alerts.map((alert) => (
-                <View key={alert.id} style={[styles.card, alert.type === 'error' ? styles.cardError : styles.cardSuccess]}>
-                    <Ionicons 
-                        name={alert.type === 'error' ? 'alert-circle' : 'checkmark-circle'} 
-                        size={28} 
-                        color={alert.type === 'error' ? Colors.error : Colors.primary} 
-                    />
-                    <View style={styles.textContainer}>
-                        {!!alert.title && <Text style={styles.title}>{alert.title}</Text>}
-                        <Text style={styles.message}>{alert.message}</Text>
+            {alerts.map((alert) => {
+                const color = ALERT_COLORS[alert.type] || ALERT_COLORS.success;
+                const icon = ALERT_ICONS[alert.type] || ALERT_ICONS.success;
+                return (
+                    <View key={alert.id} style={[styles.card, { borderLeftColor: color }]}>
+                        <Ionicons name={icon} size={28} color={color} />
+                        <View style={styles.textContainer}>
+                            {!!alert.title && <Text style={styles.title}>{alert.title}</Text>}
+                            <Text style={styles.message}>{alert.message}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => removeAlert(alert.id)} style={{ padding: 4 }}>
+                            <Ionicons name="close" size={20} color={Colors.textLight} />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity onPress={() => removeAlert(alert.id)} style={{ padding: 4 }}>
-                        <Ionicons name="close" size={20} color={Colors.textLight} />
-                    </TouchableOpacity>
-                </View>
-            ))}
+                );
+            })}
         </View>
     );
 }
@@ -64,9 +76,8 @@ const styles = StyleSheet.create({
         width: '100%',
         maxWidth: 400
     },
-    cardSuccess: { borderLeftColor: Colors.primary },
-    cardError: { borderLeftColor: Colors.error },
     textContainer: { flex: 1, marginLeft: 12 },
     title: { fontSize: 16, fontWeight: '800', color: Colors.text, marginBottom: 2 },
     message: { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' }
 });
+

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BackHandler } from 'react-native';
 import { handleError } from '../../utils/errorHandler';
+import { MOCK_POSTS } from '../../utils/mockData';
 
 // === Shared Components ===
 function ProfileBanner({ completeness }) {
@@ -447,10 +448,17 @@ export default function Home() {
             const postUserProvince = user?.province?.toLowerCase();
             const postUserCity = user?.city?.toLowerCase();
 
-            // Filtrar posts apenas da mesma província
-            let filteredPosts = postsData;
+            // Combinar posts reais com posts demonstrativos para garantir um feed ativo
+            let combinedPosts = [...postsData];
+            MOCK_POSTS.forEach(mp => {
+                if (!combinedPosts.some(p => String(p.id) === String(mp.id))) {
+                    combinedPosts.push(mp);
+                }
+            });
+
+            let filteredPosts = combinedPosts;
             if (postUserProvince) {
-                filteredPosts = postsData.filter(p => p.author?.province?.toLowerCase() === postUserProvince);
+                filteredPosts = combinedPosts.filter(p => p.is_mock || p.author?.province?.toLowerCase() === postUserProvince);
             }
 
             filteredPosts.sort((a, b) => {

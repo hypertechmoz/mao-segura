@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
-import { useUnreadCount } from '../../utils/useUnreadCount';
+import { useUnreadCount, useUnreadStore } from '../../utils/useUnreadCount';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,9 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
             if (id) {
                 const docId = String(id).startsWith('notif-') ? id.replace('notif-', '') : id;
                 if (String(id).startsWith('notif-')) {
+                    if (isNew) {
+                        useUnreadStore.getState().decrementUnreadNotifications(1);
+                    }
                     await supabase.from('notifications').update({ is_read: true }).eq('id', docId);
                     if (onRead) onRead(id);
                 } 
@@ -266,6 +269,7 @@ export default function Notifications() {
         if (!user) return;
         const uid = user.uid || user.id;
         try {
+            useUnreadStore.getState().clearAllNotifications();
             await supabase.from('notifications').update({ is_read: true }).eq('user_id', uid).eq('is_read', false);
             setNotifications(prev => prev.map(n => n.id.toString().startsWith('notif-') ? { ...n, isNew: false } : n));
         } catch (e) {

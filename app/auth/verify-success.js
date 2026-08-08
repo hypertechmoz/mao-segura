@@ -1,18 +1,28 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Fonts } from '../../constants';
+import { Colors } from '../../constants';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
+import { useAuthStore } from '../../store/authStore';
+import { sendWelcomeEmailOnce } from '../../services/emailService';
 
 export default function VerifySuccess() {
     const router = useRouter();
+    const user = useAuthStore(s => s.user);
+
+    useEffect(() => {
+        if (user?.emailVerified) {
+            sendWelcomeEmailOnce(user).catch(() => {});
+        }
+    }, [user?.id, user?.emailVerified]);
 
     const handleContinue = () => {
         router.replace('/(tabs)/home');
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenSafeArea style={styles.container}>
             <View style={styles.content}>
                 <View style={styles.successIcon}>
                     <Ionicons name="checkmark-circle" size={100} color={Colors.primary} />
@@ -20,7 +30,7 @@ export default function VerifySuccess() {
                 
                 <Text style={styles.title}>Email Verificado!</Text>
                 <Text style={styles.description}>
-                    A sua conta foi ativada com sucesso. Agora já pode explorar todos os serviços do Mão Segura.
+                    A sua conta foi ativada com sucesso. Agora já pode explorar todos os serviços do Konekta.
                 </Text>
 
                 <TouchableOpacity style={styles.button} onPress={handleContinue}>
@@ -28,7 +38,7 @@ export default function VerifySuccess() {
                     <Ionicons name="arrow-forward" size={20} color={Colors.white} />
                 </TouchableOpacity>
             </View>
-        </SafeAreaView>
+        </ScreenSafeArea>
     );
 }
 

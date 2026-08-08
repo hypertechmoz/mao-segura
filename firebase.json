@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "site": "morstar-konekta",
     "public": "dist",
     "ignore": [
       "firebase.json",

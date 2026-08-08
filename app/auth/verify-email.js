@@ -1,32 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, SafeAreaView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Fonts } from '../../constants';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Colors } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
+import { logoutAndRedirect } from '../../utils/logout';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
+import FloatingSupportButton from '../../components/FloatingSupportButton';
 
 export default function VerifyEmail() {
     const router = useRouter();
-    const { user, checkEmailVerification, resendVerificationEmail, logout } = useAuthStore();
+    const insets = useSafeAreaInsets();
+    const { user, checkEmailVerification, resendVerificationEmail } = useAuthStore();
     const { showAlert } = useAlertStore();
     const [checking, setChecking] = useState(false);
     const [resending, setResending] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(60);
 
     useEffect(() => {
-        // Redirect if verified
         if (user?.emailVerified) {
             router.replace('/auth/verify-success');
             return;
         }
 
-        // Timer for resending
         const timer = setInterval(() => {
             setSecondsLeft(prev => prev > 0 ? prev - 1 : 0);
         }, 1000);
 
-        // Auto-check every 5 seconds
         const autoCheck = setInterval(async () => {
             const verified = await checkEmailVerification();
             if (verified) {
@@ -37,7 +39,7 @@ export default function VerifyEmail() {
         return () => {
             clearInterval(timer);
             clearInterval(autoCheck);
-        }
+        };
     }, [user, router]);
 
     const handleCheckStatus = async () => {
@@ -68,10 +70,15 @@ export default function VerifyEmail() {
             setSecondsLeft(60);
             showAlert('Sucesso', 'Email de verificação reenviado!', 'success');
         } catch (err) {
-            if (err.message?.includes('ligação') || err.message?.includes('rede')) {
+            const msg = err.message || '';
+            if (msg.includes('ligação') || msg.includes('rede')) {
                 showAlert('Erro de Ligação', 'Não conseguimos contactar o servidor. Verifique a sua internet e tente novamente.', 'error');
+            } else if (msg.includes('security') || msg.includes('segurança') || msg.includes('rate')) {
+                showAlert('Aguarde', 'Por segurança, aguarde alguns segundos antes de pedir outro email.', 'warning');
+            } else if (msg.includes('Sessão')) {
+                showAlert('Sessão expirada', msg, 'warning');
             } else {
-                showAlert('Erro', 'Não foi possível reenviar o email no momento. Por favor, tente novamente mais tarde.', 'error');
+                showAlert('Erro', msg || 'Não foi possível reenviar o email no momento. Por favor, tente novamente mais tarde.', 'error');
             }
         } finally {
             setResending(false);
@@ -79,12 +86,16 @@ export default function VerifyEmail() {
     };
 
     const handleLogout = async () => {
-        await logout();
-        router.replace('/auth/login');
+        await logoutAndRedirect(router);
+    };
+
+    const openEmailSupport = () => {
+        const message = `Olá! Não recebi o email de verificação da minha conta Konekta (${user?.email || 'sem email'}). Podem ajudar?`;
+        Linking.openURL(`https://wa.me/258843623989?text=${encodeURIComponent(message)}`).catch(() => {});
     };
 
     return (
-        <SafeAreaView style={styles.container}>
+        <ScreenSafeArea style={styles.container}>
             <View style={styles.content}>
                 <View style={styles.iconBox}>
                     <Ionicons name="mail-open-outline" size={80} color={Colors.primary} />
@@ -127,12 +138,21 @@ export default function VerifyEmail() {
                         )}
                     </TouchableOpacity>
 
+                    <TouchableOpacity style={styles.supportLink} onPress={openEmailSupport}>
+                        <Text style={styles.supportLinkText}>Não recebi o email?</Text>
+                        <Text style={styles.supportHint}>Fale connosco pelo WhatsApp — estamos aqui para ajudar.</Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
                         <Text style={styles.logoutText}>Sair da conta</Text>
                     </TouchableOpacity>
                 </View>
             </View>
-        </SafeAreaView>
+            <FloatingSupportButton
+                bottomOffset={Math.max(insets.bottom, 16) + 16}
+                whatsappMessage={`Olá! Não recebi o email de verificação da minha conta Konekta (${user?.email || 'sem email'}). Podem ajudar?`}
+            />
+        </ScreenSafeArea>
     );
 }
 
@@ -151,7 +171,11 @@ const styles = StyleSheet.create({
     secondaryBtn: { height: 56, alignItems: 'center', justifyContent: 'center' },
     secondaryBtnText: { color: Colors.primary, fontSize: 16, fontWeight: '700' },
     disabledBtn: { opacity: 0.5 },
+
+    supportLink: { alignItems: 'center', paddingVertical: 8 },
+    supportLinkText: { color: Colors.primary, fontSize: 15, fontWeight: '700' },
+    supportHint: { fontSize: 12, color: Colors.textLight, textAlign: 'center', marginTop: 4, lineHeight: 18 },
     
-    logoutBtn: { marginTop: 20, height: 50, alignItems: 'center', justifyContent: 'center' },
+    logoutBtn: { marginTop: 8, height: 50, alignItems: 'center', justifyContent: 'center' },
     logoutText: { color: Colors.error, fontSize: 14, fontWeight: '600' }
 });

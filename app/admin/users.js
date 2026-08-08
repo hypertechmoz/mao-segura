@@ -1,18 +1,29 @@
 import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, ActivityIndicator, Platform, TextInput, ScrollView, Modal, TouchableWithoutFeedback } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { Ionicons } from '@expo/vector-icons';
+import { sendKonektaTransactionalEmail } from '../../services/emailService';
 
 export default function AdminUsers() {
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState(null); // null = Dashboard, 'ALL' | 'WORKER' | 'EMPLOYER' = List
+  const [activeTab, setActiveTab] = useState(params?.filter === 'UNCONFIRMED' ? 'UNCONFIRMED' : null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalConfig, setModalConfig] = useState({ title: '', message: '', actionText: '', isDestructive: false, onConfirm: null, isAlert: false });
+
+  useEffect(() => {
+    if (params?.filter === 'UNCONFIRMED') {
+      setActiveTab('UNCONFIRMED');
+    }
+  }, [params?.filter]);
 
   const showModal = (title, message, actionText, isDestructive, onConfirm, isAlert = false) => {
     setModalConfig({ title, message, actionText, isDestructive, onConfirm, isAlert });
@@ -21,13 +32,20 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
     try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('admin_list_users');
+
+      if (!rpcError && Array.isArray(rpcData)) {
+        setUsers(rpcData.map(row => (typeof row === 'string' ? JSON.parse(row) : row)));
+        return;
+      }
+
       const { data, error } = await supabase
         .from('users')
         .select('*')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setUsers(data || []);
+      setUsers((data || []).map(u => ({ ...u, email_confirmed: undefined })));
     } catch (err) {
       console.error('Error loading users:', err);
     } finally {
@@ -41,19 +59,30 @@ export default function AdminUsers() {
   const stats = useMemo(() => {
     const workers = users.filter(u => u.role === 'WORKER').length;
     const employers = users.filter(u => u.role === 'EMPLOYER').length;
+    const unconfirmed = users.filter(u => u.email_confirmed === false).length;
     return {
       total: users.length,
       workers,
-      employers
+      employers,
+      unconfirmed
     };
   }, [users]);
 
   const filteredUsers = useMemo(() => {
     return users.filter(u => {
-      const matchesTab = activeTab === 'ALL' || u.role === activeTab;
+      let matchesTab = true;
+      if (activeTab === 'WORKER' || activeTab === 'EMPLOYER') {
+        matchesTab = u.role === activeTab;
+      } else if (activeTab === 'UNCONFIRMED') {
+        matchesTab = u.email_confirmed === false;
+      } else if (activeTab === 'ALL') {
+        matchesTab = true;
+      }
+
       const matchesSearch = searchQuery === '' || 
         u.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.phone?.includes(searchQuery) ||
+        u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         u.city?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesTab && matchesSearch;
     });
@@ -128,6 +157,38 @@ export default function AdminUsers() {
     }
   };
 
+  const executeConfirmEmail = async (id, userName, email) => {
+    try {
+      const { data: wasNew, error } = await supabase.rpc('admin_confirm_user_email', {
+        target_user_id: id,
+      });
+      if (error) throw error;
+
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, email_confirmed: true } : u));
+
+      if (wasNew !== false && email) {
+        await sendKonektaTransactionalEmail('email_verified', { email, name: userName });
+      }
+
+      showModal('Sucesso', 'Email confirmado com sucesso. O utilizador já pode aceder ao Konekta.', 'OK', false, null, true);
+    } catch (err) {
+      const hint = err.message?.includes('function') || err.code === 'PGRST202'
+        ? ' Execute o script SQL em supabase/migrations/20250807_admin_email_and_welcome.sql no Supabase.'
+        : '';
+      showModal('Erro', (err.message || 'Não foi possível confirmar o email.') + hint, 'OK', true, null, true);
+    }
+  };
+
+  const handleConfirmEmail = (id, userName, email) => {
+    showModal(
+      'Confirmar Email',
+      `Confirmar manualmente o email de ${userName}? O utilizador poderá aceder à plataforma sem clicar no link de verificação.`,
+      'Confirmar',
+      false,
+      () => executeConfirmEmail(id, userName, email)
+    );
+  };
+
   const handleTogglePremium = async (id, currentStatus) => {
     try {
       const { error: userError } = await supabase
@@ -199,6 +260,21 @@ export default function AdminUsers() {
             <Text style={styles.dashCardTitle}>Clientes</Text>
             <Text style={styles.dashCardSub}>Empregadores</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.dashCard, { backgroundColor: '#D97706' }]} 
+            activeOpacity={0.8}
+            onPress={() => setActiveTab('UNCONFIRMED')}
+          >
+            <View style={styles.dashCardTop}>
+              <View style={[styles.dashCardIconWrap, { backgroundColor: Colors.white }]}>
+                <Ionicons name="mail-unread" size={32} color="#D97706" />
+              </View>
+              <Text style={styles.dashCardNumber}>{stats.unconfirmed}</Text>
+            </View>
+            <Text style={styles.dashCardTitle}>Email Pendente</Text>
+            <Text style={styles.dashCardSub}>Precisam de confirmação</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     );
@@ -211,12 +287,49 @@ export default function AdminUsers() {
         <View style={styles.listHeaderRow}>
           <TouchableOpacity style={styles.btnBackToDash} onPress={() => { setActiveTab(null); setSearchQuery(''); }}>
             <Ionicons name="grid" size={20} color={Colors.primary} />
-            <Text style={styles.btnBackToDashText}>Mudar Categoria</Text>
+            <Text style={styles.btnBackToDashText}>Categorias</Text>
           </TouchableOpacity>
           <Text style={styles.listHeaderTitle}>
-            {activeTab === 'ALL' ? 'Todos os Utilizadores' : activeTab === 'WORKER' ? 'Profissionais' : 'Clientes'}
+            {activeTab === 'ALL'
+              ? 'Todos os Utilizadores'
+              : activeTab === 'WORKER'
+              ? 'Profissionais'
+              : activeTab === 'EMPLOYER'
+              ? 'Clientes'
+              : 'Email Pendente'}
           </Text>
         </View>
+
+        {/* Filter Pills */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+          <TouchableOpacity
+            style={[styles.filterPill, activeTab === 'ALL' && styles.filterPillActive]}
+            onPress={() => setActiveTab('ALL')}
+          >
+            <Text style={[styles.filterPillText, activeTab === 'ALL' && styles.filterPillTextActive]}>Todos ({stats.total})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, activeTab === 'WORKER' && styles.filterPillActive]}
+            onPress={() => setActiveTab('WORKER')}
+          >
+            <Text style={[styles.filterPillText, activeTab === 'WORKER' && styles.filterPillTextActive]}>Profissionais ({stats.workers})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, activeTab === 'EMPLOYER' && styles.filterPillActive]}
+            onPress={() => setActiveTab('EMPLOYER')}
+          >
+            <Text style={[styles.filterPillText, activeTab === 'EMPLOYER' && styles.filterPillTextActive]}>Clientes ({stats.employers})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterPill, activeTab === 'UNCONFIRMED' && styles.filterPillWarnActive]}
+            onPress={() => setActiveTab('UNCONFIRMED')}
+          >
+            <Ionicons name="alert-circle" size={14} color={activeTab === 'UNCONFIRMED' ? Colors.white : '#D97706'} />
+            <Text style={[styles.filterPillText, { color: '#D97706' }, activeTab === 'UNCONFIRMED' && { color: Colors.white, fontWeight: '800' }]}>
+              Email Pendente ({stats.unconfirmed})
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         <View style={styles.searchContainer}>
           <Ionicons name="search" size={20} color={Colors.textLight} />
@@ -240,7 +353,7 @@ export default function AdminUsers() {
         keyExtractor={item => item.id}
         refreshing={refreshing}
         onRefresh={() => { setRefreshing(true); loadUsers(); }}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingBottom: Spacing.xl + insets.bottom }]}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={48} color={Colors.border} />
@@ -277,6 +390,12 @@ export default function AdminUsers() {
                 <Text style={styles.detailText}>{item.city || 'Desconhecido'}, {item.province || '??'}</Text>
               </View>
               <View style={styles.detailRow}>
+                <Ionicons name="mail-outline" size={14} color={item.email_confirmed === false ? Colors.error : Colors.success} />
+                <Text style={[styles.detailText, { color: item.email_confirmed === false ? Colors.error : Colors.success, fontWeight: '600' }]}>
+                  {item.email_confirmed === false ? 'Email por confirmar' : (item.email_confirmed ? 'Email confirmado' : 'Email —')}
+                </Text>
+              </View>
+              <View style={styles.detailRow}>
                 <Ionicons name="shield-checkmark-outline" size={14} color={item.is_active !== false ? Colors.success : Colors.error} />
                 <Text style={[styles.detailText, { color: item.is_active !== false ? Colors.success : Colors.error, fontWeight: '600' }]}>
                   {item.is_active !== false ? 'Conta Ativa' : 'Conta Banida'}
@@ -285,6 +404,15 @@ export default function AdminUsers() {
             </View>
 
             <View style={styles.actions}>
+              {item.email_confirmed === false && (
+                <TouchableOpacity
+                  style={[styles.actionBtn, styles.btnConfirmEmail]}
+                  onPress={() => handleConfirmEmail(item.id, item.name, item.email)}
+                >
+                  <Ionicons name="mail-unread-outline" size={14} color={Colors.white} />
+                  <Text style={styles.btnTextWhite}>Confirmar Email</Text>
+                </TouchableOpacity>
+              )}
               {!item.is_verified && (
                 <TouchableOpacity style={[styles.actionBtn, styles.btnVerify]} onPress={() => handleVerify(item.id, item.role)}>
                   <Ionicons name="checkmark-circle" size={14} color={Colors.white} />
@@ -404,6 +532,35 @@ const styles = StyleSheet.create({
   btnBackToDash: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
   btnBackToDashText: { color: Colors.primary, fontWeight: '700', fontSize: 13 },
   listHeaderTitle: { fontSize: 18, fontWeight: '800', color: Colors.text },
+
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+  },
+  filterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  filterPillWarnActive: {
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  filterPillTextActive: {
+    color: Colors.white,
+    fontWeight: '800',
+  },
   
   searchContainer: { 
     flexDirection: 'row', 
@@ -436,6 +593,7 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12 },
   btnVerify: { backgroundColor: Colors.primary },
+  btnConfirmEmail: { backgroundColor: '#1565C0' },
   btnTextWhite: { color: Colors.white, fontSize: 13, fontWeight: '800' },
   btnBan: { backgroundColor: Colors.error + '15' },
   btnUnban: { backgroundColor: Colors.info + '15' },

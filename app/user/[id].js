@@ -11,6 +11,8 @@ import { useAuthGuard } from '../../utils/useAuthGuard';
 import PostCard from '../../components/PostCard';
 import JobCard from '../../components/JobCard';
 
+import { getMockUserById, MOCK_POSTS } from '../../utils/mockData';
+
 export default function UserDetail() {
     const router = useRouter();
     const { id } = useLocalSearchParams();
@@ -62,6 +64,13 @@ export default function UserDetail() {
         }
         setIsReporting(true);
         try {
+            if (String(id).startsWith('mock-user-')) {
+                setShowReportModal(false);
+                setReportReason('');
+                setReportText('');
+                Alert.alert('Sucesso', 'A sua denúncia foi registada e será analisada pela nossa equipa.');
+                return;
+            }
             await supabase.from('reports').insert({
                 reporter_id: user.uid || user.id,
                 reported_id: profileUser.id,
@@ -82,6 +91,15 @@ export default function UserDetail() {
 
     const loadUser = useCallback(async () => {
         try {
+            if (String(id).startsWith('mock-user-')) {
+                const mockU = getMockUserById(id);
+                if (mockU) {
+                    setProfileUser(mockU);
+                }
+                setLoading(false);
+                return;
+            }
+
             // Fetch User Basic Info
             const { data: userData, error: userError } = await supabase
                 .from('users')
@@ -115,6 +133,10 @@ export default function UserDetail() {
     }, [id]);
 
     const loadReviews = useCallback(async () => {
+        if (String(id).startsWith('mock-user-')) {
+            setLoadingReviews(false);
+            return;
+        }
         setLoadingReviews(true);
         try {
             const { data: reviewsData, error } = await supabase
@@ -140,6 +162,10 @@ export default function UserDetail() {
     }, [id]);
 
     const checkConnection = useCallback(async () => {
+        if (String(id).startsWith('mock-user-')) {
+            setConnectionsCount(15);
+            return;
+        }
         const uid = user?.uid || user?.id;
         
         try {
@@ -177,6 +203,11 @@ export default function UserDetail() {
 
     const loadPosts = useCallback(async () => {
         if (!id) return;
+        if (String(id).startsWith('mock-user-')) {
+            setUserPosts(MOCK_POSTS.filter(p => p.user_id === String(id)));
+            setLoadingPosts(false);
+            return;
+        }
         setLoadingPosts(true);
         try {
             const { data, error } = await supabase

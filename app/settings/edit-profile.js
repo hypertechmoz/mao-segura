@@ -417,13 +417,16 @@ export default function EditProfile() {
         }
     };
 
-    // Bloqueia sempre os campos imutáveis, mesmo se estiverem vazios. O preenchimento deve ser no registo.
+    // Bloqueia apenas se o campo já tiver sido preenchido inicialmente.
+    // Se estiver vazio (ex: utilizador que fez registo via Google sem número de telefone), permite o preenchimento!
     const isLocked = (field) => {
         const permanentFields = ['name', 'phone', 'province', 'city', 'bairro'];
-        return permanentFields.includes(field);
+        if (!permanentFields.includes(field)) return false;
+        const initialVal = initialForm ? initialForm[field] : null;
+        return !!(initialVal && String(initialVal).trim() !== '');
     };
 
-    // Só mostra o campo se estiver preenchido no initialForm ou se showAllFields for true.
+    // Mostra o campo se showAllFields for true, se não estiver bloqueado (ex: telefone vazio) ou se for um campo normal
     const shouldShow = (field) => {
         if (showAllFields) return true;
         if (loading && !initialForm) return false;
@@ -433,7 +436,7 @@ export default function EditProfile() {
         if (autoHideFields.includes(field)) {
             const initialVal = initialForm ? initialForm[field] : null;
             const isFilled = initialVal && String(initialVal).trim() !== '';
-            // Se já tem um valor inicial preenchido, oculta-o na vista simplificada
+            // Se NÃO está preenchido (ex: Google user sem telefone), DEVE MOSTRAR para o utilizador preencher!
             return !isFilled;
         }
 
@@ -580,6 +583,15 @@ export default function EditProfile() {
                         <Text style={styles.showAllText}>Alguns campos já preenchidos estão ocultos.</Text>
                         <Text style={styles.showAllTextBold}>Toque aqui para ver/editar todos os campos.</Text>
                     </TouchableOpacity>
+                )}
+
+                {(!initialForm?.phone || String(initialForm.phone).trim() === '') && (
+                    <View style={styles.missingPhoneBanner}>
+                        <Ionicons name="information-circle" size={22} color={Colors.primary} style={{ marginRight: 10 }} />
+                        <Text style={styles.missingPhoneText}>
+                            Por favor, complete o seu número de telefone para permitir que empregadores e trabalhadores entrem em contacto.
+                        </Text>
+                    </View>
                 )}
 
                 {shouldShow('name') && (
@@ -1066,6 +1078,23 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '600',
         color: Colors.text,
+    },
+    missingPhoneBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.primaryBg,
+        borderWidth: 1,
+        borderColor: Colors.primary + '40',
+        padding: 14,
+        borderRadius: 12,
+        marginBottom: 16,
+    },
+    missingPhoneText: {
+        flex: 1,
+        fontSize: 13,
+        color: Colors.text,
+        lineHeight: 18,
+        fontWeight: '500',
     },
     submitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     submitBtnText: { color: Colors.white, fontWeight: '700' },

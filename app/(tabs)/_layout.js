@@ -5,6 +5,7 @@ import { useAuthStore } from '../../store/authStore';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { useTranslation } from 'react-i18next';
+import { logoutAndRedirect } from '../../utils/logout';
 import BrandWordmark from '../../components/BrandWordmark';
 
 import { Ionicons } from '@expo/vector-icons';
@@ -265,8 +266,7 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
                                         style={styles.dropdownItem}
                                         onPress={async () => {
                                             closeAllMenus();
-                                            router.replace('/auth/login');
-                                            logout();
+                                            await logoutAndRedirect(router);
                                         }}
                                     >
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -285,12 +285,15 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
 }
 
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 export default function TabLayout() {
     const { t } = useTranslation();
     const router = useRouter();
     const { user } = useAuthStore();
     const { requireAuth } = useAuthGuard();
     const { width } = useWindowDimensions();
+    const insets = useSafeAreaInsets();
     const isSmallScreen = width < 768;
     const isMobileWeb = width < 480;
 
@@ -307,17 +310,22 @@ export default function TabLayout() {
         );
     }
 
+    const bottomPadding = Math.max(insets.bottom, 8);
+    const barHeight = 54 + bottomPadding;
+
     return (
         <Tabs
             screenOptions={{
                 headerShown: false,
                 tabBarShowLabel: false,
-                tabBarStyle: Platform.OS === 'web' ? { display: 'none' } : {
+                tabBarHideOnKeyboard: Platform.OS === 'android',
+                tabBarStyle: {
                     backgroundColor: Colors.white,
                     borderTopWidth: 1,
                     borderTopColor: Colors.background,
-                    height: 60,
-                    paddingBottom: 8,
+                    height: barHeight,
+                    paddingBottom: bottomPadding,
+                    paddingTop: 4,
                 },
                 tabBarActiveTintColor: Colors.primary,
                 tabBarInactiveTintColor: Colors.textLight,

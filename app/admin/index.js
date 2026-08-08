@@ -22,6 +22,14 @@ export default function AdminDashboard() {
 
     const loadStats = async () => {
       try {
+        let rpcUsers = null;
+        try {
+          const { data: rpcData } = await supabase.rpc('admin_list_users');
+          if (Array.isArray(rpcData)) {
+            rpcUsers = rpcData.map(row => (typeof row === 'string' ? JSON.parse(row) : row));
+          }
+        } catch (e) {}
+
         const [
             usersSnap,
             activeJobsSnap,
@@ -29,16 +37,17 @@ export default function AdminDashboard() {
             pendingReportsSnap,
             pendingTestimonialsSnap
         ] = await Promise.all([
-            supabase.from('users').select('id, role, created_at, province, name, profile_photo').order('created_at', { ascending: false }),
+            supabase.from('users').select('*').order('created_at', { ascending: false }),
             supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'ACTIVE'),
             supabase.from('jobs').select('*', { count: 'exact', head: true }).eq('status', 'CLOSED'),
             supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'PENDING'),
             supabase.from('testimonials').select('*', { count: 'exact', head: true }).eq('status', 'PENDING')
         ]);
         
-        const allUsers = usersSnap.data || [];
+        const allUsers = rpcUsers || usersSnap.data || [];
         const workers = allUsers.filter(u => u.role === 'WORKER').length;
         const employers = allUsers.filter(u => u.role === 'EMPLOYER').length;
+        const unconfirmedCount = allUsers.filter(u => u.email_confirmed === false).length;
         
         // Calculate New this month
         const currentMonth = new Date().getMonth();
@@ -68,6 +77,7 @@ export default function AdminDashboard() {
             totalUsers: allUsers.length,
             workers,
             employers,
+            unconfirmedCount,
             newThisMonth,
             topProvince: topProv,
             activeJobs: activeJobsSnap.count || 0,
@@ -102,6 +112,29 @@ export default function AdminDashboard() {
           <Text style={styles.totalValue}>{stats?.totalUsers || 0}</Text>
         </View>
       </View>
+
+      {/* Lembrete Admin para Emails Pendentes */}
+      {stats?.unconfirmedCount > 0 && (
+        <TouchableOpacity
+          style={styles.reminderBanner}
+          activeOpacity={0.85}
+          onPress={() => router.push({ pathname: '/admin/users', params: { filter: 'UNCONFIRMED' } })}
+        >
+          <View style={styles.reminderIconCircle}>
+            <Ionicons name="mail-unread" size={24} color="#D97706" />
+          </View>
+          <View style={styles.reminderContent}>
+            <Text style={styles.reminderTitle}>Lembrete de Confirmação de Email</Text>
+            <Text style={styles.reminderDesc}>
+              Há <Text style={{ fontWeight: '800', color: '#B45309' }}>{stats.unconfirmedCount}</Text> {stats.unconfirmedCount === 1 ? 'utilizador' : 'utilizadores'} com email por confirmar. Toque para resolver.
+            </Text>
+          </View>
+          <View style={styles.reminderActionBtn}>
+            <Text style={styles.reminderActionText}>Confirmar</Text>
+            <Ionicons name="arrow-forward" size={14} color="#B45309" />
+          </View>
+        </TouchableOpacity>
+      )}
 
       <Text style={styles.sectionTitle}>Estatísticas Gerais</Text>
       <View style={styles.grid}>
@@ -150,12 +183,15 @@ export default function AdminDashboard() {
           <Text style={[styles.statValue, { color: '#2196F3' }]}>{stats?.employers || 0}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.statCard, { borderLeftColor: '#FF9800' }]}>
-          <View style={[styles.iconCircle, { backgroundColor: '#FF980020' }]}>
-            <Ionicons name="flash" size={20} color="#FF9800" />
+        <TouchableOpacity 
+          style={[styles.statCard, { borderLeftColor: '#D97706' }]} 
+          onPress={() => router.push({ pathname: '/admin/users', params: { filter: 'UNCONFIRMED' } })}
+        >
+          <View style={[styles.iconCircle, { backgroundColor: '#D9770620' }]}>
+            <Ionicons name="mail-unread" size={20} color="#D97706" />
           </View>
-          <Text style={styles.statLabel}>Vagas Ativas</Text>
-          <Text style={[styles.statValue, { color: '#FF9800' }]}>{stats?.activeJobs || 0}</Text>
+          <Text style={styles.statLabel}>Email Pendente</Text>
+          <Text style={[styles.statValue, { color: '#D97706' }]}>{stats?.unconfirmedCount || 0}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={[styles.statCard, { borderLeftColor: Colors.error }]}>
@@ -177,6 +213,11 @@ export default function AdminDashboard() {
             <Text style={styles.menuTitle}>Gerir Utilizadores</Text>
             <Text style={styles.menuDesc}>Ver, banir ou verificar contas</Text>
           </View>
+          {stats?.unconfirmedCount > 0 && (
+            <View style={[styles.badge, { backgroundColor: '#D97706' }]}>
+              <Text style={styles.badgeText}>{stats.unconfirmedCount} pendente</Text>
+            </View>
+          )}
           <Ionicons name="chevron-forward" size={20} color={Colors.textLight} />
         </TouchableOpacity>
 
@@ -261,6 +302,36 @@ const styles = StyleSheet.create({
   totalBadge: { alignItems: 'flex-end' },
   totalLabel: { fontSize: 10, color: Colors.textLight, textTransform: 'uppercase', fontWeight: '700' },
   totalValue: { fontSize: Fonts.sizes.xxl, fontWeight: '900', color: Colors.primary },
+
+  reminderBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 16,
+    padding: Spacing.md,
+    marginBottom: Spacing.xl,
+    elevation: 2,
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+  },
+  reminderIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FDE68A',
+    justify: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  reminderContent: { flex: 1 },
+  reminderTitle: { fontSize: Fonts.sizes.sm, fontWeight: '800', color: '#92400E', marginBottom: 2 },
+  reminderDesc: { fontSize: Fonts.sizes.xs, color: '#B45309', lineHeight: 18 },
+  reminderActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FDE68A', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginLeft: 8 },
+  reminderActionText: { fontSize: 11, fontWeight: '800', color: '#92400E' },
 
   sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.md, marginLeft: 4 },
   

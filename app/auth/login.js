@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
 import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function Login() {
     const router = useRouter();
+    const insets = useSafeAreaInsets();
     const { loginWithPassword, signInWithGoogle, isAuthActionLoading } = useAuthStore();
 
     const [email, setEmail] = useState('');
@@ -54,13 +56,14 @@ export default function Login() {
             await signInWithGoogle();
         } catch (err) {
             console.error('Google Login Error:', err);
-            Alert.alert('Erro', 'Não foi possível iniciar sessão com o Google.');
+            const msg = err?.message || 'Não foi possível iniciar sessão com o Google. Por favor, tente novamente.';
+            Alert.alert('Erro', msg);
         }
     };
 
     return (
         <View style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Spacing.lg + insets.bottom }]} keyboardShouldPersistTaps="handled">
                 <View style={styles.header}>
                     <View style={styles.logoBox}>
                         <Ionicons name="lock-closed" size={32} color={Colors.white} />

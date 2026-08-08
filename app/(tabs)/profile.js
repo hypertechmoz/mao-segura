@@ -14,6 +14,7 @@ import { sendPushNotification } from '../../services/notificationService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PostCard from '../../components/PostCard';
 import JobCard from '../../components/JobCard';
+import { logoutAndRedirect } from '../../utils/logout';
 
 export default function Profile() {
     const router = useRouter();
@@ -213,8 +214,7 @@ export default function Profile() {
     const handleLogout = () => {
         const performLogout = async () => {
             try {
-                router.replace('/auth/login');
-                logout();
+                await logoutAndRedirect(router);
             } catch (err) {
                 console.error('Logout error:', err);
             }
@@ -234,7 +234,7 @@ export default function Profile() {
 
     const { t, i18n } = useTranslation();
 
-    if (loading && !refreshing) {
+    if ((loading && !refreshing) || (!user && !profile)) {
         return <View style={styles.center}><ActivityIndicator size="large" color={Colors.primary} /></View>;
     }
 

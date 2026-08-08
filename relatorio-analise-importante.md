@@ -876,3 +876,204 @@ As causas mais provaveis sao:
 - app Android fechando sozinho sem logs nativos suficientes para confirmar a causa.
 
 A recomendacao e corrigir primeiro os problemas estruturais de layout, icones e loading, porque eles afetam a usabilidade geral. Depois disso, deve-se revisar a persistencia no Supabase e consolidar o Premium/Konekt Mais.
+
+---
+
+## Alteracoes implementadas
+
+Data: **2026-08-08**
+
+Esta secao regista as correcoes e melhorias aplicadas ao codigo e ao backend remoto (Supabase), com base nos bugs e pedidos de melhoria reportados na sessao de trabalho de 08/08/2026.
+
+---
+
+### 1. Reenviar email de verificacao dava erro
+
+**Problema:** Ao clicar em "Reenviar Email" na tela de verificacao, aparecia erro generico.
+
+**Causa:** A funcao `resendVerificationEmail` em `store/authStore.js` nao verificava o `error` devolvido pelo Supabase e nao enviava `emailRedirectTo`, obrigatorio para o reenvio funcionar corretamente (especialmente na web).
+
+**Alteracoes:**
+
+- Criado `utils/authRedirect.js` com `getEmailRedirectTo()` centralizado.
+- `resendVerificationEmail` passa a:
+  - usar email da sessao ou do store como fallback;
+  - incluir `emailRedirectTo` no pedido;
+  - propagar erros do Supabase;
+  - tratar rate limit e sessao expirada com mensagens mais claras em `app/auth/verify-email.js`.
+
+**Arquivos:** `store/authStore.js`, `utils/authRedirect.js`, `app/auth/verify-email.js`
+
+---
+
+### 2. Safe area na versao mobile (producao)
+
+**Problema:** Conteudo invade a barra de status e a area inferior no APK Android.
+
+**Causa:** Uso de `SafeAreaView` do React Native (ineficaz em Android edge-to-edge) e telas sem padding baseado em insets.
+
+**Alteracoes:**
+
+- Criado componente `components/ScreenSafeArea.js` usando `react-native-safe-area-context`.
+- Aplicado em:
+  - `app/onboarding.js`
+  - `app/auth/choose-type.js`
+  - `app/auth/verify-email.js`
+  - `app/auth/verify-success.js`
+  - `app/auth/login.js` (padding inferior)
+  - `app/auth/register.js` (padding inferior)
+  - `app/admin/users.js` (padding inferior na lista)
+- `SafeAreaProvider` ja existia em `app/_layout.js`; o padrao passou a ser consistente nas telas de auth e onboarding.
+
+**Arquivos:** `components/ScreenSafeArea.js`, telas listadas acima
+
+---
+
+### 3. Logout fechava o app em vez de ir para login
+
+**Problema:** Ao fazer logout, a aplicacao fechava ou crashava em vez de redirecionar para a tela de login.
+
+**Causa provavel:** Limpeza da sessao (`user = null`) enquanto o utilizador ainda estava nas tabs, provocando crash em componentes que dependem do user.
+
+**Alteracoes:**
+
+- Criado `utils/logout.js` com `logoutAndRedirect(router)` — navega **primeiro** para `/auth/login`, depois executa logout.
+- Aplicado em:
+  - `app/(tabs)/profile.js`
+  - `app/(tabs)/_layout.js` (menu web)
+  - `app/auth/verify-email.js`
+
+**Arquivos:** `utils/logout.js`, `app/(tabs)/profile.js`, `app/(tabs)/_layout.js`, `app/auth/verify-email.js`
+
+---
+
+### 4. Titulos duplicados no painel admin
+
+**Problema:** Apareciam dois headers — "admin" (layout raiz) e o titulo verde do painel (ex.: "Gerir Utilizadores").
+
+**Alteracoes:**
+
+- Adicionado em `app/_layout.js`:
+  ```js
+  <Stack.Screen name="admin" options={{ headerShown: false }} />
+  ```
+- Mantidos apenas os titulos definidos em `app/admin/_layout.js` ("Painel de Controlo", "Gerir Utilizadores", etc.).
+
+**Arquivos:** `app/_layout.js`, `app/admin/_layout.js`
+
+---
+
+### 5. Suporte na tela de verificacao de email
+
+**Melhoria:** Opcao "Nao recebi o email?" com contacto via WhatsApp.
+
+**Alteracoes:**
+
+- Link **"Nao recebi o email?"** abre WhatsApp com mensagem pre-preenchida (email do utilizador).
+- `FloatingSupportButton` atualizado para aceitar `whatsappMessage` e `bottomOffset` personalizados.
+- Botao flutuante de suporte na tela de verificacao com mensagem especifica.
+
+**Arquivos:** `app/auth/verify-email.js`, `components/FloatingSupportButton.js`
+
+---
+
+### 6. Admin confirmar email manualmente
+
+**Melhoria:** Permitir ao admin confirmar a conta de utilizadores que nao recebem o email de verificacao.
+
+**Alteracoes:**
+
+- Migration SQL: `supabase/migrations/20250807_admin_email_and_welcome.sql`
+  - RPC `admin_list_users()` — lista utilizadores com estado `email_confirmed`
+  - RPC `admin_confirm_user_email(target_user_id)` — confirma email em `auth.users`
+- Em `app/admin/users.js`:
+  - botao **"Confirmar Email"** para utilizadores com email pendente;
+  - indicador visual "Email por confirmar" / "Email confirmado";
+  - envio de email transacional apos confirmacao manual.
+
+**Nota:** A migration SQL deve ser executada no Supabase SQL Editor se ainda nao foi aplicada.
+
+**Arquivos:** `supabase/migrations/20250807_admin_email_and_welcome.sql`, `app/admin/users.js`
+
+---
+
+### 7. Continuar com Google no cadastro
+
+**Melhoria:** Botao "Continuar com Google" na tela de registo.
+
+**Alteracoes:**
+
+- Botao Google adicionado em `app/auth/register.js` (mesmo padrao visual do login).
+- Exige aceitacao dos termos antes de continuar.
+- `signInWithGoogle` em `store/authStore.js` atualizado com `redirectTo` correto para web e mobile.
+
+**Arquivos:** `app/auth/register.js`, `store/authStore.js`
+
+---
+
+### 8. Emails de boas-vindas e verificacao (Brevo + Edge Function)
+
+**Melhoria:** Enviar email de boas-vindas apos confirmacao de email; enviar email quando admin confirma manualmente.
+
+**Alteracoes no codigo:**
+
+- Criado `services/emailService.js` com:
+  - `sendKonektaTransactionalEmail(type, { email, name })`
+  - `sendWelcomeEmailOnce(user)` — evita duplicados via AsyncStorage
+- Tipos de email: `welcome`, `email_verified`
+- Disparo automatico em:
+  - `checkEmailVerification()` quando email e confirmado
+  - `app/auth/verify-success.js` ao entrar na tela de sucesso
+  - `app/admin/users.js` apos admin confirmar email
+
+**Backend (Supabase):**
+
+- Edge Function `send-konekta-email` criada e deployada.
+- Integracao via **API HTTP do Brevo** (`https://api.brevo.com/v3/smtp/email`) — portas SMTP (587) nao funcionam em Edge Functions.
+- Secrets configurados no projeto `tecmgxmolzbehalzjyrf`:
+  - `BREVO_API_KEY` (chave API `xkeysib-...`, nao a chave SMTP `xsmtpsib-...`)
+  - `KONEKTA_FROM_EMAIL` = `konekta@morstar.online`
+  - `KONEKTA_FROM_NAME` = `Konekta`
+- Teste de envio bem-sucedido em 2026-08-08 (`messageId` devolvido pelo Brevo).
+
+**Arquivos:** `services/emailService.js`, `supabase/functions/send-konekta-email/index.ts`, `store/authStore.js`, `app/auth/verify-success.js`, `app/admin/users.js`
+
+**Nota sobre Brevo:**
+
+| Tipo de email | Servico | Chave usada |
+|---------------|---------|-------------|
+| Verificacao de conta, redefinir senha | Supabase Auth + Brevo SMTP | `xsmtpsib-...` (ja configurado no dashboard Supabase) |
+| Boas-vindas, email verificado pelo admin | Edge Function + Brevo API | `xkeysib-...` (secret no Supabase) |
+
+---
+
+### 9. Configuracao Supabase local
+
+**Alteracoes:**
+
+- Criado `supabase/config.toml` com `project_id` local e configuracao minima valida para CLI.
+- Funcao deployada via: `supabase functions deploy send-konekta-email --project-ref tecmgxmolzbehalzjyrf`
+
+---
+
+### Resumo dos ficheiros novos
+
+| Ficheiro | Descricao |
+|----------|-----------|
+| `utils/authRedirect.js` | URL de redirect para emails Supabase Auth |
+| `utils/logout.js` | Logout seguro com redirect previo |
+| `components/ScreenSafeArea.js` | Safe area para Android producao |
+| `services/emailService.js` | Cliente para emails transacionais |
+| `supabase/functions/send-konekta-email/index.ts` | Edge Function Brevo |
+| `supabase/migrations/20250807_admin_email_and_welcome.sql` | RPCs admin para email |
+| `supabase/config.toml` | Configuracao CLI Supabase |
+
+---
+
+### Pendencias / acoes manuais restantes
+
+1. **Executar migration SQL** no Supabase (`20250807_admin_email_and_welcome.sql`) se os botoes de admin "Confirmar Email" ainda nao funcionarem.
+2. **Regenerar chaves** expostas no chat (token Supabase `sbp_...`, chaves Brevo) por seguranca.
+3. **Testar em APK** safe area, logout e reenvio de email em dispositivo real.
+4. Problemas da analise original **nao abordados nesta sessao** continuam pendentes: teclado Android, icones web, likes, comentarios, chat duplicado, crash Messages realtime, Premium/Konekt Mais, edicao de perfil, etc.
+

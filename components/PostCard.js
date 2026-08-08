@@ -51,6 +51,11 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
         setIsLiked(!isLiked);
         setLikesCount(prev => isLiked ? prev - 1 : prev + 1);
 
+        // Safe handling for mock posts: toggle locally without network/RPC call
+        if (post.is_mock || String(post.id).startsWith('mock-')) {
+            return;
+        }
+
         try {
             const { error } = await supabase.rpc('toggle_post_like', { 
                 p_id: post.id, 
@@ -102,6 +107,11 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
         if (uid === post.user_id) return;
         const authorName = post.author?.name || post.user?.name || post.author_name || 'Utilizador';
 
+        if (post.is_mock || String(post.id).startsWith('mock-')) {
+            router.push(`/user/${post.user_id}`);
+            return;
+        }
+
         if (connectionStatus === 'CONNECTED' && conversationId) {
             router.push({ pathname: `/chat/${conversationId}`, params: { name: authorName, pending_post_id: post.id } });
             return;
@@ -133,6 +143,12 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
     const confirmDelete = async () => {
         setIsDeleting(true);
         setDeleteError('');
+        if (post.is_mock || String(post.id).startsWith('mock-')) {
+            setIsDeleting(false);
+            setDeleteModalVisible(false);
+            if (onDelete) onDelete(post.id);
+            return;
+        }
         try {
             // Append .select() to verify if the row was actually deleted
             const { error, data } = await supabase.from('posts').delete().eq('id', post.id).select();
@@ -155,6 +171,13 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
     const handleSaveEdit = async () => {
         if (!editContent.trim()) return;
         setIsSaving(true);
+        if (post.is_mock || String(post.id).startsWith('mock-')) {
+            post.content = editContent.trim();
+            setEditModalVisible(false);
+            if (onUpdate) onUpdate(post.id, editContent.trim());
+            setIsSaving(false);
+            return;
+        }
         try {
             const { error } = await supabase.from('posts').update({ content: editContent.trim() }).eq('id', post.id);
             if (error) throw error;

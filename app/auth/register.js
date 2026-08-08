@@ -1,14 +1,18 @@
 import { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../store/authStore';
+import { useAlertStore } from '../../store/alertStore';
 import { Colors, Spacing, Fonts, PROVINCES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import FloatingSupportButton from '../../components/FloatingSupportButton';
 
 export default function Register() {
     const router = useRouter();
     const { role } = useLocalSearchParams();
-    const { register, isAuthActionLoading } = useAuthStore();
+    const { register, signInWithGoogle, isAuthActionLoading } = useAuthStore();
+    const insets = useSafeAreaInsets();
 
     const [form, setForm] = useState({
         name: '',
@@ -24,6 +28,7 @@ export default function Register() {
     const [showPassword, setShowPassword] = useState(false);
     const [passwordStrength, setPasswordStrength] = useState({ score: 0, label: '', color: Colors.textLight });
     const [termsAccepted, setTermsAccepted] = useState(false);
+    const [termsError, setTermsError] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
 
     const updateField = (field, value) => {
@@ -57,36 +62,44 @@ export default function Register() {
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     };
 
+    const triggerTermsWarning = (context = '') => {
+        setTermsError(true);
+        const msg = `Por favor, marque a caixa a confirmar que aceita as Regras e Termos de Uso${context}.`;
+        setErrorMsg(msg);
+        useAlertStore.getState().showAlert('Atenção', msg, 'warning');
+    };
+
     const handleRegister = async () => {
         const { name, email, phone, province, city, bairro, password } = form;
 
         if (!name || !email || !province || !city || !bairro || !password) {
-            Alert.alert('Atenção', 'Preencha todos os campos obrigatórios');
+            useAlertStore.getState().showAlert('Atenção', 'Preencha todos os campos obrigatórios', 'warning');
             return;
         }
 
         if (name.trim().split(/\s+/).length < 2) {
-            Alert.alert('Atenção', 'Por favor, insira o seu nome completo (nome e apelido).');
+            useAlertStore.getState().showAlert('Atenção', 'Por favor, insira o seu nome completo (nome e apelido).', 'warning');
             return;
         }
 
         if (!validateEmail(email)) {
-            Alert.alert('Atenção', 'Introduza um endereço de email válido');
+            useAlertStore.getState().showAlert('Atenção', 'Introduza um endereço de email válido', 'warning');
             return;
         }
 
         if (passwordStrength.score < 4) {
-            Alert.alert('Segurança Insuficiente', 'A sua palavra-passe deve ser Forte. Cumpra com as recomendações de segurança (mín. 8 caracteres, maiúsculas, minúsculas, números e símbolos).');
+            useAlertStore.getState().showAlert('Segurança Insuficiente', 'A sua palavra-passe deve ser Forte (mín. 8 caracteres, maiúsculas, minúsculas, números e símbolos).', 'warning');
             return;
         }
 
         if (!termsAccepted) {
-            Alert.alert('Atenção', 'É obrigatório aceitar os Termos e Condições para criar uma conta.');
+            triggerTermsWarning(' para criar uma conta');
             return;
         }
 
         try {
             setErrorMsg('');
+            setTermsError(false);
             await register(email, password, {
                 name,
                 role: role || 'WORKER',
@@ -99,13 +112,29 @@ export default function Register() {
         } catch (err) {
             const message = err.message || 'Ocorreu um erro ao criar a conta';
             setErrorMsg(message);
-            Alert.alert('Erro', message);
+            useAlertStore.getState().showAlert('Erro', message, 'error');
+        }
+    };
+
+    const handleGoogleRegister = async () => {
+        if (!termsAccepted) {
+            triggerTermsWarning(' para continuar com a conta Google');
+            return;
+        }
+        try {
+            setErrorMsg('');
+            setTermsError(false);
+            await signInWithGoogle();
+        } catch (err) {
+            console.error('Google Register Error:', err);
+            const msg = err?.message || 'Não foi possível continuar com o Google. Por favor, tente novamente.';
+            useAlertStore.getState().showAlert('Erro', msg, 'error');
         }
     };
 
     return (
         <View style={{ flex: 1 }}>
-            <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <ScrollView style={styles.container} contentContainerStyle={[styles.content, { paddingBottom: Spacing.xxl + insets.bottom }]} keyboardShouldPersistTaps="handled">
             <Text style={styles.heading}>
                 {role === 'EMPLOYER' ? 'Criar conta de Cliente' : 'Criar conta de Profissional'}
             </Text>
@@ -258,22 +287,26 @@ export default function Register() {
 
             {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
 
-            <View style={styles.termsContainer}>
-                <TouchableOpacity 
-                    style={[styles.checkbox, termsAccepted && styles.checkboxChecked]} 
-                    onPress={() => setTermsAccepted(!termsAccepted)}
-                >
-                    {termsAccepted && <Ionicons name="checkmark" size={16} color={Colors.white} />}
-                </TouchableOpacity>
+            <TouchableOpacity 
+                style={[
+                    styles.termsContainer,
+                    termsError && !termsAccepted && { borderColor: Colors.error, borderWidth: 1.5, backgroundColor: Colors.error + '10' }
+                ]} 
+                onPress={() => { setTermsAccepted(!termsAccepted); setTermsError(false); }}
+                activeOpacity={0.8}
+            >
+                <View style={[styles.checkbox, termsAccepted && styles.checkboxChecked, termsError && !termsAccepted && { borderColor: Colors.error }]}>
+                    {termsAccepted && <Ionicons name="checkmark-sharp" size={16} color={Colors.white} />}
+                </View>
                 <Text style={styles.termsText}>
-                    Confirmo que li e aceito as <Text style={styles.termsLink} onPress={() => router.push('/info/terms')}>Regras da Comunidade e Termos de Uso.</Text>
+                    Confirmo que li e aceito as <Text style={styles.termsLink} onPress={(e) => { e.stopPropagation(); router.push('/info/terms'); }}>Regras da Comunidade e Termos de Uso.</Text>
                 </Text>
-            </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
-                style={[styles.button, (isAuthActionLoading || !termsAccepted || passwordStrength.score < 4) && styles.buttonDisabled]}
+                style={[styles.button, isAuthActionLoading && styles.buttonDisabled]}
                 onPress={handleRegister}
-                disabled={isAuthActionLoading || !termsAccepted || passwordStrength.score < 4}
+                disabled={isAuthActionLoading}
                 activeOpacity={0.8}
             >
                 {isAuthActionLoading ? (
@@ -283,6 +316,22 @@ export default function Register() {
                 )}
             </TouchableOpacity>
 
+            <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>ou</Text>
+                <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+                style={styles.googleButton}
+                onPress={handleGoogleRegister}
+                disabled={isAuthActionLoading}
+                activeOpacity={0.8}
+            >
+                <Ionicons name="logo-google" size={20} color={Colors.text} style={{ marginRight: 12 }} />
+                <Text style={styles.googleButtonText}>Continuar com Google</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.link}>
                 <Text style={styles.linkText}>
                     Já tem conta? <Text style={styles.linkBold}>Entrar</Text>
@@ -290,6 +339,7 @@ export default function Register() {
             </TouchableOpacity>
 
             </ScrollView>
+            <FloatingSupportButton bottomOffset={Math.max(insets.bottom, 16) + 16} />
         </View>
     );
 }
@@ -387,9 +437,49 @@ const styles = StyleSheet.create({
     strengthLabel: { fontSize: 12, fontWeight: '600' },
     recommendations: { marginTop: 12, padding: 12, backgroundColor: Colors.background, borderRadius: 8 },
     recText: { fontSize: 11, color: Colors.textSecondary, marginBottom: 2 },
-    termsContainer: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.md, marginBottom: Spacing.sm, paddingHorizontal: 4 },
-    checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, marginRight: 10, justifyContent: 'center', alignItems: 'center' },
-    checkboxChecked: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    termsContainer: { 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        marginTop: Spacing.md, 
+        marginBottom: Spacing.sm, 
+        paddingHorizontal: 4,
+        paddingVertical: 4,
+    },
+    checkbox: { 
+        width: 24, 
+        height: 24, 
+        borderRadius: 6, 
+        borderWidth: 2, 
+        borderColor: Colors.primary, 
+        backgroundColor: Colors.white,
+        marginRight: 10, 
+        justifyContent: 'center', 
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 1,
+    },
+    checkboxChecked: { 
+        backgroundColor: Colors.primary, 
+        borderColor: Colors.primary 
+    },
     termsText: { flex: 1, fontSize: 13, color: Colors.textSecondary },
-    termsLink: { fontWeight: '700', color: Colors.primary },
+    termsLink: { fontWeight: '700', color: Colors.primary, textDecorationLine: 'underline' },
+    dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.md, gap: 12 },
+    dividerLine: { flex: 1, height: 1, backgroundColor: Colors.borderLight },
+    dividerText: { fontSize: Fonts.sizes.sm, color: Colors.textLight, fontWeight: '600' },
+    googleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.white,
+        borderWidth: 1,
+        borderColor: Colors.borderLight,
+        borderRadius: 12,
+        paddingVertical: 14,
+        marginBottom: Spacing.md,
+    },
+    googleButtonText: { color: Colors.text, fontSize: Fonts.sizes.md, fontWeight: '600' },
 });
