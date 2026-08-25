@@ -11,6 +11,11 @@ import { formatTime as formatTimeUtil } from '../../utils/profileUtils';
 import { sendPushNotification } from '../../services/notificationService';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useUnreadStore } from '../../utils/useUnreadCount';
+
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImage } from '../../services/storageService';
+import UpgradeModal from '../../components/UpgradeModal';
 
 export default function ChatScreen() {
     const { id, name, pending_post_id, pending_job_id } = useLocalSearchParams();
@@ -33,6 +38,10 @@ export default function ChatScreen() {
     const [initiatedBy, setInitiatedBy] = useState(null);
     const [isAuthorizing, setIsAuthorizing] = useState(false);
     const [replyContext, setReplyContext] = useState(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const [selectedFullImage, setSelectedFullImage] = useState(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState('');
     const flatListRef = useRef(null);
 
     useEffect(() => {
@@ -184,6 +193,98 @@ export default function ChatScreen() {
             }
         } catch (err) {
             console.error('Send message error:', err);
+        }
+    };
+
+    const handlePickAndSendImage = async () => {
+        if (!user || !isAuthorized || !receiverId || isUploadingImage) return;
+        const uid = user.uid || user.id;
+
+        // Verificar limite de imagens por plano (Diário para PLUS, Semanal para FREE)
+        const plan = user?.subscription_plan || 'FREE';
+        
+        const now = new Date();
+        const pastDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        const pastWeek = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        const isImageRecent = (m) => {
+            if (m.sender_id !== uid || !m.image_url || !m.created_at) return false;
+            const msgDate = new Date(m.created_at);
+            if (plan === 'PLUS') return msgDate >= pastDay;
+            if (plan === 'FREE') return msgDate >= pastWeek;
+            return false;
+        };
+
+        const userSentImagesCount = messages.filter(isImageRecent).length;
+        
+        let maxAllowedImages = 1;
+        if (plan === 'MAX') maxAllowedImages = 9999;
+        else if (plan === 'PLUS') maxAllowedImages = 10;
+        
+        if (userSentImagesCount >= maxAllowedImages) {
+            if (plan === 'FREE') {
+                setUpgradeMessage('Atingiu o seu limite semanal de imagens (1 imagem por semana). Atualize para o Konekt Mais para enviar mais imagens e mostrar o seu trabalho!');
+                setShowUpgradeModal(true);
+            } else if (plan === 'PLUS') {
+                setUpgradeMessage('Atingiu o seu limite diário de imagens nesta conversa (10 imagens por dia). Atualize para o plano MAX para imagens ilimitadas!');
+                setShowUpgradeModal(true);
+            }
+            return;
+        }
+
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images'],
+            allowsEditing: true,
+            quality: 0.8,
+        });
+
+        if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+        setIsUploadingImage(true);
+        try {
+            const fileUri = result.assets[0].uri;
+            const fileName = `${uid}_${Date.now()}.jpg`;
+            const imageUrl = await uploadImage(fileUri, fileName, 'chat-attachments');
+
+            const payload = {
+                conversation_id: id,
+                sender_id: uid,
+                receiver_id: receiverId,
+                content: text.trim() ? text.trim() : '📷 Imagem',
+                image_url: imageUrl,
+                read: false
+            };
+            if (replyContext?.type === 'post') payload.post_id = replyContext.data.id;
+            if (replyContext?.type === 'job') payload.job_id = replyContext.data.id;
+
+            await supabase.from('messages').insert(payload);
+            setText('');
+            setReplyContext(null);
+
+            // Atualizar conversa
+            const { data: conv } = await supabase.from('chat_conversations').select('unread_count').eq('id', id).single();
+            const unread = conv?.unread_count || {};
+            const newUnread = { ...unread, [receiverId]: (unread[receiverId] || 0) + 1 };
+
+            await supabase.from('chat_conversations').update({
+                last_message: '📷 Imagem',
+                updated_at: new Date().toISOString(),
+                unread_count: newUnread
+            }).eq('id', id);
+
+            if (receiverProfile?.push_token) {
+                sendPushNotification(
+                    receiverProfile.push_token,
+                    user.name || 'Nova Imagem',
+                    '📷 Enviou uma imagem',
+                    { type: 'chat', chatId: id }
+                );
+            }
+        } catch (err) {
+            console.error('Upload image error:', err);
+            Alert.alert('Erro', 'Não foi possível enviar a imagem. Tente novamente.');
+        } finally {
+            setIsUploadingImage(false);
         }
     };
 
@@ -485,6 +586,13 @@ export default function ChatScreen() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
         >
+            <UpgradeModal 
+                visible={showUpgradeModal} 
+                onClose={() => setShowUpgradeModal(false)}
+                title="Limite de Imagens Atingido"
+                message={upgradeMessage}
+            />
+
             <View style={[styles.headerBar, { paddingTop: insets.top + 10 }]}>
                 <TouchableOpacity
                     onPress={() => {
@@ -545,35 +653,56 @@ export default function ChatScreen() {
                     }
 
                     return (
-                        <View style={[styles.messageBubble, mine ? styles.myMessage : styles.otherMessage]}>
-                            {(item.post || item.job) && (
-                                <View style={[styles.replyReference, mine ? styles.myReplyReference : styles.otherReplyReference]}>
-                                    <View style={[styles.replyReferenceTypeBar, mine ? {backgroundColor: 'rgba(255,255,255,0.4)'} : {backgroundColor: Colors.primary}]} />
-                                    <View style={styles.replyReferenceContent}>
-                                        <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
-                                            <Ionicons name={item.post ? "document-text" : "briefcase"} size={12} color={mine ? 'rgba(255,255,255,0.8)' : Colors.primary} />
-                                            <Text style={[styles.replyReferenceType, mine ? {color: 'rgba(255,255,255,0.8)'} : {color: Colors.primary}]}>
-                                                {item.post ? 'Post' : 'Vaga'}
+                        <View style={[styles.messageContainer, mine ? {alignItems: 'flex-end'} : {alignItems: 'flex-start'}]}>
+                            <View style={[
+                                styles.messageBubble, 
+                                mine ? styles.myMessage : styles.otherMessage,
+                                item.content === '📷 Imagem' && { padding: 4, backgroundColor: mine ? Colors.primary : '#E9E9EB', elevation: 0, shadowOpacity: 0 }
+                            ]}>
+                                {(item.post || item.job) && (
+                                    <View style={[styles.replyReference, mine ? styles.myReplyReference : styles.otherReplyReference]}>
+                                        <View style={[styles.replyReferenceTypeBar, mine ? {backgroundColor: 'rgba(255,255,255,0.4)'} : {backgroundColor: Colors.primary}]} />
+                                        <View style={styles.replyReferenceContent}>
+                                            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 2}}>
+                                                <Ionicons name={item.post ? "document-text" : "briefcase"} size={12} color={mine ? 'rgba(255,255,255,0.8)' : Colors.primary} />
+                                                <Text style={[styles.replyReferenceType, mine ? {color: 'rgba(255,255,255,0.8)'} : {color: Colors.primary}]}>
+                                                    {item.post ? 'Post' : 'Vaga'}
+                                                </Text>
+                                            </View>
+                                            <Text style={[styles.replyReferenceTitle, mine ? {color: Colors.white} : {color: Colors.text}]} numberOfLines={1}>
+                                                {item.post ? (item.post.content?.substring(0, 30) + '...') : item.job.title}
                                             </Text>
                                         </View>
-                                        <Text style={[styles.replyReferenceTitle, mine ? {color: Colors.white} : {color: Colors.text}]} numberOfLines={1}>
-                                            {item.post ? (item.post.content?.substring(0, 30) + '...') : item.job.title}
-                                        </Text>
                                     </View>
-                                </View>
-                            )}
-                            <Text style={[styles.messageText, mine ? styles.myMessageText : styles.otherMessageText]}>
-                                {item.content}
-                            </Text>
-                            <View style={styles.messageFooter}>
-                                <Text style={[styles.messageTime, mine ? styles.myMessageTime : styles.otherMessageTime]}>
+                                )}
+                                {item.image_url && (
+                                    <TouchableOpacity
+                                        onPress={() => setSelectedFullImage(item.image_url)}
+                                        activeOpacity={0.9}
+                                        style={{ marginBottom: item.content === '📷 Imagem' ? 0 : 8, borderRadius: 16, overflow: 'hidden' }}
+                                    >
+                                        <Image
+                                            source={{ uri: item.image_url }}
+                                            style={{ width: 250, height: 250, borderRadius: 16 }}
+                                            resizeMode="cover"
+                                        />
+                                    </TouchableOpacity>
+                                )}
+                                {item.content !== '📷 Imagem' && (
+                                    <Text style={[styles.messageText, mine ? styles.myMessageText : styles.otherMessageText]}>
+                                        {item.content}
+                                    </Text>
+                                )}
+                            </View>
+                            <View style={styles.messageFooterOutside}>
+                                <Text style={styles.messageTimeOutside}>
                                     {formatTime(item.created_at)}
                                 </Text>
                                 {mine && (
                                     <Ionicons
                                         name={item.read ? "checkmark-done" : "checkmark"}
                                         size={14}
-                                        color={item.read ? "#4CAF50" : "rgba(255,255,255,0.5)"}
+                                        color={item.read ? "#4CAF50" : "#8E8E93"}
                                         style={{ marginLeft: 4 }}
                                     />
                                 )}
@@ -734,79 +863,114 @@ export default function ChatScreen() {
                 </View>
             )}
 
-            <View style={[styles.inputBar, !isAuthorized && styles.inputDisabled, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-                <TextInput
-                    style={[styles.textInput, !isAuthorized && { backgroundColor: '#f1f1f1' }]}
-                    placeholder={isAuthorized ? "Mensagem..." : "Chat bloqueado..."}
-                    placeholderTextColor={Colors.textLight}
-                    value={text}
-                    onChangeText={setText}
-                    multiline
-                    maxHeight={120}
-                    maxLength={1000}
-                    editable={isAuthorized}
-                    onKeyPress={(e) => {
-                        if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                            e.preventDefault();
-                            if (text.trim() && isAuthorized) {
-                                handleSend();
+            <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+                <View style={[styles.inputWrapper, !isAuthorized && styles.inputDisabled]}>
+                    <TouchableOpacity
+                        style={[styles.attachBtn, !isAuthorized && { opacity: 0.5 }]}
+                        onPress={handlePickAndSendImage}
+                        disabled={!isAuthorized || isUploadingImage}
+                    >
+                        {isUploadingImage ? (
+                            <ActivityIndicator size="small" color={Colors.primary} />
+                        ) : (
+                            <Ionicons name="add-circle" size={28} color={Colors.textSecondary} />
+                        )}
+                    </TouchableOpacity>
+                    <TextInput
+                        style={[styles.textInput, !isAuthorized && { backgroundColor: 'transparent' }]}
+                        placeholder={isAuthorized ? "Mensagem..." : "Chat bloqueado..."}
+                        placeholderTextColor={Colors.textLight}
+                        value={text}
+                        onChangeText={setText}
+                        multiline
+                        maxHeight={120}
+                        maxLength={1000}
+                        editable={isAuthorized}
+                        onKeyPress={(e) => {
+                            if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                                e.preventDefault();
+                                if (text.trim() && isAuthorized) {
+                                    handleSend();
+                                }
                             }
-                        }
-                    }}
-                />
-                <TouchableOpacity
-                    style={[styles.sendButton, (!text.trim() || !isAuthorized) && { opacity: 0.5 }]}
-                    onPress={handleSend}
-                    disabled={!text.trim() || !isAuthorized}
-                >
-                    <Ionicons name="send" size={20} color={Colors.white} />
-                </TouchableOpacity>
+                        }}
+                    />
+                    <TouchableOpacity
+                        style={[styles.sendButton, (!text.trim() && !isAuthorized) ? { opacity: 0 } : null]}
+                        onPress={handleSend}
+                        disabled={!text.trim() || !isAuthorized}
+                    >
+                        <Ionicons name="arrow-up" size={20} color={Colors.white} />
+                    </TouchableOpacity>
+                </View>
             </View>
+
+            {/* Modal de Imagem em Tamanho Total */}
+            <Modal visible={!!selectedFullImage} transparent animationType="fade">
+                <View style={styles.fullImageOverlay}>
+                    <TouchableOpacity
+                        style={styles.closeFullImageBtn}
+                        onPress={() => setSelectedFullImage(null)}
+                    >
+                        <Ionicons name="close-circle" size={36} color={Colors.white} />
+                    </TouchableOpacity>
+                    {selectedFullImage && (
+                        <Image
+                            source={{ uri: selectedFullImage }}
+                            style={styles.fullImageDisplay}
+                            resizeMode="contain"
+                        />
+                    )}
+                </View>
+            </Modal>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
+    container: { flex: 1, backgroundColor: '#F8F9FA', ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 20, elevation: 5 } : {}) },
     headerBar: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.white,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
         paddingHorizontal: Spacing.md,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: Colors.borderLight
+        borderBottomColor: 'rgba(0,0,0,0.05)',
+        zIndex: 10,
     },
     headerAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         backgroundColor: Colors.primaryBg,
         justifyContent: 'center',
         alignItems: 'center',
-        marginRight: 10,
+        marginRight: 12,
         overflow: 'hidden'
     },
-    avatarImage: { width: 36, height: 36, borderRadius: 18 },
-    headerAvatarText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
-    headerName: { fontSize: Fonts.sizes.md, fontWeight: '600', color: Colors.text },
-    messagesList: { padding: Spacing.md, paddingBottom: Spacing.sm },
-    messageBubble: { maxWidth: '85%', borderRadius: 18, padding: 12, marginBottom: 12, elevation: 1, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 1 },
-    myMessage: { alignSelf: 'flex-end', backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
-    otherMessage: { alignSelf: 'flex-start', backgroundColor: '#E9E9EB', borderBottomLeftRadius: 4 },
-    messageText: { fontSize: 15, color: '#333', lineHeight: 21 },
-    myMessageText: { color: Colors.white },
-    otherMessageText: { color: Colors.text },
-    messageFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
-    messageTime: { fontSize: 10, color: Colors.textLight },
-    myMessageTime: { color: 'rgba(255,255,255,0.7)' },
-    otherMessageTime: { color: Colors.textLight },
-    inputBar: { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: Colors.white, padding: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.borderLight, gap: 8 },
-    textInput: { flex: 1, backgroundColor: Colors.background, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 100, fontSize: Fonts.sizes.md, color: Colors.text },
-    sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
-    sendText: { color: Colors.white, fontSize: 20 },
-    empty: { flex: 1, alignItems: 'center', paddingVertical: 60 },
-    emptyText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, textAlign: 'center' },
+    avatarImage: { width: 40, height: 40, borderRadius: 20 },
+    headerAvatarText: { fontSize: 16, fontWeight: '700', color: Colors.primary },
+    headerName: { fontSize: 16, fontWeight: '700', color: Colors.text, letterSpacing: -0.3 },
+    messagesList: { padding: Spacing.md, paddingBottom: Spacing.xl },
+    messageContainer: { marginBottom: 16 },
+    messageBubble: { maxWidth: '82%', borderRadius: 20, padding: 12, marginBottom: 4, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4 },
+    myMessage: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
+    otherMessage: { backgroundColor: '#FFFFFF', borderBottomLeftRadius: 4, borderWidth: 1, borderColor: 'rgba(0,0,0,0.03)' },
+    messageText: { fontSize: 15, lineHeight: 22 },
+    myMessageText: { color: '#FFFFFF' },
+    otherMessageText: { color: '#1A1A1A' },
+    messageFooterOutside: { flexDirection: 'row', alignItems: 'center', marginTop: 2, paddingHorizontal: 4 },
+    messageTimeOutside: { fontSize: 11, color: '#8E8E93', fontWeight: '500' },
+    
+    inputContainer: { backgroundColor: 'transparent', paddingHorizontal: 12, paddingTop: 8, position: 'relative' },
+    inputWrapper: { flexDirection: 'row', alignItems: 'flex-end', backgroundColor: Colors.white, borderRadius: 24, padding: 6, paddingHorizontal: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4, borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)' },
+    inputDisabled: { opacity: 0.7, backgroundColor: '#F0F0F0' },
+    attachBtn: { padding: 6, marginRight: 2, justifyContent: 'center', alignItems: 'center', paddingBottom: 8 },
+    textInput: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 8, paddingVertical: 12, maxHeight: 120, fontSize: 15, color: Colors.text, minHeight: 44 },
+    sendButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', marginBottom: 4, marginRight: 2 },
+    empty: { flex: 1, alignItems: 'center', paddingVertical: 80 },
+    emptyText: { fontSize: 15, color: Colors.textLight, textAlign: 'center', fontWeight: '500' },
 
     replyReference: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.05)', borderRadius: 8, marginBottom: 6, overflow: 'hidden' },
     myReplyReference: { backgroundColor: 'rgba(255,255,255,0.2)' },
@@ -912,5 +1076,10 @@ const styles = StyleSheet.create({
     suggestionsTitle: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8 },
     suggestionsScroll: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     suggestionBtn: { backgroundColor: Colors.primaryBg, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: Colors.primary + '30' },
-    suggestionText: { color: Colors.primary, fontSize: 13, fontWeight: '600' }
+    suggestionText: { color: Colors.primary, fontSize: 13, fontWeight: '600' },
+
+    // Attach & Full Image Modal Styles
+    fullImageOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' },
+    closeFullImageBtn: { position: 'absolute', top: 50, right: 24, zIndex: 100 },
+    fullImageDisplay: { width: '100%', height: '80%' },
 });

@@ -1,5 +1,5 @@
 {
-  "name": "trabalhe-ja-mobile",
+  "name": "konekta",
   "version": "1.0.1",
   "main": "expo-router/entry",
   "scripts": {
@@ -53,7 +53,9 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "babel-preset-expo": "^57.0.6"
+    "@types/react": "~19.1.10",
+    "babel-preset-expo": "^57.0.6",
+    "typescript": "~5.9.2"
   },
   "private": true
 }

@@ -85,12 +85,51 @@ export default function WebLandingOrSplash() {
     if (isLoading) {
         return (
             <View style={styles.splashContainer}>
-                <ActivityIndicator size="large" color={Colors.primary} />
+                {/* Central Platform Graphic & Surrounding Users/Services (VidMate Style) */}
+                <View style={styles.splashVidmateCenterBox}>
+                    <View style={styles.splashCubeGlow} />
+
+                    {/* Floating Service & User Badges around Konekta */}
+                    <View style={[styles.splashFloatBadge, styles.badgeTopLeft]}>
+                        <Ionicons name="code-slash" size={16} color={Colors.primary} />
+                        <Text style={styles.splashBadgeText}>TI & Dev</Text>
+                    </View>
+                    <View style={[styles.splashFloatBadge, styles.badgeTopRight]}>
+                        <Ionicons name="color-palette" size={16} color="#EC4899" />
+                        <Text style={styles.splashBadgeText}>Design</Text>
+                    </View>
+                    <View style={[styles.splashFloatBadge, styles.badgeBottomLeft]}>
+                        <Ionicons name="construct" size={16} color="#F59E0B" />
+                        <Text style={styles.splashBadgeText}>Serviços</Text>
+                    </View>
+                    <View style={[styles.splashFloatBadge, styles.badgeBottomRight]}>
+                        <Ionicons name="school" size={16} color="#10B981" />
+                        <Text style={styles.splashBadgeText}>Formação</Text>
+                    </View>
+
+                    {/* Center Konekta Box */}
+                    <View style={styles.splashCenterCube}>
+                        <BrandWordmark variant="default" layout="inline" showIcon />
+                    </View>
+                </View>
+
+                {/* Slogan Text (VidMate style slogan) */}
+                <View style={styles.splashTextContainer}>
+                    <Text style={styles.splashSloganTitle}>Conecta & Contrata</Text>
+                    <Text style={styles.splashSloganSubtitle}>
+                        A plataforma que une milhares de clientes e profissionais em todo o país.
+                    </Text>
+                </View>
+
+                <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 24 }} />
             </View>
         );
     }
 
     if (user) {
+        if (user.role === 'PENDING') {
+            return <Redirect href="/auth/choose-profile" />;
+        }
         return <Redirect href="/(tabs)/home" />;
     }
 
@@ -636,4 +675,19 @@ const styles = StyleSheet.create({
     mapIcon: { fontSize: 24, opacity: 0.5 },
     footerBottom: { borderTopWidth: 1, borderTopColor: '#374151', paddingTop: 24, alignItems: 'center' },
     footerBottomText: { color: '#9CA3AF', fontSize: 12 },
+
+    // Splash Screen (VidMate Style)
+    splashContainer: { flex: 1, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', padding: 24 },
+    splashVidmateCenterBox: { width: 280, height: 280, justifyContent: 'center', alignItems: 'center', position: 'relative', marginVertical: 32 },
+    splashCubeGlow: { position: 'absolute', width: 220, height: 220, borderRadius: 110, backgroundColor: Colors.primary + '15' },
+    splashFloatBadge: { position: 'absolute', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.white, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.1, shadowRadius: 6, borderWidth: 1, borderColor: '#F1F5F9' },
+    badgeTopLeft: { top: 10, left: 0 },
+    badgeTopRight: { top: 10, right: 0 },
+    badgeBottomLeft: { bottom: 10, left: 0 },
+    badgeBottomRight: { bottom: 10, right: 0 },
+    splashBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.text },
+    splashCenterCube: { width: 140, height: 70, backgroundColor: Colors.white, borderRadius: 20, justifyContent: 'center', alignItems: 'center', elevation: 8, shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12, borderWidth: 1, borderColor: Colors.primary + '20' },
+    splashTextContainer: { alignItems: 'center', paddingHorizontal: 32, marginTop: 12 },
+    splashSloganTitle: { fontSize: 24, fontWeight: '800', color: Colors.text, textAlign: 'center', marginBottom: 8 },
+    splashSloganSubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, maxWidth: 320 },
 });

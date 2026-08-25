@@ -5,14 +5,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
-import { Colors, Spacing, Fonts, JOB_TYPES, COMMON_SKILLS, PROFESSION_CATEGORIES, JOBS_CATEGORIES_MAP } from '../../constants';
+import { Colors, Spacing, Fonts, JOB_TYPES, COMMON_SKILLS, REMOTE_CATEGORIES, ONSITE_CATEGORIES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { decode } from 'base64-arraybuffer';
 import { handleError } from '../../utils/errorHandler';
+import { useTaxonomy } from '../../hooks/useTaxonomy';
+import Input from '../../components/ui/Input';
+import Button from '../../components/ui/Button';
 
 export default function EditProfile() {
     const router = useRouter();
     const { user, refreshUser, deleteAccount } = useAuthStore();
+    const { categories, getSpecialtiesByCategoryName } = useTaxonomy();
     const [showAvatarModal, setShowAvatarModal] = useState(false);
     const [showPhotoOptions, setShowPhotoOptions] = useState(false);
 
@@ -56,11 +60,31 @@ export default function EditProfile() {
     const isPickingImage = useRef(false);
 
     const [form, setForm] = useState({
-        name: '', document: '', province: '', city: '', bairro: '', addressDetails: '', companyName: '',
+        name: '', phone: '', document: '', province: '', city: '', bairro: '', addressDetails: '', companyName: '',
         professionCategory: '', customCategory: '',
-        workTypes: [], customWT: '', skills: [], tempSkill: '', availability: '',
-        canSleepOnSite: null, hasExperience: null, description: '',
+        workTypes: [], customWT: '',
+        skills: [], tempSkill: '',
+        workModalities: ['PRESENCIAL'],
+        serviceTypes: ['SINGLE_TASK'],
+        availability: 'IMMEDIATE',
+        hasExperience: null, description: '', interests: '',
     });
+    const [employerInterests, setEmployerInterests] = useState({
+        modalities: [],
+        categories: [],
+        specialties: []
+    });
+
+    const getAvailableCategories = (modalities) => {
+        let cats = new Set();
+        if (modalities.includes('Remoto')) REMOTE_CATEGORIES.forEach(c => cats.add(c));
+        if (modalities.includes('Presencial')) ONSITE_CATEGORIES.forEach(c => cats.add(c));
+        if (modalities.includes('Híbrido')) {
+            REMOTE_CATEGORIES.forEach(c => cats.add(c));
+            ONSITE_CATEGORIES.forEach(c => cats.add(c));
+        }
+        return Array.from(cats).sort();
+    };
 
     useFocusEffect(
         useCallback(() => {
@@ -77,8 +101,6 @@ export default function EditProfile() {
                         .maybeSingle();
 
                     if (userError || !userData) {
-                        // User record in public.users doesn't exist yet (likely a new user)
-                        // Let's pull everything from metadata so they don't have to type again!
                         const metadata = user?.user_metadata || {};
                         const initialData = {
                             name: metadata.name || '',
@@ -90,16 +112,17 @@ export default function EditProfile() {
                             professionCategory: metadata.role === 'EMPLOYER' ? '' : '',
                             workTypes: [],
                             skills: [],
-                            availability: '',
+                            workModalities: ['PRESENCIAL'],
+                            serviceTypes: ['SINGLE_TASK'],
+                            availability: 'IMMEDIATE',
                             description: ''
                         };
                         setForm(prev => ({ ...prev, ...initialData }));
-                        setInitialForm({}); // Still empty to allow the first save
+                        setInitialForm({});
                         setLoading(false);
                         return;
                     }
 
-                    // 2. Get profile data based on role
                     const profileTable = userData.role === 'EMPLOYER' ? 'employer_profiles' : 'worker_profiles';
                     const { data: profileData, error: profileError } = await supabase
                         .from(profileTable)
@@ -121,7 +144,7 @@ export default function EditProfile() {
                         if (customSkill) sks.push('Outro');
 
                         const loadedCat = profileData?.profession_category || '';
-                        const isCustomCat = loadedCat && !PROFESSION_CATEGORIES.includes(loadedCat);
+                        const isCustomCat = loadedCat && !categories.some(c => c.name === loadedCat);
 
                         setProfilePhoto(userData?.profile_photo || null);
 
@@ -138,13 +161,24 @@ export default function EditProfile() {
                             customWT: customWT || '',
                             skills: sks,
                             tempSkill: customSkill || '',
-                            availability: profileData?.availability || '',
-                            canSleepOnSite: profileData?.can_sleep_on_site ?? null,
+                            workModalities: profileData?.work_modalities || ['PRESENCIAL'],
+                            serviceTypes: profileData?.service_types || ['SINGLE_TASK'],
+                            availability: profileData?.availability || 'IMMEDIATE',
                             hasExperience: profileData?.has_experience ?? null,
                             description: profileData?.description || '',
-                            companyName: profileData?.company_name || '',
-                            addressDetails: profileData?.address_details || ''
+                            interests: profileData?.interests || ''
                         };
+
+                        let parsedInterests = { modalities: [], categories: [], specialties: [] };
+                        if (profileData?.interests) {
+                            try {
+                                parsedInterests = JSON.parse(profileData.interests);
+                            } catch (e) {
+                                parsedInterests.modalities = profileData.interests.split(',').map(s => s.trim()).filter(Boolean);
+                            }
+                        }
+                        setEmployerInterests(parsedInterests);
+
                         setForm(loadedForm);
                         setInitialForm(loadedForm);
                     }
@@ -252,21 +286,23 @@ export default function EditProfile() {
     };
 
     const toggleWorkType = (type) => {
-        const wt = form.workTypes.includes(type)
-            ? form.workTypes.filter((t) => t !== type)
-            : [...form.workTypes, type];
+        const currentWT = form.workTypes || [];
+        const wt = currentWT.includes(type)
+            ? currentWT.filter((t) => t !== type)
+            : [...currentWT, type];
         update('workTypes', wt);
     };
 
     const toggleSkill = (skill) => {
-        if (form.skills.includes(skill)) {
-            update('skills', form.skills.filter((s) => s !== skill));
+        const currentSkills = form.skills || [];
+        if (currentSkills.includes(skill)) {
+            update('skills', currentSkills.filter((s) => s !== skill));
         } else {
-            if (form.skills.length >= 5) {
+            if (currentSkills.length >= 5) {
                 useAlertStore.getState().showAlert('Aviso', 'Pode adicionar no máximo 5 habilidades.', 'error');
                 return;
             }
-            update('skills', [...form.skills, skill]);
+            update('skills', [...currentSkills, skill]);
         }
     };
 
@@ -275,13 +311,14 @@ export default function EditProfile() {
             const parts = val.split('#');
             const newSkill = parts[0].trim();
             if (newSkill) {
-                if (form.skills.length >= 5) {
+                const currentSkills = form.skills || [];
+                if (currentSkills.length >= 5) {
                     useAlertStore.getState().showAlert('Aviso', 'Pode adicionar no máximo 5 habilidades.', 'error');
                     update('tempSkill', '');
                     return;
                 }
-                if (!form.skills.includes(newSkill)) {
-                    setForm(prev => ({ ...prev, skills: [...prev.skills, newSkill], tempSkill: '' }));
+                if (!currentSkills.includes(newSkill)) {
+                    setForm(prev => ({ ...prev, skills: [...(prev.skills || []), newSkill], tempSkill: '' }));
                     return;
                 }
             }
@@ -296,8 +333,9 @@ export default function EditProfile() {
             const parts = val.split('#');
             const newWT = parts[0].trim();
             if (newWT) {
-                if (!form.workTypes.includes(newWT)) {
-                    setForm(prev => ({ ...prev, workTypes: [...prev.workTypes, newWT], customWT: '' }));
+                const currentWT = form.workTypes || [];
+                if (!currentWT.includes(newWT)) {
+                    setForm(prev => ({ ...prev, workTypes: [...(prev.workTypes || []), newWT], customWT: '' }));
                     return;
                 }
             }
@@ -307,6 +345,24 @@ export default function EditProfile() {
         }
     };
 
+    const toggleModality = (mod) => {
+        const currentMods = form.workModalities || [];
+        const updated = currentMods.includes(mod)
+            ? currentMods.filter(m => m !== mod)
+            : [...currentMods, mod];
+        if (updated.length === 0) return; // Must have at least 1 modality
+        update('workModalities', updated);
+    };
+
+    const toggleServiceType = (st) => {
+        const currentST = form.serviceTypes || [];
+        const updated = currentST.includes(st)
+            ? currentST.filter(s => s !== st)
+            : [...currentST, st];
+        if (updated.length === 0) return; // Must have at least 1 service type
+        update('serviceTypes', updated);
+    };
+
     const handleSave = async () => {
         const uid = user?.uid || user?.id;
         if (!uid) {
@@ -314,19 +370,16 @@ export default function EditProfile() {
             return;
         }
 
-        // Fallback para o role (se o authStore ainda não tiver carregado corretamente)
         const currentRole = user?.role || initialForm?.role || form.role || 'WORKER';
 
         setLoading(true);
         console.log('[handleSave] Iniciando...', { uid, currentRole });
 
         try {
-            // 1. Update User info
             const userUpdate = {
                 profile_photo: profilePhoto
             };
 
-            // Só atualiza os campos de localização/nome se eles vierem vazios (o que não deve acontecer se estiverem bloqueados)
             if (!initialForm?.name && form.name) userUpdate.name = form.name;
             if (!initialForm?.phone && form.phone) userUpdate.phone = form.phone;
             if (!initialForm?.province && form.province) userUpdate.province = form.province;
@@ -338,7 +391,6 @@ export default function EditProfile() {
 
             if (userError) throw userError;
 
-            // 2. Update Role-specific profile
             let finalCategory = form.professionCategory === 'Outro' && form.customCategory?.trim()
                 ? form.customCategory.trim()
                 : form.professionCategory;
@@ -362,17 +414,16 @@ export default function EditProfile() {
                     profession_category: finalCategory || null,
                     work_types: Array.from(new Set(finalWT)),
                     skills: Array.from(new Set(finalSkills)),
-                    availability: form.availability || null,
-                    can_sleep_on_site: form.canSleepOnSite,
+                    work_modalities: form.workModalities || ['PRESENCIAL'],
+                    service_types: form.serviceTypes || ['SINGLE_TASK'],
+                    availability: form.availability || 'IMMEDIATE',
                     has_experience: form.hasExperience,
                     description: form.description || null
                 };
             } else {
                 profilePayload = {
                     user_id: uid,
-                    description: form.description || null,
-                    company_name: form.companyName || null,
-                    address_details: form.addressDetails || null
+                    interests: JSON.stringify(employerInterests)
                 };
             }
 
@@ -596,14 +647,13 @@ export default function EditProfile() {
 
                 {shouldShow('name') && (
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Nome</Text>
-                        <TextInput
-                            style={[styles.input, isLocked('name') && styles.inputDisabled]}
+                        <Input
+                            label="Nome"
+                            inputStyle={[isLocked('name') && styles.inputDisabled]}
                             value={form.name}
                             onChangeText={(v) => update('name', v)}
                             editable={!isLocked('name')}
                             placeholder="Insira seu nome completo"
-                            placeholderTextColor={Colors.textLight}
                         />
                         <Text style={styles.helperText}>O nome tem que ser exatamente o mesmo do documento para verificação.</Text>
                     </View>
@@ -611,9 +661,9 @@ export default function EditProfile() {
 
                 {shouldShow('phone') && (
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Telefone</Text>
-                        <TextInput
-                            style={[styles.input, isLocked('phone') && styles.inputDisabled]}
+                        <Input
+                            label="Telefone"
+                            inputStyle={[isLocked('phone') && styles.inputDisabled]}
                             value={form.phone}
                             onChangeText={(v) => update('phone', v)}
                             editable={!isLocked('phone')}
@@ -628,42 +678,39 @@ export default function EditProfile() {
                 {/* Common Location Fields */}
                 {shouldShow('province') && (
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Província</Text>
-                        <TextInput
-                            style={[styles.input, isLocked('province') && styles.inputDisabled]}
+                        <Input
+                            label="Província"
+                            inputStyle={[isLocked('province') && styles.inputDisabled]}
                             value={form.province}
                             onChangeText={(v) => update('province', v)}
                             editable={!isLocked('province')}
                             placeholder="Sua província"
-                            placeholderTextColor={Colors.textLight}
                         />
                     </View>
                 )}
 
                 {shouldShow('city') && (
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Cidade</Text>
-                        <TextInput
-                            style={[styles.input, isLocked('city') && styles.inputDisabled]}
+                        <Input
+                            label="Cidade"
+                            inputStyle={[isLocked('city') && styles.inputDisabled]}
                             value={form.city}
                             onChangeText={(v) => update('city', v)}
                             editable={!isLocked('city')}
                             placeholder="Sua cidade"
-                            placeholderTextColor={Colors.textLight}
                         />
                     </View>
                 )}
 
                 {shouldShow('bairro') && (
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Bairro</Text>
-                        <TextInput
-                            style={[styles.input, isLocked('bairro') && styles.inputDisabled]}
+                        <Input
+                            label="Bairro"
+                            inputStyle={[isLocked('bairro') && styles.inputDisabled]}
                             value={form.bairro}
                             onChangeText={(v) => update('bairro', v)}
                             editable={!isLocked('bairro')}
                             placeholder="Seu bairro"
-                            placeholderTextColor={Colors.textLight}
                         />
                     </View>
                 )}
@@ -675,21 +722,20 @@ export default function EditProfile() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Área de Atuação (Categoria Principal)</Text>
                                 <View style={styles.chips}>
-                                    {PROFESSION_CATEGORIES.map((cat) => (
+                                    {categories.map((catObj) => (
                                         <TouchableOpacity
-                                            key={cat}
-                                            style={[styles.chip, form.professionCategory === cat && styles.chipActive]}
-                                            onPress={() => update('professionCategory', cat)}
+                                            key={catObj.name}
+                                            style={[styles.chip, form.professionCategory === catObj.name && styles.chipActive]}
+                                            onPress={() => update('professionCategory', catObj.name)}
                                         >
-                                            <Text style={[styles.chipText, form.professionCategory === cat && styles.chipTextActive]}>{cat}</Text>
+                                            <Text style={[styles.chipText, form.professionCategory === catObj.name && styles.chipTextActive]}>{catObj.name}</Text>
                                         </TouchableOpacity>
                                     ))}
                                 </View>
                                 {form.professionCategory === 'Outro' && (
-                                    <TextInput
-                                        style={[styles.input, { marginTop: 12 }]}
+                                    <Input
+                                        inputStyle={[{ marginTop: 12 }]}
                                         placeholder="Ex: Operador de Máquinas"
-                                        placeholderTextColor={Colors.textLight}
                                         value={form.customCategory}
                                         onChangeText={(v) => update('customCategory', v)}
                                     />
@@ -699,31 +745,29 @@ export default function EditProfile() {
 
                         {shouldShow('workTypes') && (
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Tipos de trabalho / Especialização</Text>
+                                <Text style={styles.label}>Especialidades</Text>
                                 <View style={styles.chips}>
-                                    {form.professionCategory && JOBS_CATEGORIES_MAP[form.professionCategory] ? (
-                                        Array.from(new Set([...JOBS_CATEGORIES_MAP[form.professionCategory], ...form.workTypes.filter(w => w !== 'Outro')])).filter(t => t !== 'Outro').map((type) => (
+                                    {form.professionCategory && getSpecialtiesByCategoryName(form.professionCategory).length > 0 ? (
+                                        Array.from(new Set([...getSpecialtiesByCategoryName(form.professionCategory).map(s => s.name), ...(form.workTypes || []).filter(w => w !== 'Outro')])).filter(t => t !== 'Outro').map((type) => (
                                             <TouchableOpacity
                                                 key={type}
-                                                style={[styles.chip, form.workTypes.includes(type) && styles.chipActive]}
+                                                style={[styles.chip, (form.workTypes || []).includes(type) && styles.chipActive]}
                                                 onPress={() => toggleWorkType(type)}
                                             >
-                                                <Text style={[styles.chipText, form.workTypes.includes(type) && styles.chipTextActive]}>{type}</Text>
+                                                <Text style={[styles.chipText, (form.workTypes || []).includes(type) && styles.chipTextActive]}>{type}</Text>
                                             </TouchableOpacity>
                                         ))
                                     ) : form.professionCategory === 'Outro' ? (
-                                        <Text style={styles.helperText}>Como escolheu "Outro" na categoria, digite o seu tipo de trabalho abaixo.</Text>
+                                        <Text style={styles.helperText}>Como escolheu "Outro" na categoria, digite a sua especialidade abaixo.</Text>
                                     ) : (
-                                        <Text style={styles.helperText}>Selecione uma categoria principal acima para ver as especializações disponíveis.</Text>
+                                        <Text style={styles.helperText}>Selecione uma categoria principal acima para ver as especialidades disponíveis.</Text>
                                     )}
                                 </View>
-                                {form.workTypes.includes('Outro') && (
+                                {(form.workTypes || []).includes('Outro') && (
                                     <View style={{ marginTop: 12 }}>
-                                        <Text style={[styles.label, { fontSize: 12 }]}>Digite a profissão e use # para adicionar:</Text>
-                                        <TextInput
-                                            style={styles.input}
+                                        <Text style={[styles.label, { fontSize: 12 }]}>Digite a especialidade e use # para adicionar:</Text>
+                                        <Input
                                             placeholder="Ex: Operador de Guindaste#"
-                                            placeholderTextColor={Colors.textLight}
                                             value={form.customWT}
                                             onChangeText={handleCustomWTInput}
                                             onSubmitEditing={() => handleCustomWTInput(form.customWT + '#')}
@@ -733,62 +777,63 @@ export default function EditProfile() {
                             </View>
                         )}
 
-                        {shouldShow('skills') && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Especialidades / Habilidades (Máx. 5)</Text>
-
-                                {/* Selected Skills Chips */}
-                                <View style={[styles.chips, { marginBottom: 12 }]}>
-                                    {form.skills.filter(s => s !== 'Outro').map((skill) => (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Modalidade de Atendimento</Text>
+                            <View style={styles.chips}>
+                                {[
+                                    { id: 'PRESENCIAL', label: '🏢 Presencial' },
+                                    { id: 'REMOTE', label: '💻 Remoto' },
+                                    { id: 'HYBRID', label: '🔄 Híbrido' }
+                                ].map((opt) => {
+                                    const active = (form.workModalities || []).includes(opt.id);
+                                    return (
                                         <TouchableOpacity
-                                            key={skill}
-                                            style={[styles.chip, styles.chipActive]}
-                                            onPress={() => toggleSkill(skill)}
+                                            key={opt.id}
+                                            style={[styles.chip, active && styles.chipActive]}
+                                            onPress={() => toggleModality(opt.id)}
                                         >
-                                            <Text style={[styles.chipText, styles.chipTextActive]}>{skill}  <Ionicons name="close" size={12} color={Colors.primary} /></Text>
+                                            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                                {opt.label}
+                                            </Text>
                                         </TouchableOpacity>
-                                    ))}
-                                </View>
-
-                                <Text style={[styles.label, { fontSize: 12, color: Colors.textSecondary }]}>Sugestões:</Text>
-                                <View style={styles.chips}>
-                                    {COMMON_SKILLS.map((skill) => (
-                                        <TouchableOpacity
-                                            key={skill}
-                                            style={[styles.chip, form.skills.includes(skill) && styles.chipActive]}
-                                            onPress={() => toggleSkill(skill)}
-                                        >
-                                            <Text style={[styles.chipText, form.skills.includes(skill) && styles.chipTextActive]}>{skill}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
-
-                                {form.skills.includes('Outro') && (
-                                    <View style={{ marginTop: 12 }}>
-                                        <Text style={[styles.label, { fontSize: 12 }]}>Digite uma habilidade personalizada e use # para adicionar:</Text>
-                                        <TextInput
-                                            style={styles.input}
-                                            placeholder="Ex: Pintura Automotiva#"
-                                            placeholderTextColor={Colors.textLight}
-                                            value={form.tempSkill}
-                                            onChangeText={handleCustomSkillInput}
-                                            onSubmitEditing={() => handleCustomSkillInput(form.tempSkill + '#')}
-                                        />
-                                    </View>
-                                )}
-                                <Text style={styles.helperText}>Dica: Ao selecionar "Outro", você pode digitar habilidades novas manualmente usando o símbolo #.</Text>
+                                    );
+                                })}
                             </View>
-                        )}
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Tipos de Serviço / Contratação Aceites</Text>
+                            <View style={styles.chips}>
+                                {[
+                                    { id: 'SINGLE_TASK', label: '⚡ Serviço Único / Tarefa' },
+                                    { id: 'PROJECT', label: '📁 Por Projeto' },
+                                    { id: 'RECURRING', label: '🔄 Recorrente' },
+                                    { id: 'CONTINUOUS', label: '📜 Contrato Contínuo' }
+                                ].map((opt) => {
+                                    const active = (form.serviceTypes || []).includes(opt.id);
+                                    return (
+                                        <TouchableOpacity
+                                            key={opt.id}
+                                            style={[styles.chip, active && styles.chipActive]}
+                                            onPress={() => toggleServiceType(opt.id)}
+                                        >
+                                            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                                                {opt.label}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+                        </View>
 
                         {shouldShow('availability') && (
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Disponibilidade</Text>
                                 <View style={styles.chips}>
                                     {[
-                                        { id: 'IMMEDIATE', label: 'Imediata' },
-                                        { id: 'TEMPORARY', label: 'Temporária' },
-                                        { id: 'DAILY', label: 'Diarista' },
-                                        { id: 'PERMANENT', label: 'Permanente' }
+                                        { id: 'IMMEDIATE', label: '⚡ Imediata' },
+                                        { id: 'SCHEDULED', label: '📅 Agendada / Programada' },
+                                        { id: 'FLEXIBLE', label: '🕒 Horário Flexível' }
                                     ].map((opt) => (
                                         <TouchableOpacity
                                             key={opt.id}
@@ -800,26 +845,6 @@ export default function EditProfile() {
                                             </Text>
                                         </TouchableOpacity>
                                     ))}
-                                </View>
-                            </View>
-                        )}
-
-                        {shouldShow('canSleepOnSite') && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Pode dormir no local?</Text>
-                                <View style={styles.optionRow}>
-                                    <TouchableOpacity
-                                        style={[styles.option, form.canSleepOnSite === true && styles.optionActive]}
-                                        onPress={() => update('canSleepOnSite', true)}
-                                    >
-                                        <Text style={[styles.optionText, form.canSleepOnSite === true && styles.optionTextActive]}>Sim</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.option, form.canSleepOnSite === false && styles.optionActive]}
-                                        onPress={() => update('canSleepOnSite', false)}
-                                    >
-                                        <Text style={[styles.optionText, form.canSleepOnSite === false && styles.optionTextActive]}>Não</Text>
-                                    </TouchableOpacity>
                                 </View>
                             </View>
                         )}
@@ -846,16 +871,15 @@ export default function EditProfile() {
 
                         {shouldShow('description') && (
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Descrição pessoal</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
+                                <Input
+                                    label="Descrição pessoal"
+                                    inputStyle={[styles.textArea]}
                                     value={form.description}
                                     onChangeText={(v) => update('description', v)}
                                     multiline
                                     numberOfLines={4}
                                     textAlignVertical="top"
                                     placeholder="Fale sobre si, sua experiência..."
-                                    placeholderTextColor={Colors.textLight}
                                 />
                             </View>
                         )}
@@ -865,60 +889,104 @@ export default function EditProfile() {
                 {/* Employer Specific Fields */}
                 {user?.role === 'EMPLOYER' && (
                     <>
-                        {shouldShow('companyName') && (
+                        {shouldShow('interests') && (
                             <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Nome da Empresa (Opcional se for individual)</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    value={form.companyName}
-                                    onChangeText={(v) => update('companyName', v)}
-                                    placeholder="Ex: Serviços de Limpeza Lda."
-                                    placeholderTextColor={Colors.textLight}
-                                />
-                            </View>
-                        )}
+                                <Text style={styles.label}>Em que modalidade de trabalho você se interessa?</Text>
+                                <View style={styles.chips}>
+                                    {['Remoto', 'Presencial', 'Híbrido'].map((modality) => {
+                                        const isSelected = employerInterests.modalities.includes(modality);
+                                        return (
+                                            <TouchableOpacity
+                                                key={modality}
+                                                style={[styles.chip, isSelected && styles.chipActive]}
+                                                onPress={() => {
+                                                    setEmployerInterests(prev => ({
+                                                        ...prev,
+                                                        modalities: isSelected
+                                                            ? prev.modalities.filter(m => m !== modality)
+                                                            : [...prev.modalities, modality]
+                                                    }));
+                                                }}
+                                            >
+                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{modality}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
 
-                        {shouldShow('addressDetails') && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Detalhes do Endereço / Ponto de Referência</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    value={form.addressDetails}
-                                    onChangeText={(v) => update('addressDetails', v)}
-                                    multiline
-                                    numberOfLines={2}
-                                    textAlignVertical="top"
-                                    placeholder="Rua, número, vizinhança ou ponto de referência importante perto de si..."
-                                    placeholderTextColor={Colors.textLight}
-                                />
-                            </View>
-                        )}
+                                {employerInterests.modalities.length > 0 && (
+                                    <>
+                                        <Text style={[styles.label, { marginTop: 16 }]}>Quais áreas de trabalho?</Text>
+                                        <View style={styles.chips}>
+                                            {getAvailableCategories(employerInterests.modalities).map(cName => {
+                                                const isSelected = employerInterests.categories.includes(cName);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={cName}
+                                                        style={[styles.chip, isSelected && styles.chipActive]}
+                                                        onPress={() => {
+                                                            setEmployerInterests(prev => ({
+                                                                ...prev,
+                                                                categories: isSelected
+                                                                    ? prev.categories.filter(c => c !== cName)
+                                                                    : [...prev.categories, cName]
+                                                            }));
+                                                        }}
+                                                    >
+                                                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{cName}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </>
+                                )}
 
-                        {shouldShow('description') && (
-                            <View style={styles.inputGroup}>
-                                <Text style={styles.label}>Descrição do Perfil / Necessidades</Text>
-                                <TextInput
-                                    style={[styles.input, styles.textArea]}
-                                    value={form.description}
-                                    onChangeText={(v) => update('description', v)}
-                                    multiline
-                                    numberOfLines={4}
-                                    textAlignVertical="top"
-                                    placeholder="Descreva a sua vivência, rotina ou família..."
-                                    placeholderTextColor={Colors.textLight}
-                                />
+                                {employerInterests.categories.length > 0 && (
+                                    <>
+                                        <Text style={[styles.label, { marginTop: 16 }]}>Quais especialidades?</Text>
+                                        <View style={styles.chips}>
+                                            {employerInterests.categories.flatMap(c => getSpecialtiesByCategoryName(c)).map(s => {
+                                                const isSelected = employerInterests.specialties.includes(s.name);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={s.name}
+                                                        style={[styles.chip, isSelected && styles.chipActive]}
+                                                        onPress={() => {
+                                                            setEmployerInterests(prev => ({
+                                                                ...prev,
+                                                                specialties: isSelected
+                                                                    ? prev.specialties.filter(sp => sp !== s.name)
+                                                                    : [...prev.specialties, s.name]
+                                                            }));
+                                                        }}
+                                                    >
+                                                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{s.name}</Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    </>
+                                )}
+
+                                <Text style={[styles.helperText, { marginTop: 8 }]}>Usado para recomendações de profissionais</Text>
                             </View>
                         )}
                     </>
                 )}
-            <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleSave} disabled={loading}>
-                {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.buttonText}>Guardar Alterações</Text>}
-            </TouchableOpacity>
+            <Button 
+                title="Guardar Alterações" 
+                onPress={handleSave} 
+                loading={loading}
+                style={{ marginBottom: Spacing.md }}
+            />
 
-            <TouchableOpacity style={[styles.buttonDelete, loading && styles.buttonDisabled]} onPress={() => setShowDeleteModal(true)} disabled={loading}>
-                <Ionicons name="trash-outline" size={20} color={Colors.error} style={{ marginRight: 8 }} />
-                <Text style={styles.buttonDeleteText}>Apagar Conta Permanentemente</Text>
-            </TouchableOpacity>
+            <Button 
+                title="Apagar Conta Permanentemente" 
+                onPress={() => setShowDeleteModal(true)} 
+                variant="danger"
+                icon={<Ionicons name="trash-outline" size={20} color={Colors.white} />}
+                disabled={loading}
+            />
 
                 {/* Modal de Confirmação de Deleção */}
                 <Modal visible={showDeleteModal} transparent animationType="fade">
@@ -932,8 +1000,8 @@ export default function EditProfile() {
                                 Esta ação é irreversível. Por segurança, introduza a sua senha para confirmar.
                             </Text>
 
-                            <TextInput
-                                style={[styles.input, { width: '100%', marginBottom: 20 }]}
+                            <Input
+                                inputStyle={[{ width: '100%', marginBottom: 20 }]}
                                 placeholder="Sua senha"
                                 secureTextEntry
                                 value={deletePassword}
@@ -941,23 +1009,24 @@ export default function EditProfile() {
                             />
 
                             <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={styles.cancelBtn}
+                                <Button 
+                                    title="Manter Conta" 
                                     onPress={() => {
                                         setShowDeleteModal(false);
                                         setDeletePassword('');
-                                    }}
+                                    }} 
+                                    variant="outline"
+                                    style={{ flex: 1, marginRight: Spacing.sm }}
                                     disabled={loading}
-                                >
-                                    <Text style={styles.cancelBtnText}>Manter Conta</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.submitBtn, { backgroundColor: Colors.error }]}
-                                    onPress={handleDeleteAccount}
-                                    disabled={loading || !deletePassword}
-                                >
-                                    {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.submitBtnText}>Sim, Apagar</Text>}
-                                </TouchableOpacity>
+                                />
+                                <Button 
+                                    title="Sim, Apagar" 
+                                    onPress={handleDeleteAccount} 
+                                    variant="danger"
+                                    style={{ flex: 1, marginLeft: Spacing.sm }}
+                                    loading={loading}
+                                    disabled={!deletePassword}
+                                />
                             </View>
                         </View>
                     </View>

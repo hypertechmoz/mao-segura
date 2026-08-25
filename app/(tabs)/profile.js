@@ -303,9 +303,11 @@ export default function Profile() {
                         )}
                     </View>
                     <View style={styles.badges}>
-                        {p?.is_premium && (
+                        {(p?.subscription_plan === 'PLUS' || p?.subscription_plan === 'MAX' || p?.is_premium) && (
                             <View style={[styles.badge, styles.premiumBadge]}>
-                                <Text style={[styles.badgeText, styles.premiumText]}>⭐ {t('common.premium')}</Text>
+                                <Text style={[styles.badgeText, styles.premiumText]}>
+                                    ⭐ {p?.subscription_plan === 'MAX' ? 'Konekta Max' : p?.subscription_plan === 'PLUS' ? 'Konekta Plus' : t('common.premium')}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -426,16 +428,33 @@ export default function Profile() {
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Disponibilidade</Text>
                             <Text style={styles.infoValue}>
-                                {p.workerProfile.availability === 'IMMEDIATE' ? 'Imediata' :
-                                    p.workerProfile.availability === 'TEMPORARY' ? 'Temporário' :
-                                        p.workerProfile.availability === 'DAILY' ? 'Diarista' :
-                                            p.workerProfile.availability === 'PERMANENT' ? 'Permanente' : 'Não definida'}
+                                {p.workerProfile.availability === 'IMMEDIATE' ? '⚡ Imediata' :
+                                    p.workerProfile.availability === 'SCHEDULED' ? '📅 Agendada / Programada' :
+                                        p.workerProfile.availability === 'FLEXIBLE' ? '🕒 Horário Flexível' : 'Não definida'}
                             </Text>
                         </View>
-                        <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>Pode dormir no local</Text>
-                            <Text style={styles.infoValue}>{p.workerProfile.can_sleep_on_site ? 'Sim' : 'Não'}</Text>
-                        </View>
+                        {p.workerProfile.work_modalities && p.workerProfile.work_modalities.length > 0 ? (
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Modalidade de Atendimento</Text>
+                                <View style={styles.tags}>
+                                    {p.workerProfile.work_modalities.map((m, i) => {
+                                        const label = m === 'PRESENCIAL' ? '🏢 Presencial' : m === 'REMOTE' ? '💻 Remoto' : '🔄 Híbrido';
+                                        return <View key={i} style={styles.tag}><Text style={styles.tagText}>{label}</Text></View>;
+                                    })}
+                                </View>
+                            </View>
+                        ) : null}
+                        {p.workerProfile.service_types && p.workerProfile.service_types.length > 0 ? (
+                            <View style={styles.infoRow}>
+                                <Text style={styles.infoLabel}>Tipos de Contratação Aceites</Text>
+                                <View style={styles.tags}>
+                                    {p.workerProfile.service_types.map((s, i) => {
+                                        const label = s === 'SINGLE_TASK' ? '⚡ Serviço Único / Tarefa' : s === 'PROJECT' ? '📁 Por Projeto' : s === 'RECURRING' ? '🔄 Recorrente' : '📜 Contrato Contínuo';
+                                        return <View key={i} style={styles.tag}><Text style={styles.tagText}>{label}</Text></View>;
+                                    })}
+                                </View>
+                            </View>
+                        ) : null}
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Experiência</Text>
                             <Text style={styles.infoValue}>{p.workerProfile.has_experience ? 'Sim' : 'Não'}</Text>

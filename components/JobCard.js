@@ -11,7 +11,7 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
     const isNear = userLocation?.city && job.city && userLocation.city.toLowerCase() === job.city.toLowerCase();
 
     return (
-        <TouchableOpacity style={styles.card} onPress={() => router.push(`/job/${job.id}`)} activeOpacity={0.7}>
+        <TouchableOpacity style={[styles.card, job.employer?.is_premium && styles.premiumCard]} onPress={() => router.push(`/job/${job.id}`)} activeOpacity={0.7}>
             <View style={styles.contentContainer}>
                 <TouchableOpacity
                     style={styles.cardAuthorRow}
@@ -36,6 +36,12 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                 </TouchableOpacity>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    {job.employer?.is_premium && (
+                        <View style={styles.premiumBadge}>
+                            <Ionicons name="star" size={12} color="#B8860B" style={{ marginRight: 4 }} />
+                            <Text style={styles.premiumBadgeText}>Destaque</Text>
+                        </View>
+                    )}
                     <View style={styles.cardType}>
                         <Text style={styles.cardTypeText}>{job.type}</Text>
                     </View>
@@ -115,6 +121,11 @@ const styles = StyleSheet.create({
             elevation: 2,
         }),
     },
+    premiumCard: {
+        borderWidth: 1.5,
+        borderColor: '#FFD700',
+        backgroundColor: '#FFFAEB',
+    },
     contentContainer: {
         paddingHorizontal: Spacing.md,
         paddingTop: Spacing.md,
@@ -130,6 +141,8 @@ const styles = StyleSheet.create({
     
     cardType: { backgroundColor: Colors.primaryBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
     cardTypeText: { fontSize: Fonts.sizes.xs, color: Colors.primary, fontWeight: '600' },
+    premiumBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5E6', borderColor: '#FFD700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+    premiumBadgeText: { fontSize: 10, color: '#B8860B', fontWeight: '700', textTransform: 'uppercase' },
     proximityBadge: { backgroundColor: Colors.primary + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     proximityText: { fontSize: 10, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
 

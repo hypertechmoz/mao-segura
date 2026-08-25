@@ -1,6 +1,6 @@
 import { Tabs, Slot, useRouter, usePathname } from 'expo-router';
 import { View, Text, TextInput, StyleSheet, Platform, Image, TouchableOpacity, useWindowDimensions } from 'react-native';
-import { Colors, Fonts, Spacing, PROFESSION_CATEGORIES, JOB_TYPES } from '../../constants';
+import { Colors, Fonts, Spacing } from '../../constants';
 import { useAuthStore } from '../../store/authStore';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuthGuard } from '../../utils/useAuthGuard';
@@ -10,6 +10,7 @@ import BrandWordmark from '../../components/BrandWordmark';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useUnreadCount } from '../../utils/useUnreadCount';
+import { useTaxonomy } from '../../hooks/useTaxonomy';
 
 function TabIcon({ icon, focused, badge }) {
     return (
@@ -57,12 +58,13 @@ function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNotifications, unr
     // Search state
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const { categories, specialties } = useTaxonomy();
 
     const SUGGESTIONS = useMemo(() => {
-        const categories = PROFESSION_CATEGORIES.filter(c => c !== 'Outro');
-        const jobs = JOB_TYPES.filter(j => j !== 'Outro');
-        return [...new Set([...categories, ...jobs])];
-    }, []);
+        const catNames = categories.map(c => c.name).filter(c => c !== 'Outro');
+        const specNames = specialties.map(s => s.name).filter(j => j !== 'Outro');
+        return [...new Set([...catNames, ...specNames])];
+    }, [categories, specialties]);
 
     const filteredSuggestions = searchQuery.trim().length > 0
         ? SUGGESTIONS.filter(item => item.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 6)
@@ -310,141 +312,143 @@ export default function TabLayout() {
         );
     }
 
-    const bottomPadding = Math.max(insets.bottom, 8);
-    const barHeight = 54 + bottomPadding;
+    const bottomPadding = Math.max(insets.bottom, 12);
+    const fabBottomOffset = bottomPadding + 68;
 
     return (
-        <Tabs
-            screenOptions={{
-                headerShown: false,
-                tabBarShowLabel: false,
-                tabBarHideOnKeyboard: Platform.OS === 'android',
-                tabBarStyle: {
-                    backgroundColor: Colors.white,
-                    borderTopWidth: 1,
-                    borderTopColor: Colors.background,
-                    height: barHeight,
-                    paddingBottom: bottomPadding,
-                    paddingTop: 4,
-                },
-                tabBarActiveTintColor: Colors.primary,
-                tabBarInactiveTintColor: Colors.textLight,
-            }}
-        >
-            <Tabs.Screen
-                name="home"
-                options={{
-                    title: t('tabs.home'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile for custom animated header
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.home')} icon="home" focused={focused} />,
+        <View style={{ flex: 1 }}>
+            <Tabs
+                screenOptions={{
+                    headerShown: false,
+                    tabBarShowLabel: false,
+                    tabBarHideOnKeyboard: Platform.OS === 'android',
+                    tabBarStyle: {
+                        position: 'absolute',
+                        bottom: bottomPadding,
+                        left: 16,
+                        right: 16,
+                        elevation: 12,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 32,
+                        height: 58,
+                        borderTopWidth: 0,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 6 },
+                        shadowOpacity: 0.12,
+                        shadowRadius: 16,
+                        paddingBottom: 0,
+                    },
+                    tabBarActiveTintColor: Colors.primary,
+                    tabBarInactiveTintColor: Colors.textLight,
                 }}
-            />
+            >
+                <Tabs.Screen
+                    name="home"
+                    options={{
+                        title: t('tabs.home'),
+                        headerShown: Platform.OS === 'web', // Hide on mobile for custom animated header
+                        tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.home')} icon="home" focused={focused} />,
+                    }}
+                />
 
-            <Tabs.Screen
-                name="network"
-                options={{
-                    title: 'Minha Rede',
-                    headerShown: Platform.OS === 'web',
-                    tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} badge={unreadConnectionRequests} />,
-                }}
-            />
+                <Tabs.Screen
+                    name="network"
+                    options={{
+                        title: 'Minha Rede',
+                        headerShown: Platform.OS === 'web',
+                        tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} badge={unreadConnectionRequests} />,
+                    }}
+                />
 
-            <Tabs.Screen
-                name="search"
-                options={{
-                    title: t('tabs.search'),
-                    href: null, // Hide from bottom tabs
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.search')} icon="search" focused={focused} />,
-                }}
-            />
-            <Tabs.Screen
-                name="dashboard"
-                options={{
-                    title: '',
-                    tabBarIcon: () => (
-                        <TouchableOpacity
-                            style={styles.fabTab}
-                            onPress={() => {
-                                if (requireAuth()) {
-                                    router.push(user?.role === 'EMPLOYER' ? '/job/create' : '/post/create');
-                                }
-                            }}
-                            activeOpacity={0.8}
-                        >
-                            <View style={styles.fabButton}>
-                                <Ionicons name="add" size={28} color={Colors.white} />
-                            </View>
-                        </TouchableOpacity>
-                    ),
-                }}
-                listeners={{
-                    tabPress: (e) => {
-                        e.preventDefault();
-                        if (requireAuth()) {
-                            router.push(user?.role === 'EMPLOYER' ? '/job/create' : '/post/create');
-                        }
-                    },
-                }}
-            />
+                <Tabs.Screen
+                    name="search"
+                    options={{
+                        title: t('tabs.search'),
+                        href: null, // Hide from bottom tabs
+                        tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.search')} icon="search" focused={focused} />,
+                    }}
+                />
 
-            <Tabs.Screen
-                name="jobs"
-                options={{
-                    title: t('tabs.jobs'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.jobs')} icon="briefcase" focused={focused} />,
+                <Tabs.Screen
+                    name="jobs"
+                    options={{
+                        title: t('tabs.jobs'),
+                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.jobs')} icon="briefcase" focused={focused} />,
+                    }}
+                />
+
+                <Tabs.Screen
+                    name="messages"
+                    options={{
+                        title: t('tabs.messages'),
+                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.messages')} icon="chatbubble-ellipses" focused={focused} badge={unreadMessages} />,
+                    }}
+                    listeners={{
+                        tabPress: (e) => {
+                            if (!user) {
+                                e.preventDefault();
+                                requireAuth();
+                            }
+                        },
+                    }}
+                />
+
+                <Tabs.Screen
+                    name="dashboard"
+                    options={{
+                        href: null,
+                    }}
+                />
+
+                <Tabs.Screen
+                    name="notifications"
+                    options={{
+                        title: t('tabs.notifications'),
+                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        href: null, // Removed from bottom tabs
+                    }}
+                    listeners={{
+                        tabPress: (e) => {
+                            if (!user) {
+                                e.preventDefault();
+                                requireAuth();
+                            }
+                        },
+                    }}
+                />
+                <Tabs.Screen
+                    name="profile"
+                    options={{
+                        title: t('tabs.profile'),
+                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.profile')} icon="person" focused={focused} />,
+                    }}
+                    listeners={{
+                        tabPress: (e) => {
+                            if (!user) {
+                                e.preventDefault();
+                                requireAuth();
+                            }
+                        },
+                    }}
+                />
+            </Tabs>
+
+            {/* Floating Action Button (+) - Telegram Style */}
+            <TouchableOpacity
+                style={[styles.floatingFab, { bottom: fabBottomOffset }]}
+                onPress={() => {
+                    if (requireAuth()) {
+                        router.push(user?.role === 'EMPLOYER' ? '/job/create' : '/post/create');
+                    }
                 }}
-            />
-            <Tabs.Screen
-                name="messages"
-                options={{
-                    title: t('tabs.messages'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile
-                    href: null, // Hidden from bottom tabs
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.messages')} icon="chatbubble-ellipses" focused={focused} badge={unreadMessages} />,
-                }}
-                listeners={{
-                    tabPress: (e) => {
-                        if (!user) {
-                            e.preventDefault();
-                            requireAuth();
-                        }
-                    },
-                }}
-            />
-            <Tabs.Screen
-                name="notifications"
-                options={{
-                    title: t('tabs.notifications'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile
-                    href: null, // Removed from bottom tabs
-                }}
-                listeners={{
-                    tabPress: (e) => {
-                        if (!user) {
-                            e.preventDefault();
-                            requireAuth();
-                        }
-                    },
-                }}
-            />
-            <Tabs.Screen
-                name="profile"
-                options={{
-                    title: t('tabs.profile'),
-                    headerShown: Platform.OS === 'web', // Hide on mobile
-                    tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.profile')} icon="person" focused={focused} />,
-                }}
-                listeners={{
-                    tabPress: (e) => {
-                        if (!user) {
-                            e.preventDefault();
-                            requireAuth();
-                        }
-                    },
-                }}
-            />
-        </Tabs>
+                activeOpacity={0.85}
+            >
+                <Ionicons name="add" size={30} color={Colors.white} />
+            </TouchableOpacity>
+        </View>
     );
 }
 
@@ -472,7 +476,23 @@ const styles = StyleSheet.create({
     },
     mobileBadgeText: { color: Colors.white, fontSize: 10, fontWeight: '800' },
 
-    // FAB Create Button in Tab Bar
+    // FAB Create Button - Telegram Floating Style
+    floatingFab: {
+        position: 'absolute',
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 10,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.35,
+        shadowRadius: 8,
+        zIndex: 999,
+    },
     fabTab: { alignItems: 'center', justifyContent: 'center', marginTop: -20 },
     fabButton: {
         width: 52, height: 52, borderRadius: 26,
@@ -704,6 +724,24 @@ const styles = StyleSheet.create({
         right: 0,
         bottom: 0,
         backgroundColor: 'transparent',
+        zIndex: 1000,
+    },
+
+    // Floating Action Button (+) Telegram Style
+    floatingFab: {
+        position: 'absolute',
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: Colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 8,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
         zIndex: 1000,
     },
 });

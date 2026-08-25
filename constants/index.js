@@ -16,7 +16,7 @@ export const Colors = {
     success: '#22C55E',      // Green
     successBg: '#F0FDF4',
     info: '#4A9EFF',         // Soft Blue (secondary)
-    premium: '#FFB300',
+    premium: '#10B981',      // Vibrant Green for Premium (Plus/Max)
     star: '#FFC107',
     shadow: '#0000000F',
 };
@@ -45,6 +45,38 @@ export const Spacing = {
     xxl: 48,
 };
 
+export const Radius = {
+    sm: 4,
+    md: 8,
+    lg: 12,
+    xl: 16,
+    full: 9999,
+};
+
+export const Shadows = {
+    sm: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    md: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 4,
+    },
+    lg: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+};
+
 export const API_URL = 'http://localhost:3000/api';
 export const SOCKET_URL = 'http://localhost:3000';
 
@@ -69,8 +101,8 @@ export const JOBS_CATEGORIES_MAP = {
         'Técnico de redes'
     ],
     'Tecnologia': [
-        'Técnico informático', 'Técnico de computadores', 'Programador', 
-        'Especialista em redes', 'Reparador de telemóveis'
+        'Técnico informático', 'Técnico de computadores', 'Programador', 'Desenvolvedor Web',
+        'Especialista em redes', 'Reparador de telemóveis', 'Engenheiro de Software', 'Analista de Dados', 'QA / Tester'
     ],
     'Jardim e agricultura': [
         'Jardineiro', 'Paisagista', 'Podador de árvores', 'Capinador', 
@@ -104,16 +136,55 @@ export const JOBS_CATEGORIES_MAP = {
     ],
     'Gestão e apoio': [
         'Administrador de propriedade', 'Caseiro', 'Gestor de fazenda', 
-        'Supervisor de manutenção', 'Comprador de suprimentos'
+        'Supervisor de manutenção', 'Comprador de suprimentos', 'Assistente Administrativo', 'Secretária'
     ],
     'Outros serviços úteis': [
         'Instalador de cercas', 'Reparador de portões', 'Técnico de alarmes', 
         'Instalador de câmeras de segurança', 'Operador de gerador elétrico'
+    ],
+    'Design': [
+        'Designer Gráfico', 'UI/UX Designer', 'Designer de Interiores', 'Ilustrador', 'Animador 3D'
+    ],
+    'Educação': [
+        'Professor', 'Professor Particular', 'Tradutor', 'Revisor de Textos', 'Criador de Cursos'
+    ],
+    'Beleza': [
+        'Cabeleireiro', 'Manicure / Pedicure', 'Maquiador', 'Esteticista', 'Massagista'
+    ],
+    'Eventos': [
+        'Organizador de Eventos', 'Cerimonialista', 'DJ', 'Barman', 'Músico'
+    ],
+    'Fotografia e Vídeo': [
+        'Fotógrafo', 'Editor de Vídeo', 'Videomaker', 'Operador de Drone'
+    ],
+    'Consultoria': [
+        'Consultor Financeiro', 'Consultor de RH', 'Consultor de Marketing', 'Advogado', 'Contabilista'
+    ],
+    'Serviços Digitais': [
+        'Gestor de Redes Sociais', 'Copywriter', 'Especialista de SEO', 'Gestor de Tráfego'
     ]
 };
 
 export const PROFESSION_CATEGORIES = Object.keys(JOBS_CATEGORIES_MAP).concat(['Outro']);
 export const JOB_TYPES = Object.values(JOBS_CATEGORIES_MAP).flat().concat(['Outro']);
+
+export const MODALITIES = {
+    REMOTE: 'Remoto',
+    ONSITE: 'Presencial',
+    HYBRID: 'Híbrido'
+};
+
+// Classificação de categorias que aceitam trabalho remoto vs estritamente presenciais
+export const REMOTE_CATEGORIES = [
+    'Tecnologia', 'Design', 'Serviços Digitais', 'Consultoria', 'Educação', 'Gestão e apoio', 'Fotografia e Vídeo'
+];
+
+export const ONSITE_CATEGORIES = [
+    'Serviços domésticos', 'Cuidados e apoio', 'Construção e reparos', 'Instalações e manutenção', 
+    'Jardim e agricultura', 'Animais', 'Veículos e equipamentos', 'Segurança', 'Serviços gerais', 
+    'Obras e infraestrutura', 'Trabalhos artesanais', 'Serviços complementares', 'Outros serviços úteis',
+    'Beleza', 'Eventos'
+];
 
 export const COMMON_SKILLS = [
     'Montador de TV',

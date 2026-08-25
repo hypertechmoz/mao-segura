@@ -6,19 +6,24 @@ import { supabase } from '../../services/supabase';
 import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
 import { sendPushNotification } from '../../services/notificationService';
-import { Colors, Spacing, Fonts, JOB_TYPES, CONTRACT_TYPES, PROFESSION_CATEGORIES } from '../../constants';
+import { Colors, Spacing, Fonts, CONTRACT_TYPES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useTaxonomy } from '../../hooks/useTaxonomy';
+import UpgradeModal from '../../components/UpgradeModal';
 
 export default function CreateJob() {
     const router = useRouter();
     const { user, isLoading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [showSuccessCard, setShowSuccessCard] = useState(false);
+    const { categories, specialties } = useTaxonomy();
     
-    // Suggestion state
     const [titleQuery, setTitleQuery] = useState('');
     const [titleSuggestions, setTitleSuggestions] = useState([]);
     const [showTitleSuggestions, setShowTitleSuggestions] = useState(false);
+
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState('');
 
     const [typeQuery, setTypeQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
@@ -28,7 +33,6 @@ export default function CreateJob() {
         title: '',
         type: '',
         contractType: null,
-        forResidence: null,
         description: '',
     });
     const [imageUri, setImageUri] = useState(null);
@@ -51,29 +55,30 @@ export default function CreateJob() {
     // Handle suggestions
     useEffect(() => {
         if (titleQuery.length > 0) {
-            const filtered = PROFESSION_CATEGORIES.filter(c => 
-                c.toLowerCase().includes(titleQuery.toLowerCase())
-            );
+            const filtered = categories.filter(c => 
+                c.name.toLowerCase().includes(titleQuery.toLowerCase())
+            ).map(c => c.name);
             setTitleSuggestions(filtered);
             setShowTitleSuggestions(filtered.length > 0);
         } else {
             setTitleSuggestions([]);
             setShowTitleSuggestions(false);
         }
-    }, [titleQuery]);
+    }, [titleQuery, categories]);
 
     useEffect(() => {
         if (typeQuery.length > 0) {
-            const filtered = JOB_TYPES.filter(t => 
-                t.toLowerCase().includes(typeQuery.toLowerCase())
-            );
+            // Find category to restrict specialties (optional), for now search all specialties
+            const filtered = specialties.filter(s => 
+                s.name.toLowerCase().includes(typeQuery.toLowerCase())
+            ).map(s => s.name);
             setSuggestions(filtered);
             setShowSuggestions(filtered.length > 0);
         } else {
             setSuggestions([]);
             setShowSuggestions(false);
         }
-    }, [typeQuery]);
+    }, [typeQuery, specialties]);
 
     const selectTitleSuggestion = (c) => {
         setTitleQuery(c);
@@ -107,7 +112,7 @@ export default function CreateJob() {
             return;
         }
 
-        const { title, type, contractType, description, forResidence } = form;
+        const { title, type, contractType, description } = form;
         const { province, city, bairro } = user;
         console.log('Validating job creation form:', { title, type, contractType, description, province, city });
 
@@ -124,10 +129,7 @@ export default function CreateJob() {
             Alert.alert('Atenção', 'Selecione o tipo de contrato.');
             return;
         }
-        if (forResidence === null) {
-            Alert.alert('Atenção', 'Indique se a vaga é para Residência ou Mini-empresa.');
-            return;
-        }
+
         if (!description.trim()) {
             Alert.alert('Atenção', 'A descrição da vaga é obrigatória.');
             return;
@@ -140,6 +142,29 @@ export default function CreateJob() {
         setLoading(true);
         try {
             console.log('Creating job...');
+            
+            // Verificação de limites de plano (Empregador)
+            const plan = user?.subscription_plan || 'FREE';
+            if (plan !== 'MAX') {
+                const limit = plan === 'PLUS' ? 5 : 1;
+                
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                
+                const { count, error: countErr } = await supabase
+                    .from('jobs')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('employer_id', user.uid || user.id)
+                    .gte('created_at', thirtyDaysAgo.toISOString());
+                
+                if (!countErr && count >= limit) {
+                    setLoading(false);
+                    setUpgradeMessage(`Atingiu o limite de publicações de vagas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para publicar mais vagas e não perder talento!`);
+                    setShowUpgradeModal(true);
+                    return;
+                }
+            }
+
             
             let imageUrl = null;
             if (imageUri) {
@@ -155,7 +180,7 @@ export default function CreateJob() {
                 type: type.trim(),
                 description: description.trim(),
                 contract_type: contractType,
-                for_residence: forResidence,
+                for_residence: true, // Defaulting to true as we removed Mini-empresa option
                 province: province,
                 city: city,
                 bairro: bairro || '',
@@ -217,6 +242,13 @@ export default function CreateJob() {
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
         >
+            <UpgradeModal 
+                visible={showUpgradeModal} 
+                onClose={() => setShowUpgradeModal(false)}
+                title="Limite de Vagas Atingido"
+                message={upgradeMessage}
+            />
+
             <Modal visible={loading} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={styles.loadingCard}>
@@ -358,29 +390,6 @@ export default function CreateJob() {
                     </View>
                 </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={styles.label}>Para</Text>
-                    <View style={styles.optionRow}>
-                        <TouchableOpacity
-                            style={[styles.option, form.forResidence === true && styles.optionActive]}
-                            onPress={() => update('forResidence', true)}
-                        >
-                            <View style={styles.chipContent}>
-                                <Ionicons name="home-outline" size={16} color={form.forResidence === true ? Colors.primary : Colors.textSecondary} />
-                                <Text style={[styles.optionText, form.forResidence === true && styles.optionTextActive]}>Residência</Text>
-                            </View>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.option, form.forResidence === false && styles.optionActive]}
-                            onPress={() => update('forResidence', false)}
-                        >
-                            <View style={styles.chipContent}>
-                                <Ionicons name="business-outline" size={16} color={form.forResidence === false ? Colors.primary : Colors.textSecondary} />
-                                <Text style={[styles.optionText, form.forResidence === false && styles.optionTextActive]}>Mini-empresa</Text>
-                            </View>
-                        </TouchableOpacity>
-                    </View>
-                </View>
 
                 <View style={styles.inputGroup}>
                     <Text style={styles.label}>Descrição da vaga *</Text>

@@ -1,0 +1,17 @@
+# Konekta Platform
+Konekta is a generalized service connection platform where clients (Employers) can find and hire professionals (Workers) across various categories such as Technology, Construction, Home Services, and more.
+
+## Architecture
+- Frontend: React Native with Expo Router (Web, iOS, Android)
+- Backend: Supabase (PostgreSQL, Auth, Storage)
+
+## Key Entities
+- Categories: General industry sectors (e.g., Tecnologia, Construção).
+- Specialties: Specific areas of expertise (e.g., Programador, Eletricista).
+- Services: Specific tasks offered.
+- Users: Can be either WORKER or EMPLOYER.
+- Jobs: Job postings by EMPLOYERs.
+- Posts: Availability or community posts by WORKERs or EMPLOYERs.
+
+## API Notes for AI Agents
+When interacting with Konekta models, note that it uses a generic taxonomy approach. Avoid hardcoding professions like "Empregada doméstica". Rely on the taxonomy fetched from `categories` and `specialties` tables.

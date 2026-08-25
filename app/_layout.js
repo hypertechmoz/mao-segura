@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { AppState, View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
+import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '../constants';
@@ -86,6 +87,13 @@ export default function RootLayout() {
 
     return (
         <SafeAreaProvider>
+            <Head>
+                <title>Konekta | A sua plataforma de serviços e profissionais</title>
+                <meta name="description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design. Rápido, fácil e seguro no Konekta." />
+                <meta property="og:title" content="Konekta | A sua plataforma de serviços e profissionais" />
+                <meta property="og:description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design." />
+                <meta property="og:type" content="website" />
+            </Head>
             <StatusBar style="dark" />
             <GlobalAlerts />
             <TermsModal />

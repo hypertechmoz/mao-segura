@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Scr
 import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
-import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES } from '../../constants';
+import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import PostCard from '../../components/PostCard';
 import JobCard from '../../components/JobCard';
@@ -108,7 +108,6 @@ function WebLeftSidebar({ user, completeness, router }) {
 
 // === Web-Only: Right Sidebar (Widgets) ===
 function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds }) {
-    const trendingTypes = PROFESSION_CATEGORIES.slice(0, 5);
 
     return (
         <View style={{ flex: 1 }}>
@@ -354,10 +353,10 @@ export default function Home() {
             // [0] Feed Principal (Vagas ou Trabalhadores) - Com Paginação
             if (isWorker) {
                 let jobQuery = supabase.from('jobs')
-                    .select('*, employer:users!employer_id(id, name, city, province, is_verified)')
+                    .select('*, employer:users!employer_id(id, name, city, province, is_verified, is_premium)')
                     .eq('status', 'ACTIVE');
 
-                if (!user?.is_premium && user?.province) {
+                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
                     jobQuery = jobQuery.eq('province', user.province);
                 }
 
@@ -367,7 +366,7 @@ export default function Home() {
                     .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
                     .eq('role', 'WORKER');
 
-                if (!user?.is_premium && user?.province) {
+                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
                     workerQuery = workerQuery.eq('province', user.province);
                 }
 
@@ -381,7 +380,7 @@ export default function Home() {
                 .range(from, to);
             
             // Restrição Freemium: Apenas ver posts da mesma província
-            if (!user?.is_premium && user?.province) {
+            if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
                 postQuery = postQuery.eq('author.province', user.province);
             }
             

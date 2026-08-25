@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
-import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES, PROVINCES } from '../../constants';
+import { Colors, Spacing, Fonts, PROVINCES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import PostCard from '../../components/PostCard';
+import { useTaxonomy } from '../../hooks/useTaxonomy';
 
 export default function Search() {
     const router = useRouter();
@@ -17,6 +18,7 @@ export default function Search() {
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const { user } = useAuthStore();
+    const { categories } = useTaxonomy();
 
     useEffect(() => {
         if (q) {
@@ -43,7 +45,7 @@ export default function Search() {
 
             if (activeTab === 'VAGAS') {
                 query = supabase.from('jobs').select('*, employer:users!employer_id(*)').eq('status', 'ACTIVE');
-                if (!user?.is_premium && user?.province) {
+                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
                     query = query.eq('province', user.province);
                 }
                 if (isType) {
@@ -53,7 +55,7 @@ export default function Search() {
                 }
             } else {
                 query = supabase.from('posts').select('*, user:users!inner(*)');
-                if (!user?.is_premium && user?.province) {
+                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
                     query = query.eq('user.province', user.province);
                 }
                 if (searchTerm) {
@@ -129,13 +131,13 @@ export default function Search() {
                 <View style={styles.categories}>
                     <Text style={styles.categoryTitle}>Categorias populares</Text>
                     <View style={styles.chips}>
-                        {PROFESSION_CATEGORIES.slice(0, 10).map((type) => (
+                        {categories.slice(0, 10).map((catObj) => (
                             <TouchableOpacity
-                                key={type}
+                                key={catObj.name}
                                 style={styles.chip}
-                                onPress={() => handleFilter(type)}
+                                onPress={() => handleFilter(catObj.name)}
                             >
-                                <Text style={styles.chipText}>{type}</Text>
+                                <Text style={styles.chipText}>{catObj.name}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>

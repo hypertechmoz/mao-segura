@@ -88,6 +88,7 @@ export default function Premium() {
     };
 
     const isPremium = subscription?.plan === 'PREMIUM' || user?.is_premium;
+    const isEmployer = user?.role === 'EMPLOYER';
 
     const renderFeature = (text, included, premiumOnly = false) => (
         <View style={styles.featureRow}>
@@ -124,11 +125,14 @@ export default function Premium() {
                 <Text style={styles.planDesc}>O essencial para começar a encontrar oportunidades na sua cidade.</Text>
                 
                 <View style={styles.featuresList}>
-                    {renderFeature("Perfil profissional básico", true)}
-                    {renderFeature("Acesso a vagas da sua cidade", true)}
-                    {renderFeature("Limite de 3 vagas/mês", true)}
-                    {renderFeature("Destaque nas pesquisas", false)}
-                    {renderFeature("Acesso a vagas de todo o país", false)}
+                    {renderFeature("Perfil básico", true)}
+                    {renderFeature(isEmployer ? "Acesso a profissionais da sua cidade" : "Acesso a vagas da sua cidade", true)}
+                    {isEmployer ? renderFeature("1 Vaga ativa em simultâneo", true) : renderFeature("3 Candidaturas ativas em simultâneo", true)}
+                    {!isEmployer && renderFeature("1 Publicação (Post) no Feed", true)}
+                    {renderFeature("1 Imagem por conversa de Chat", true)}
+                    
+                    {renderFeature(isEmployer ? "Destaque visual nas suas vagas" : "Destaque do perfil nas pesquisas", false)}
+                    {renderFeature("Acesso sem limite geográfico (Todo país)", false)}
                     {renderFeature("Selo azul de Conta Oficial", false)}
                 </View>
             </View>
@@ -147,11 +151,11 @@ export default function Premium() {
                 
                 <View style={styles.featuresList}>
                     {renderFeature("Tudo do plano Free", true, true)}
-                    {renderFeature("Acesso a vagas de TODO O PAÍS", true, true)}
-                    {renderFeature("Publicações e Vagas ILIMITADAS", true, true)}
-                    {renderFeature("Destaque absoluto nas pesquisas", true, true)}
+                    {isEmployer ? renderFeature("5 Vagas ativas em simultâneo", true, true) : renderFeature("10 Candidaturas ativas em simultâneo", true, true)}
+                    {!isEmployer && renderFeature("10 Publicações (Posts) no Feed", true, true)}
+                    {renderFeature("10 Imagens por conversa de Chat", true, true)}
+                    {renderFeature(isEmployer ? "Destaque absoluto visual nas suas Vagas" : "Destaque absoluto nas pesquisas", true, true)}
                     {renderFeature("Selo azul de Conta Oficial", true, true)}
-                    {renderFeature("Mensagens diretas ilimitadas", true, true)}
                 </View>
 
                 {isPremium ? (
@@ -206,13 +210,14 @@ export default function Premium() {
                     <View style={[styles.currentBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}><Text style={[styles.currentBadgeText, { color: Colors.white }]}>Em Breve</Text></View>
                 </View>
                 <Text style={[styles.planPrice, { color: Colors.white }]}>---<Text style={[styles.planPricePeriod, { color: 'rgba(255,255,255,0.7)' }]}>/mês</Text></Text>
-                <Text style={[styles.planDesc, { color: 'rgba(255,255,255,0.9)' }]}>Acesso total e absoluto. Seja cliente, profissional e empresa em simultâneo.</Text>
+                <Text style={[styles.planDesc, { color: 'rgba(255,255,255,0.9)' }]}>Acesso total e absoluto. Seja o melhor e sem limites.</Text>
                 
                 <View style={styles.featuresList}>
                     {renderFeature("Tudo do Konekt Mais", true, true)}
-                    {renderFeature("Seja Cliente e Profissional ao mesmo tempo", true, true)}
-                    {renderFeature("Criar e gerir Conta Empresarial", true, true)}
-                    {renderFeature("Interagir com qualquer utilizador (sem restrições)", true, true)}
+                    {renderFeature(isEmployer ? "Acesso a profissionais de TODO O PAÍS" : "Acesso a vagas de TODO O PAÍS", true, true)}
+                    {isEmployer && renderFeature("Criar e gerir Conta Empresarial (Business)", true, true)}
+                    {isEmployer ? renderFeature("Vagas ILIMITADAS", true, true) : renderFeature("Candidaturas e Publicações ILIMITADAS", true, true)}
+                    {renderFeature("Imagens ILIMITADAS no Chat", true, true)}
                     {renderFeature("Acesso Exclusivo a futuras funcionalidades", true, true)}
                 </View>
 

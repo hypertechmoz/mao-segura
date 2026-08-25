@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
+import UpgradeModal from '../../components/UpgradeModal';
 
 export default function JobDetail() {
     const router = useRouter();
@@ -20,6 +21,8 @@ export default function JobDetail() {
     const [isConnected, setIsConnected] = useState(false);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
     const [applicationStatus, setApplicationStatus] = useState(null);
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState('');
 
     const loadJob = useCallback(async () => {
         if (!id) return;
@@ -145,7 +148,29 @@ export default function JobDetail() {
         } else if (hasPendingRequest) {
             Alert.alert("Aviso", "Já enviou um pedido de candidatura para esta vaga.");
         } else {
+            const uid = user?.uid || user?.id;
             try {
+                // Verificação de limites de plano
+                const plan = user?.subscription_plan || 'FREE';
+                if (plan !== 'MAX') {
+                    const limit = plan === 'PLUS' ? 10 : 3;
+                    
+                    const thirtyDaysAgo = new Date();
+                    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                    
+                    const { count, error: countErr } = await supabase
+                        .from('applications')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('worker_id', uid)
+                        .gte('created_at', thirtyDaysAgo.toISOString());
+                    
+                    if (!countErr && count >= limit) {
+                        setUpgradeMessage(`Atingiu o limite de candidaturas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para candidatar-se sem limites!`);
+                        setShowUpgradeModal(true);
+                        return;
+                    }
+                }
+
                 await supabase.from('applications').insert({
                     job_id: id,
                     worker_id: uid,
@@ -274,6 +299,13 @@ export default function JobDetail() {
 
     return (
         <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+            <UpgradeModal 
+                visible={showUpgradeModal} 
+                onClose={() => setShowUpgradeModal(false)}
+                title="Limite Atingido"
+                message={upgradeMessage}
+            />
+
             <View style={styles.header}>
                 <View style={styles.typeTag}>
                     <Text style={styles.typeTagText}>{job.type}</Text>

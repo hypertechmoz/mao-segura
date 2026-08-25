@@ -98,6 +98,9 @@ export const useAuthStore = create((set, get) => ({
 
             const uid = user.id;
 
+            // 0. Sync premium status to revoke expired plans
+            await supabase.rpc('sync_user_premium_status').catch(() => {});
+
             // 1. Fetch base metadata from Users table
             let { data: userData, error: userError } = await supabase
                 .from('users')
@@ -114,7 +117,7 @@ export const useAuthStore = create((set, get) => ({
                 console.log('[refreshUser] public.users row missing for user. Creating auto-profile...');
                 const metaName = user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'Utilizador';
                 const metaPhoto = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-                const metaRole = user.user_metadata?.role || 'WORKER';
+                const metaRole = user.user_metadata?.role || 'PENDING';
                 const metaPhone = user.user_metadata?.phone || null;
                 const metaProvince = user.user_metadata?.province || null;
                 const metaCity = user.user_metadata?.city || null;
@@ -131,6 +134,7 @@ export const useAuthStore = create((set, get) => ({
                     is_active: true,
                     is_verified: false,
                     is_premium: false,
+                    subscription_plan: 'FREE',
                     profile_photo: metaPhoto,
                     created_at: new Date().toISOString(),
                 };
@@ -204,7 +208,7 @@ export const useAuthStore = create((set, get) => ({
             const normalizedPhone = phone?.trim() ? phone.trim() : null;
             const metadata = {
                 name,
-                role: role || 'WORKER',
+                role: role || 'PENDING',
                 province,
                 city,
                 bairro,

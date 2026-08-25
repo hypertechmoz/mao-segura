@@ -6,12 +6,18 @@ import { supabase } from '../../services/supabase';
 import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
 import { sendPushNotification } from '../../services/notificationService';
-import { Colors, Spacing, Fonts, PROFESSION_CATEGORIES, JOBS_CATEGORIES_MAP } from '../../constants';
+import { Colors, Spacing, Fonts } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
+import { useTaxonomy } from '../../hooks/useTaxonomy';
+import UpgradeModal from '../../components/UpgradeModal';
 
 export default function CreatePost() {
     const router = useRouter();
     const { user } = useAuthStore();
+    const { categories, getSpecialtiesByCategoryName } = useTaxonomy();
+    
+    const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+    const [upgradeMessage, setUpgradeMessage] = useState('');
     
     useEffect(() => {
         if (user?.role === 'EMPLOYER') {
@@ -55,6 +61,28 @@ export default function CreatePost() {
         const uid = user?.uid || user?.id;
 
         try {
+            // Verificação de limites de plano (Profissionais)
+            const plan = user?.subscription_plan || 'FREE';
+            if (plan !== 'MAX') {
+                const limit = plan === 'PLUS' ? 10 : 1;
+                
+                const thirtyDaysAgo = new Date();
+                thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+                
+                const { count, error: countErr } = await supabase
+                    .from('posts')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', uid)
+                    .gte('created_at', thirtyDaysAgo.toISOString());
+                
+                if (!countErr && count >= limit) {
+                    setLoading(false);
+                    setUpgradeMessage(`Atingiu o limite de publicações (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para partilhar a sua disponibilidade sem limites!`);
+                    setShowUpgradeModal(true);
+                    return;
+                }
+            }
+
             let imageUrl = null;
             if (imageUri) {
                 // Ensure unique path for Supabase Storage
@@ -130,6 +158,12 @@ export default function CreatePost() {
 
     return (
         <KeyboardAvoidingView style={[{ flex: 1 }, Platform.OS === 'web' ? { alignItems: 'center', backgroundColor: Colors.background } : {}]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <UpgradeModal 
+                visible={showUpgradeModal} 
+                onClose={() => setShowUpgradeModal(false)}
+                title="Limite Atingido"
+                message={upgradeMessage}
+            />
             <View style={[{ flex: 1, width: '100%' }, Platform.OS === 'web' ? { maxWidth: 600 } : {}]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -199,13 +233,13 @@ export default function CreatePost() {
                         style={styles.chipsScroll}
                         contentContainerStyle={Platform.OS === 'web' ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } : {}}
                     >
-                        {PROFESSION_CATEGORIES.map(cat => (
+                        {categories.map(catObj => (
                             <TouchableOpacity
-                                key={cat}
-                                style={[styles.chip, category === cat && styles.chipActive]}
-                                onPress={() => { setCategory(cat); setWorkType(''); }}
+                                key={catObj.name}
+                                style={[styles.chip, category === catObj.name && styles.chipActive]}
+                                onPress={() => { setCategory(catObj.name); setWorkType(''); }}
                             >
-                                <Text style={[styles.chipText, category === cat && styles.chipTextActive]}>{cat}</Text>
+                                <Text style={[styles.chipText, category === catObj.name && styles.chipTextActive]}>{catObj.name}</Text>
                             </TouchableOpacity>
                         ))}
                     </ScrollView>
@@ -219,13 +253,13 @@ export default function CreatePost() {
                                 style={styles.chipsScroll}
                                 contentContainerStyle={Platform.OS === 'web' ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } : {}}
                             >
-                                {JOBS_CATEGORIES_MAP[category]?.map(type => (
+                                {getSpecialtiesByCategoryName(category).map(specObj => (
                                     <TouchableOpacity
-                                        key={type}
-                                        style={[styles.chip, workType === type && styles.chipActive]}
-                                        onPress={() => setWorkType(workType === type ? '' : type)}
+                                        key={specObj.name}
+                                        style={[styles.chip, workType === specObj.name && styles.chipActive]}
+                                        onPress={() => setWorkType(workType === specObj.name ? '' : specObj.name)}
                                     >
-                                        <Text style={[styles.chipText, workType === type && styles.chipTextActive]}>{type}</Text>
+                                        <Text style={[styles.chipText, workType === specObj.name && styles.chipTextActive]}>{specObj.name}</Text>
                                     </TouchableOpacity>
                                 ))}
                             </ScrollView>
