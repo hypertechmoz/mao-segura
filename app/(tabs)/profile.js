@@ -305,8 +305,9 @@ export default function Profile() {
                     <View style={styles.badges}>
                         {(p?.subscription_plan === 'PLUS' || p?.subscription_plan === 'MAX' || p?.is_premium) && (
                             <View style={[styles.badge, styles.premiumBadge]}>
+                                <Ionicons name="star" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
                                 <Text style={[styles.badgeText, styles.premiumText]}>
-                                    ⭐ {p?.subscription_plan === 'MAX' ? 'Konekta Max' : p?.subscription_plan === 'PLUS' ? 'Konekta Plus' : t('common.premium')}
+                                    {p?.subscription_plan === 'MAX' ? 'Konekta Max' : p?.subscription_plan === 'PLUS' ? 'Konekta Plus' : t('common.premium')}
                                 </Text>
                             </View>
                         )}
@@ -326,7 +327,12 @@ export default function Profile() {
                         <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                                 <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{p?.workerProfile?.reviews_count || p?.rating_count || 0}</Text>
-                                {(p?.workerProfile?.rating > 0 || p?.rating_avg > 0) && <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFB800' }}>⭐ {Number(p?.workerProfile?.rating || p?.rating_avg).toFixed(1)}</Text>}
+                                {(p?.workerProfile?.rating > 0 || p?.rating_avg > 0) && (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <Ionicons name="star" size={12} color={Colors.primary} />
+                                        <Text style={{ fontSize: 12, fontWeight: '700', color: Colors.primary, marginLeft: 2 }}>{Number(p?.workerProfile?.rating || p?.rating_avg).toFixed(1)}</Text>
+                                    </View>
+                                )}
                             </View>
                             <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Recomendações</Text>
                         </View>
@@ -660,7 +666,8 @@ export default function Profile() {
                                                 </View>
                                             </View>
                                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                                <Text style={{ fontWeight: 'bold', color: '#FFB800', fontSize: 14 }}>⭐ {review.rating}</Text>
+                                                <Ionicons name="star" size={16} color={Colors.primary} />
+                                                <Text style={{ fontWeight: 'bold', color: Colors.primary, fontSize: 14, marginLeft: 4 }}>{review.rating}</Text>
                                             </View>
                                         </View>
                                         {review.comment ? (

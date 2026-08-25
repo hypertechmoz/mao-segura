@@ -231,12 +231,12 @@ export default function UserDetail() {
         try {
             if (profileUser.role === 'WORKER') {
                 const { data, error } = await supabase
-                    .from('applications')
-                    .select('*, job:jobs(*, employer:users!employer_id(id,name,is_verified,is_premium))')
-                    .eq('worker_id', id)
+                    .from('reviews')
+                    .select('*, employer:users!reviews_from_id_fkey(name, profile_photo, is_verified, is_premium)')
+                    .eq('to_id', id)
                     .order('created_at', { ascending: false });
                 if (error) throw error;
-                setUserHistory(data?.map(app => app.job).filter(j => j != null) || []);
+                setUserHistory(data || []);
             } else {
                 const { data, error } = await supabase
                     .from('jobs')
@@ -380,9 +380,14 @@ export default function UserDetail() {
                     </View>
                     <View style={styles.statDivider} />
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.statNumber}>{profileUser.rating_count || 0}</Text>
+                        <Text style={styles.statNumber}>{profileUser.reviews_count || profileUser.rating_count || 0}</Text>
                         <Text style={styles.statLabel}>Recomendações</Text>
-                        {profileUser.rating_avg > 0 && <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFB800', marginLeft: 6 }}>⭐ {profileUser.rating_avg.toFixed(1)}</Text>}
+                        {(profileUser.rating > 0 || profileUser.rating_avg > 0) && (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
+                                <Ionicons name="star" size={13} color={Colors.primary} />
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: Colors.primary, marginLeft: 2 }}>{Number(profileUser.rating || profileUser.rating_avg).toFixed(1)}</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -559,9 +564,38 @@ export default function UserDetail() {
                     {loadingHistory ? (
                         <ActivityIndicator size="small" color={Colors.primary} style={{ marginTop: 20 }} />
                     ) : userHistory.length > 0 ? (
-                        userHistory.map(job => (
-                            <JobCard key={job.id} job={job} />
-                        ))
+                        profileUser.role === 'WORKER' ? (
+                            userHistory.map(review => (
+                                <View key={review.id} style={[styles.historyCard, { padding: 16, backgroundColor: Colors.white, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight }]}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            {review.employer?.profile_photo ? (
+                                                <Image source={{ uri: review.employer.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                                            ) : (
+                                                <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center' }}>
+                                                    <Text style={{ color: Colors.primary, fontWeight: 'bold' }}>{review.employer?.name?.charAt(0) || 'E'}</Text>
+                                                </View>
+                                            )}
+                                            <View>
+                                                <Text style={{ fontWeight: '600', fontSize: 14 }}>{review.employer?.name || 'Empregador'}</Text>
+                                                <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{new Date(review.created_at).toLocaleDateString()}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Ionicons name="star" size={16} color={Colors.primary} />
+                                            <Text style={{ fontWeight: 'bold', color: Colors.primary, fontSize: 14, marginLeft: 4 }}>{review.rating}</Text>
+                                        </View>
+                                    </View>
+                                    {review.comment ? (
+                                        <Text style={{ marginTop: 12, color: Colors.text, fontSize: 14, fontStyle: 'italic' }}>"{review.comment}"</Text>
+                                    ) : null}
+                                </View>
+                            ))
+                        ) : (
+                            userHistory.map(job => (
+                                <JobCard key={job.id} job={job} />
+                            ))
+                        )
                     ) : (
                         <View style={{ alignItems: 'center', paddingVertical: 40 }}>
                             <Ionicons name="briefcase-outline" size={48} color={Colors.border} />
