@@ -327,27 +327,31 @@ export default function UserDetail() {
                 <Ionicons name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>
 
-            <View style={[styles.header, { paddingTop: Math.max(insets.top, 10) + 20 }]}>
-                <View style={styles.avatarContainer}>
-                    {profileUser.profile_photo ? (
-                        <Image source={{ uri: profileUser.profile_photo }} style={styles.avatar} />
-                    ) : (
-                        <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                            <Text style={styles.avatarInitial}>{profileUser.name?.[0] || '?'}</Text>
-                        </View>
-                    )}
-                </View>
+            <View style={[styles.header, { marginTop: Math.max(insets.top, 10) }]}>
+                {/* Banner Profile */}
+                <View style={styles.banner} />
 
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={styles.name}>{profileUser.name}</Text>
-                    {(profileUser.is_premium || profileUser.is_verified) && <VerifiedBadge size={18} style={{ marginLeft: 6 }} />}
-                </View>
-                <Text style={styles.role}>{profileUser.role === 'EMPLOYER' ? 'Empregador' : (profileUser.work_types?.join(' & ') || profileUser.profession_category || 'Profissional em Geral')}</Text>
-                
-                <View style={styles.locationRow}>
-                    <Ionicons name="location" size={16} color={Colors.textSecondary} />
-                    <Text style={styles.locationText}>{profileUser.city}, {profileUser.bairro || profileUser.province}</Text>
-                </View>
+                <View style={styles.headerContent}>
+                    <View style={styles.avatarContainer}>
+                        {profileUser.profile_photo ? (
+                            <Image source={{ uri: profileUser.profile_photo }} style={styles.avatar} />
+                        ) : (
+                            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                                <Text style={styles.avatarInitial}>{profileUser.name?.[0] || '?'}</Text>
+                            </View>
+                        )}
+                        {(profileUser.is_premium || profileUser.is_verified) && <VerifiedBadge size={22} style={styles.verifiedBadgeLarge} />}
+                    </View>
+
+                    <View style={styles.nameRow}>
+                        <Text style={styles.name}>{profileUser.name}</Text>
+                    </View>
+                    <Text style={styles.role}>{profileUser.role === 'EMPLOYER' ? 'Empregador' : (profileUser.work_types?.join(' & ') || profileUser.profession_category || 'Profissional em Geral')}</Text>
+                    
+                    <View style={styles.locationRow}>
+                        <Ionicons name="location" size={16} color={Colors.textSecondary} />
+                        <Text style={styles.locationText}>{profileUser.city}, {profileUser.bairro || profileUser.province}</Text>
+                    </View>
 
                 {/* Connection Status Badge */}
                 {user && id !== user.uid && id !== user.id && (
@@ -369,47 +373,44 @@ export default function UserDetail() {
                 )}
 
                 {/* Stats Section */}
-                <View style={{ flexDirection: 'row', justifyContent: 'center', width: '100%', marginTop: 24, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: 20 }}>
-                    <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
-                        <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{connectionsCount || 0}</Text>
-                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Conexões</Text>
+                <View style={styles.statsRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.statNumber}>{connectionsCount || 0}</Text>
+                        <Text style={styles.statLabel}>Conexões</Text>
                     </View>
-                    <View style={{ width: 1, backgroundColor: Colors.borderLight, height: 40 }} />
-                    <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{profileUser.rating_count || 0}</Text>
-                            {profileUser.rating_avg > 0 && <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFB800' }}>⭐ {profileUser.rating_avg.toFixed(1)}</Text>}
-                        </View>
-                        <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Recomendações</Text>
+                    <View style={styles.statDivider} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={styles.statNumber}>{profileUser.rating_count || 0}</Text>
+                        <Text style={styles.statLabel}>Recomendações</Text>
+                        {profileUser.rating_avg > 0 && <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFB800', marginLeft: 6 }}>⭐ {profileUser.rating_avg.toFixed(1)}</Text>}
                     </View>
                 </View>
 
                 {profileUser.role === 'WORKER' && (
-                    <View style={{ alignItems: 'center', marginTop: 12 }}>
+                    <View style={{ marginTop: 8 }}>
                         <Text style={styles.completedText}>
                             {profileUser.completed_contracts || 0} trabalhos concluídos
                         </Text>
                     </View>
                 )}
 
+                <View style={styles.headerActions}>
+                    <TouchableOpacity style={[styles.chatButton, isProcessingChat && { opacity: 0.7 }]} onPress={handleChat} disabled={isProcessingChat}>
+                        {isProcessingChat ? (
+                            <ActivityIndicator size="small" color={Colors.white} />
+                        ) : (
+                            <>
+                                <Ionicons name={isConnected ? "chatbubbles" : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? "checkmark-circle" : "time") : "person-add")} size={18} color={Colors.white} style={{ marginRight: 6 }} />
+                                <Text style={styles.chatButtonText}>{isConnected ? 'Mensagem' : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? 'Aceitar' : 'Pendente') : 'Conectar')}</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.reportBtnIcon} onPress={() => setShowReportModal(true)}>
+                        <Text style={styles.reportBtnText}>Denunciar</Text>
+                    </TouchableOpacity>
+                </View>
             </View>
-
-            <View style={styles.actions}>
-                <TouchableOpacity style={[styles.chatButton, isProcessingChat && { opacity: 0.7 }]} onPress={handleChat} disabled={isProcessingChat}>
-                    {isProcessingChat ? (
-                        <ActivityIndicator size="small" color={Colors.white} />
-                    ) : (
-                        <>
-                            <Ionicons name={isConnected ? "chatbubbles" : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? "checkmark-circle" : "time") : "chatbubble-ellipses")} size={22} color={Colors.white} style={{ marginRight: 8 }} />
-                            <Text style={styles.chatButtonText}>{isConnected ? 'Escrever Mensagem' : (hasPendingRequest ? ((pendingRequest && pendingRequest.receiver_id === (user?.uid || user?.id)) ? 'Aceitar Pedido' : 'Pedido Pendente') : 'Pedir para Contactar')}</Text>
-                        </>
-                    )}
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.reportBtn} onPress={() => setShowReportModal(true)}>
-                    <Ionicons name="flag" size={16} color={Colors.textLight} style={{ marginRight: 6 }} />
-                    <Text style={styles.reportBtnText}>Denunciar Perfil</Text>
-                </TouchableOpacity>
             </View>
 
             {/* TABS */}
@@ -622,38 +623,39 @@ export default function UserDetail() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    content: { paddingBottom: Spacing.xxl },
+    content: { paddingBottom: Spacing.xxl, width: '100%', maxWidth: 800, alignSelf: 'center' },
     loading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: { 
-        backgroundColor: Colors.white, padding: Spacing.xl, alignItems: 'center', borderBottomLeftRadius: 32, borderBottomRightRadius: 32, 
-        shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 10, elevation: 4, zIndex: 10,
+        backgroundColor: Colors.white, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16,
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, zIndex: 10,
+        overflow: 'hidden', marginHorizontal: Platform.OS === 'web' ? 15 : 0, borderWidth: 1, borderColor: Colors.primary + '30'
     },
+    banner: { height: 140, backgroundColor: Colors.primaryBg, width: '100%' },
+    headerContent: { paddingHorizontal: 24, paddingBottom: 24 },
     backButton: {
-        position: 'absolute',
-        left: 16,
-        zIndex: 10,
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: 'rgba(255,255,255,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
+        position: 'absolute', left: 16, zIndex: 20, width: 40, height: 40, borderRadius: 20,
+        backgroundColor: 'rgba(255,255,255,0.9)', justifyContent: 'center', alignItems: 'center',
     },
-    avatarContainer: { position: 'relative', marginBottom: 16 },
-    avatar: { width: 110, height: 110, borderRadius: 55, backgroundColor: Colors.border, borderWidth: 3, borderColor: Colors.primary },
+    avatarContainer: { position: 'relative', marginTop: -70, marginBottom: 16, alignSelf: 'flex-start' },
+    avatar: { width: 140, height: 140, borderRadius: 70, backgroundColor: Colors.white, borderWidth: 4, borderColor: Colors.white },
     avatarPlaceholder: { justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primaryBg },
-    avatarInitial: { fontSize: 40, fontWeight: '700', color: Colors.primary },
-    verifiedBadge: { position: 'absolute', bottom: 5, right: 5, backgroundColor: Colors.primary, borderRadius: 12, width: 24, height: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.white },
-    name: { fontSize: 24, fontWeight: '800', color: Colors.text, marginBottom: 4, textAlign: 'center' },
-    role: { fontSize: 15, color: Colors.primary, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
-    locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-    locationText: { fontSize: 14, color: Colors.textSecondary, marginLeft: 6 },
-    tabContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15 },
+    avatarInitial: { fontSize: 50, fontWeight: '700', color: Colors.primary },
+    verifiedBadgeLarge: { position: 'absolute', bottom: 10, right: 10, backgroundColor: Colors.primary, borderRadius: 14, width: 28, height: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: Colors.white },
+    nameRow: { flexDirection: 'row', alignItems: 'center' },
+    name: { fontSize: 26, fontWeight: '800', color: Colors.text, marginBottom: 4 },
+    role: { fontSize: 16, color: Colors.textSecondary, fontWeight: '500', marginBottom: 8 },
+    locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+    locationText: { fontSize: 14, color: Colors.textLight, marginLeft: 6 },
+    statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+    statNumber: { fontSize: 15, fontWeight: '700', color: Colors.text, marginRight: 4 },
+    statLabel: { fontSize: 14, color: Colors.textSecondary },
+    statDivider: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.border, marginHorizontal: 10 },
+    tabContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15, borderWidth: 1, borderColor: Colors.primary + '30' },
     tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
     activeTab: { backgroundColor: Colors.primaryBg },
     tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
     activeTabText: { color: Colors.primary },
-    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginTop: 15, padding: 20, borderRadius: 20 },
+    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginTop: 15, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary + '30' },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
     description: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24 },
@@ -664,19 +666,19 @@ const styles = StyleSheet.create({
     infoItem: { width: '45%' },
     infoLabel: { fontSize: 12, color: Colors.textLight, marginBottom: 4 },
     infoValue: { fontSize: 14, color: Colors.text, fontWeight: '600' },
-    actions: { padding: Spacing.xl },
+    
+    headerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', marginTop: 16, gap: 12 },
     chatButton: { 
-        backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
-        elevation: 8,
-        ...Platform.select({
-            web: { boxShadow: '0 6px 12px rgba(46,125,50,0.3)' },
-            default: { shadowColor: Colors.primary, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 12 }
-        })
+        backgroundColor: Colors.primary, borderRadius: 24, paddingVertical: 10, paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', 
     },
-    chatButtonText: { color: Colors.white, fontSize: 16, fontWeight: '700' },
+    chatButtonText: { color: Colors.white, fontSize: 15, fontWeight: '700' },
+    reportBtnIcon: { 
+        backgroundColor: Colors.white, paddingVertical: 10, paddingHorizontal: 20, borderRadius: 24, justifyContent: 'center', alignItems: 'center',
+        borderWidth: 1, borderColor: Colors.textLight 
+    },
+    reportBtnText: { color: Colors.textSecondary, fontSize: 15, fontWeight: '700' },
+    
     emptyText: { fontSize: 14, color: Colors.textLight, fontStyle: 'italic' },
-    reportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: Spacing.xl },
-    reportBtnText: { color: Colors.textLight, fontSize: 14, fontWeight: '600' },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
     modalContent: { backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.xl, minHeight: 400 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },

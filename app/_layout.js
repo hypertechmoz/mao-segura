@@ -15,6 +15,11 @@ import { supabase } from '../services/supabase';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { GlobalAlerts } from '../components/GlobalAlerts';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import WebNavbar from '../components/WebNavbar';
+import { useSegments, usePathname } from 'expo-router';
+import { Platform, useWindowDimensions } from 'react-native';
+import AppDownloadPrompt from '../components/AppDownloadPrompt';
+import { useUnreadCount } from '../utils/useUnreadCount';
 
 // Initialize i18n
 import '../utils/i18n';
@@ -93,10 +98,50 @@ export default function RootLayout() {
                 <meta property="og:title" content="Konekta | A sua plataforma de serviços e profissionais" />
                 <meta property="og:description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design." />
                 <meta property="og:type" content="website" />
+                <style>{`
+                    body, html, #root { 
+                        background-color: ${Colors.background};
+                    }
+                `}</style>
             </Head>
             <StatusBar style="dark" />
             <GlobalAlerts />
             <TermsModal />
+            <MainAppWrapper />
+            <AppDownloadPrompt />
+        </SafeAreaProvider>
+    );
+}
+
+function MainAppWrapper() {
+    const { user } = useAuthStore();
+    const segments = useSegments();
+    const pathname = usePathname();
+    const { width } = useWindowDimensions();
+    const isSmallScreen = width < 768;
+    const isMobileWeb = width < 480;
+    const isWeb = Platform.OS === 'web';
+    
+    // We only call this if we are on web and not on auth/landing, but hooks must be called unconditionally.
+    // However, useUnreadCount is safe to call always.
+    const { unreadMessages, unreadNotifications, unreadConnectionRequests } = useUnreadCount();
+
+    // Do not show on auth pages or landing page
+    const isAuthRoute = segments[0] === 'auth' || pathname === '/auth/login' || pathname === '/auth/register';
+    const isLandingRoute = segments.length === 0 || pathname === '/' || pathname === '/index';
+    const showWebNav = isWeb && user && !isAuthRoute && !isLandingRoute;
+
+    return (
+        <View style={{ flex: 1, minHeight: Platform.OS === 'web' ? '100vh' : '100%', backgroundColor: Colors.background }}>
+            {showWebNav && (
+                <WebNavbar 
+                    isSmall={isSmallScreen} 
+                    isMobile={isMobileWeb} 
+                    unreadMessages={unreadMessages} 
+                    unreadNotifications={unreadNotifications} 
+                    unreadConnectionRequests={unreadConnectionRequests} 
+                />
+            )}
             <Stack
                 screenOptions={{
                     headerStyle: { backgroundColor: Colors.white },
@@ -137,6 +182,6 @@ export default function RootLayout() {
                 <Stack.Screen name="info/coming-soon" options={{ headerShown: false }} />
                 <Stack.Screen name="admin" options={{ headerShown: false }} />
             </Stack>
-        </SafeAreaProvider>
+        </View>
     );
 }

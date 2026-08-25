@@ -166,12 +166,12 @@ export default function Profile() {
         try {
             if (user.role === 'WORKER') {
                 const { data, error } = await supabase
-                    .from('applications')
+                    .from('reviews')
                     .select(`
-                        id, status, created_at,
-                        job:jobs(*, employer:users!jobs_employer_id_fkey(name, profile_photo, is_verified, is_premium))
+                        id, rating, comment, created_at,
+                        employer:users!reviews_from_id_fkey(name, profile_photo, is_verified, is_premium)
                     `)
-                    .eq('worker_id', targetId)
+                    .eq('to_id', targetId)
                     .order('created_at', { ascending: false });
                 if (error) throw error;
                 setUserHistory(data || []);
@@ -325,8 +325,8 @@ export default function Profile() {
                         <View style={{ width: 1, backgroundColor: Colors.borderLight, height: 40 }} />
                         <View style={{ alignItems: 'center', paddingHorizontal: 30 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{p?.rating_count || 0}</Text>
-                                {p?.rating_avg > 0 && <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFB800' }}>⭐ {p.rating_avg.toFixed(1)}</Text>}
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: Colors.text }}>{p?.workerProfile?.reviews_count || p?.rating_count || 0}</Text>
+                                {(p?.workerProfile?.rating > 0 || p?.rating_avg > 0) && <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFB800' }}>⭐ {Number(p?.workerProfile?.rating || p?.rating_avg).toFixed(1)}</Text>}
                             </View>
                             <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Recomendações</Text>
                         </View>
@@ -378,7 +378,7 @@ export default function Profile() {
                     </TouchableOpacity>
                 )}
 
-                {isOwnProfile && p?.role === 'EMPLOYER' && (
+                {isOwnProfile && p?.role === 'EMPLOYER' && completeness < 100 && (
                     <View style={[styles.section, styles.tipsCard]}>
                         <View style={styles.tipsHeader}>
                             <Ionicons name="bulb" size={20} color={Colors.warning} />
@@ -390,7 +390,7 @@ export default function Profile() {
                     </View>
                 )}
 
-                {isOwnProfile && p?.role === 'WORKER' && (
+                {isOwnProfile && p?.role === 'WORKER' && completeness < 100 && (
                     <View style={[styles.section, styles.tipsCard]}>
                         <View style={styles.tipsHeader}>
                             <Ionicons name="rocket" size={20} color={Colors.warning} />
@@ -428,9 +428,9 @@ export default function Profile() {
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>Disponibilidade</Text>
                             <Text style={styles.infoValue}>
-                                {p.workerProfile.availability === 'IMMEDIATE' ? '⚡ Imediata' :
-                                    p.workerProfile.availability === 'SCHEDULED' ? '📅 Agendada / Programada' :
-                                        p.workerProfile.availability === 'FLEXIBLE' ? '🕒 Horário Flexível' : 'Não definida'}
+                                {p.workerProfile.availability === 'IMMEDIATE' ? 'Imediata' :
+                                    p.workerProfile.availability === 'SCHEDULED' ? 'Agendada / Programada' :
+                                        p.workerProfile.availability === 'FLEXIBLE' ? 'Horário Flexível' : 'Não definida'}
                             </Text>
                         </View>
                         {p.workerProfile.work_modalities && p.workerProfile.work_modalities.length > 0 ? (
@@ -438,7 +438,7 @@ export default function Profile() {
                                 <Text style={styles.infoLabel}>Modalidade de Atendimento</Text>
                                 <View style={styles.tags}>
                                     {p.workerProfile.work_modalities.map((m, i) => {
-                                        const label = m === 'PRESENCIAL' ? '🏢 Presencial' : m === 'REMOTE' ? '💻 Remoto' : '🔄 Híbrido';
+                                        const label = m === 'PRESENCIAL' ? 'Presencial' : m === 'REMOTE' ? 'Remoto' : 'Híbrido';
                                         return <View key={i} style={styles.tag}><Text style={styles.tagText}>{label}</Text></View>;
                                     })}
                                 </View>
@@ -449,7 +449,7 @@ export default function Profile() {
                                 <Text style={styles.infoLabel}>Tipos de Contratação Aceites</Text>
                                 <View style={styles.tags}>
                                     {p.workerProfile.service_types.map((s, i) => {
-                                        const label = s === 'SINGLE_TASK' ? '⚡ Serviço Único / Tarefa' : s === 'PROJECT' ? '📁 Por Projeto' : s === 'RECURRING' ? '🔄 Recorrente' : '📜 Contrato Contínuo';
+                                        const label = s === 'SINGLE_TASK' ? 'Serviço Único / Tarefa' : s === 'PROJECT' ? 'Por Projeto' : s === 'RECURRING' ? 'Recorrente' : 'Contrato Contínuo';
                                         return <View key={i} style={styles.tag}><Text style={styles.tagText}>{label}</Text></View>;
                                     })}
                                 </View>
@@ -643,22 +643,29 @@ export default function Profile() {
                             </View>
                         ) : (
                             p?.role === 'WORKER' ? (
-                                userHistory.map(app => (
-                                    <View key={app.id} style={styles.historyCard}>
-                                        <View style={[styles.historyStatusBadge, 
-                                            app.status === 'HIRED' ? { backgroundColor: Colors.success + '20' } : 
-                                            app.status === 'REJECTED' ? { backgroundColor: Colors.error + '20' } : 
-                                            { backgroundColor: Colors.warning + '20' }
-                                        ]}>
-                                            <Text style={[styles.historyStatusText,
-                                                app.status === 'HIRED' ? { color: Colors.success } : 
-                                                app.status === 'REJECTED' ? { color: Colors.error } : 
-                                                { color: Colors.warning }
-                                            ]}>
-                                                {app.status === 'HIRED' ? 'Contratado / Concluído' : app.status === 'REJECTED' ? 'Rejeitado' : 'Pendente'}
-                                            </Text>
+                                userHistory.map(review => (
+                                    <View key={review.id} style={[styles.historyCard, { padding: 16, backgroundColor: Colors.white, borderRadius: 12, marginBottom: 10, borderWidth: 1, borderColor: Colors.borderLight }]}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                                {review.employer?.profile_photo ? (
+                                                    <Image source={{ uri: review.employer.profile_photo }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                                                ) : (
+                                                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center' }}>
+                                                        <Text style={{ color: Colors.primary, fontWeight: 'bold' }}>{review.employer?.name?.charAt(0) || 'E'}</Text>
+                                                    </View>
+                                                )}
+                                                <View>
+                                                    <Text style={{ fontWeight: '600', fontSize: 14 }}>{review.employer?.name || 'Empregador'}</Text>
+                                                    <Text style={{ fontSize: 12, color: Colors.textSecondary }}>{new Date(review.created_at).toLocaleDateString()}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <Text style={{ fontWeight: 'bold', color: '#FFB800', fontSize: 14 }}>⭐ {review.rating}</Text>
+                                            </View>
                                         </View>
-                                        {app.job && <JobCard job={app.job} hideActions={true} />}
+                                        {review.comment ? (
+                                            <Text style={{ marginTop: 12, color: Colors.text, fontSize: 14, fontStyle: 'italic' }}>"{review.comment}"</Text>
+                                        ) : null}
                                     </View>
                                 ))
                             ) : (

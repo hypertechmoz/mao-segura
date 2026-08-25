@@ -227,7 +227,26 @@ export default function EditProfile() {
                 });
 
             if (!result.canceled && result.assets && result.assets[0].uri) {
-                const imageUri = result.assets[0].uri;
+                const asset = result.assets[0];
+                let size = asset.fileSize;
+                
+                if (Platform.OS === 'web' && asset.file) {
+                    size = asset.file.size;
+                } else if (!size && Platform.OS === 'web') {
+                    try {
+                        const response = await fetch(asset.uri);
+                        const blob = await response.blob();
+                        size = blob.size;
+                    } catch(e) {}
+                }
+
+                if (size && size > 2 * 1024 * 1024) {
+                    useAlertStore.getState().showAlert('Imagem Muito Grande', 'O tamanho da imagem excede o limite máximo de 2MB.', 'error');
+                    isPickingImage.current = false;
+                    return;
+                }
+
+                const imageUri = asset.uri;
                 await uploadImage(imageUri);
             }
         } catch (err) {
@@ -414,8 +433,6 @@ export default function EditProfile() {
                     profession_category: finalCategory || null,
                     work_types: Array.from(new Set(finalWT)),
                     skills: Array.from(new Set(finalSkills)),
-                    work_modalities: form.workModalities || ['PRESENCIAL'],
-                    service_types: form.serviceTypes || ['SINGLE_TASK'],
                     availability: form.availability || 'IMMEDIATE',
                     has_experience: form.hasExperience,
                     description: form.description || null
@@ -748,7 +765,7 @@ export default function EditProfile() {
                                 <Text style={styles.label}>Especialidades</Text>
                                 <View style={styles.chips}>
                                     {form.professionCategory && getSpecialtiesByCategoryName(form.professionCategory).length > 0 ? (
-                                        Array.from(new Set([...getSpecialtiesByCategoryName(form.professionCategory).map(s => s.name), ...(form.workTypes || []).filter(w => w !== 'Outro')])).filter(t => t !== 'Outro').map((type) => (
+                                        Array.from(new Set([...getSpecialtiesByCategoryName(form.professionCategory).map(s => s.name), ...(form.workTypes || [])])).map((type) => (
                                             <TouchableOpacity
                                                 key={type}
                                                 style={[styles.chip, (form.workTypes || []).includes(type) && styles.chipActive]}
@@ -781,9 +798,9 @@ export default function EditProfile() {
                             <Text style={styles.label}>Modalidade de Atendimento</Text>
                             <View style={styles.chips}>
                                 {[
-                                    { id: 'PRESENCIAL', label: '🏢 Presencial' },
-                                    { id: 'REMOTE', label: '💻 Remoto' },
-                                    { id: 'HYBRID', label: '🔄 Híbrido' }
+                                    { id: 'PRESENCIAL', label: 'Presencial' },
+                                    { id: 'REMOTE', label: 'Remoto' },
+                                    { id: 'HYBRID', label: 'Híbrido' }
                                 ].map((opt) => {
                                     const active = (form.workModalities || []).includes(opt.id);
                                     return (
@@ -805,10 +822,10 @@ export default function EditProfile() {
                             <Text style={styles.label}>Tipos de Serviço / Contratação Aceites</Text>
                             <View style={styles.chips}>
                                 {[
-                                    { id: 'SINGLE_TASK', label: '⚡ Serviço Único / Tarefa' },
-                                    { id: 'PROJECT', label: '📁 Por Projeto' },
-                                    { id: 'RECURRING', label: '🔄 Recorrente' },
-                                    { id: 'CONTINUOUS', label: '📜 Contrato Contínuo' }
+                                    { id: 'SINGLE_TASK', label: 'Serviço Único / Tarefa' },
+                                    { id: 'PROJECT', label: 'Por Projeto' },
+                                    { id: 'RECURRING', label: 'Recorrente' },
+                                    { id: 'CONTINUOUS', label: 'Contrato Contínuo' }
                                 ].map((opt) => {
                                     const active = (form.serviceTypes || []).includes(opt.id);
                                     return (
@@ -831,9 +848,9 @@ export default function EditProfile() {
                                 <Text style={styles.label}>Disponibilidade</Text>
                                 <View style={styles.chips}>
                                     {[
-                                        { id: 'IMMEDIATE', label: '⚡ Imediata' },
-                                        { id: 'SCHEDULED', label: '📅 Agendada / Programada' },
-                                        { id: 'FLEXIBLE', label: '🕒 Horário Flexível' }
+                                        { id: 'IMMEDIATE', label: 'Imediata' },
+                                        { id: 'SCHEDULED', label: 'Agendada / Programada' },
+                                        { id: 'FLEXIBLE', label: 'Horário Flexível' }
                                     ].map((opt) => (
                                         <TouchableOpacity
                                             key={opt.id}

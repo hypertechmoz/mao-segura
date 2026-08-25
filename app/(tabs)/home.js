@@ -107,28 +107,74 @@ function WebLeftSidebar({ user, completeness, router }) {
 }
 
 // === Web-Only: Right Sidebar (Widgets) ===
-function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds }) {
+function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds, user }) {
+    const [appOpens, setAppOpens] = useState(0);
+
+    useEffect(() => {
+        try {
+            if (Platform.OS === 'web') {
+                const count = parseInt(localStorage.getItem('konekta_app_opens') || '0', 10);
+                setAppOpens(count);
+                // Increment logic is handled in _layout or main home mount
+            }
+        } catch(e) {}
+    }, []);
+
+    // Se o user for WORKER: sugerir Criar Post / Conexões
+    // Se o user for EMPLOYER: sugerir Criar Vaga
+    const isWorker = user?.role === 'WORKER';
 
     return (
         <View style={{ flex: 1 }}>
-            {/* Tips Card Redesigned */}
-            <View style={webStyles.premiumWidget}>
-                <View style={webStyles.premiumWidgetHeader}>
-                    <View style={webStyles.bulbIconBox}>
-                        <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+            {/* Dicas de Sucesso - Só mostra se já entrou 3+ vezes */}
+            {appOpens >= 2 && (
+                <View style={webStyles.premiumWidget}>
+                    <View style={webStyles.premiumWidgetHeader}>
+                        <View style={webStyles.bulbIconBox}>
+                            <Ionicons name="bulb-outline" size={18} color={Colors.primary} />
+                        </View>
+                        <Text style={webStyles.premiumWidgetTitle}>Dicas de Sucesso</Text>
                     </View>
-                    <Text style={webStyles.premiumWidgetTitle}>Dicas de Sucesso</Text>
+                    <Text style={webStyles.premiumWidgetText}>
+                        {isWorker 
+                            ? 'Sabia que publicar o seu trabalho aumenta em 3x as chances de ser contratado?'
+                            : 'Anúncios detalhados recebem propostas mais rápidas de profissionais qualificados.'
+                        }
+                    </Text>
+                    <TouchableOpacity
+                        style={webStyles.premiumWidgetBtn}
+                        onPress={() => router.push(isWorker ? '/post/create' : '/job/create')}
+                    >
+                        <Text style={webStyles.premiumWidgetBtnText}>{isWorker ? 'Criar Publicação' : 'Criar Vaga'}</Text>
+                    </TouchableOpacity>
                 </View>
-                <Text style={webStyles.premiumWidgetText}>
-                    Sabia que utilizadores com o <Text style={{ fontWeight: '700' }}>perfil Completo</Text> recebem em média <Text style={{ color: Colors.primary, fontWeight: '700' }}>3x mais</Text> propostas de trabalho em Moçambique?
-                </Text>
-                <TouchableOpacity
-                    style={webStyles.premiumWidgetBtn}
-                    onPress={() => router.push('/settings/edit-profile')}
-                >
-                    <Text style={webStyles.premiumWidgetBtnText}>Melhorar Perfil</Text>
-                </TouchableOpacity>
-            </View>
+            )}
+
+            {/* Sugestões de Ação Dinâmicas (Aparece a partir da segunda vez) */}
+            {appOpens >= 1 && (
+                <View style={webStyles.widget}>
+                    <Text style={webStyles.widgetTitle}>Acelere o seu Perfil</Text>
+                    <TouchableOpacity style={webStyles.suggestionRow} onPress={() => router.push('/network')}>
+                        <View style={webStyles.suggestionIconBox}>
+                            <Ionicons name="people" size={16} color={Colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={webStyles.suggestionTextTitle}>Aumentar Conexões</Text>
+                            <Text style={webStyles.suggestionTextSub}>Crie uma rede de contactos mais forte</Text>
+                        </View>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity style={webStyles.suggestionRow} onPress={() => router.push('/settings/edit-profile')}>
+                        <View style={webStyles.suggestionIconBox}>
+                            <Ionicons name="person-circle" size={16} color={Colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={webStyles.suggestionTextTitle}>Editar Perfil</Text>
+                            <Text style={webStyles.suggestionTextSub}>Adicione mais detalhes para destacar-se</Text>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* Recomendado para si */}
             {suggestedUsers && suggestedUsers.length > 0 && (
@@ -537,6 +583,13 @@ export default function Home() {
         useCallback(() => {
             if (authLoading) return;
             loadData(true, false);
+
+            if (Platform.OS === 'web') {
+                try {
+                    const currentOpens = parseInt(localStorage.getItem('konekta_app_opens') || '0', 10);
+                    localStorage.setItem('konekta_app_opens', (currentOpens + 1).toString());
+                } catch(e) {}
+            }
         }, [authLoading, uid, userRole, userProvince, userCity])
     );
 
@@ -570,14 +623,15 @@ export default function Home() {
     };
 
     // === WEB: 3-Column Layout ===
-    // Prepare mixed feed (Only include jobs if they are NOT user profiles. i.e., they have a title property)
+    // Prepare mixed feed
     const mixedFeed = useMemo(() => {
-        return [...posts, ...jobs.filter(j => j.title)].sort((a, b) => {
+        const primaryFeed = user?.role === 'WORKER' ? jobs : jobs; // For workers, it's jobs. For employers, it's workers.
+        return [...posts, ...primaryFeed].sort((a, b) => {
             const dateA = new Date(a.created_at?.seconds ? a.created_at.seconds * 1000 : a.created_at);
             const dateB = new Date(b.created_at?.seconds ? b.created_at.seconds * 1000 : b.created_at);
             return dateB - dateA;
         });
-    }, [posts, jobs]);
+    }, [posts, jobs, user?.role]);
 
     if (isWeb) {
         return (
@@ -696,7 +750,7 @@ export default function Home() {
                     {!isSmallScreen && (
                         <View style={webStyles.rightSidebar}>
                             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-                                <WebRightSidebar router={router} suggestedUsers={suggestedUsers} handleContact={handleContact} actionedIds={actionedIds} />
+                                <WebRightSidebar router={router} suggestedUsers={suggestedUsers} handleContact={handleContact} actionedIds={actionedIds} user={user} />
                             </ScrollView>
                         </View>
                     )}
@@ -1118,7 +1172,13 @@ const webStyles = StyleSheet.create({
     premiumWidgetTitle: { fontSize: 15, fontWeight: '800', color: Colors.text },
     premiumWidgetText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18, marginBottom: 16 },
     premiumWidgetBtn: { backgroundColor: Colors.primary, borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-    premiumWidgetBtnText: { color: Colors.white, fontSize: 12, fontWeight: '700' },
+    premiumWidgetBtnText: { color: Colors.primary, fontWeight: '700', fontSize: 13, marginLeft: 'auto' },
+
+    // Widget Dinâmico Sugestões
+    suggestionRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0EFEB' },
+    suggestionIconBox: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    suggestionTextTitle: { fontSize: 14, fontWeight: '700', color: Colors.text },
+    suggestionTextSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
     widgetTitle: {
         fontSize: 15, fontWeight: '700', color: Colors.text,
         paddingHorizontal: 16, marginBottom: 8,

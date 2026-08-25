@@ -75,7 +75,9 @@ export function useTaxonomy() {
     }, []);
 
     const getSpecialtiesByCategory = (categoryId) => {
-        return specialties.filter(s => s.category_id === categoryId);
+        const specs = specialties.filter(s => s.category_id === categoryId);
+        specs.push({ id: 'outro', name: 'Outro', category_id: categoryId });
+        return specs;
     };
     
     const getSpecialtiesByCategoryName = (categoryName) => {

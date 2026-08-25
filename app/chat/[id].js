@@ -80,18 +80,19 @@ export default function ChatScreen() {
                     if (job) setReplyContext({ type: 'job', data: job });
                 }
 
-                // Check for active contract
+                // Check for active or completed contract
                 const isEmployer = user.role === 'EMPLOYER';
                 const { data: contracts } = await supabase
                     .from('contracts')
                     .select('*')
                     .eq('conversation_id', id)
                     .eq(isEmployer ? 'employer_id' : 'worker_id', uid)
-                    .eq('status', 'hired');
+                    .order('created_at', { ascending: false })
+                    .limit(1);
 
                 if (contracts && contracts.length > 0) {
                     setActiveContract(contracts[0]);
-                    setContractStatus('hired');
+                    setContractStatus(contracts[0].status);
                 }
 
                 // Clear unread count
@@ -240,6 +241,25 @@ export default function ChatScreen() {
 
         if (result.canceled || !result.assets || result.assets.length === 0) return;
 
+        const asset = result.assets[0];
+        let size = asset.fileSize;
+        
+        if (Platform.OS === 'web' && asset.file) {
+            size = asset.file.size;
+        } else if (!size && Platform.OS === 'web') {
+            try {
+                const response = await fetch(asset.uri);
+                const blob = await response.blob();
+                size = blob.size;
+            } catch(e) {}
+        }
+
+        if (size && size > 2 * 1024 * 1024) {
+            const msg = 'O tamanho da imagem excede o limite máximo de 2MB.';
+            Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Imagem Muito Grande', msg);
+            return;
+        }
+
         setIsUploadingImage(true);
         try {
             const fileUri = result.assets[0].uri;
@@ -314,8 +334,20 @@ export default function ChatScreen() {
             // Send system message
             await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: '00000000-0000-0000-0000-000000000000', // Use a zero UUID for system or add a sender_type
+                sender_id: uid,
+                receiver_id: receiverId,
                 content: '🎉 Profissional contratado! O histórico será atualizado quando o trabalho for concluído.'
+            });
+
+            // Insert notification
+            await supabase.from('notifications').insert({
+                user_id: receiverId,
+                sender_id: uid,
+                title: 'Contratado! 🎉',
+                description: `${user.name} aceitou o seu serviço.`,
+                type: 'HIRED',
+                is_read: false,
+                route: `/chat/${id}`
             });
 
             // Push notification to worker
@@ -352,7 +384,8 @@ export default function ChatScreen() {
             // Send system message
             await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: '00000000-0000-0000-0000-000000000000',
+                sender_id: uid,
+                receiver_id: receiverId,
                 content: '🚫 O empregador decidiu não prosseguir com a contratação neste momento.'
             });
 
@@ -377,96 +410,33 @@ export default function ChatScreen() {
 
         setIsSubmittingReview(true);
         try {
-            // Update contract status
-            await supabase.from('contracts').update({
-                status: 'completed',
-                completed_at: new Date().toISOString()
-            }).eq('id', activeContract.id);
+            const { error: rpcError } = await supabase.rpc('complete_job_and_review', {
+                p_contract_id: activeContract.id,
+                p_receiver_id: receiverId,
+                p_rating: rating,
+                p_comment: reviewComment,
+                p_conversation_id: id
+            });
 
-            // Check if review already exists
-            const { data: existingReview } = await supabase
-                .from('reviews')
-                .select('*')
-                .eq('from_id', uid)
-                .eq('to_id', receiverId)
-                .maybeSingle();
+            if (rpcError) throw rpcError;
 
-            // Update Worker Profile
-            const { data: prof } = await supabase
-                .from('worker_profiles')
-                .select('*')
-                .eq('user_id', receiverId)
-                .single();
-
-            if (prof) {
-                const currentCount = prof.completed_contracts || 0;
-                const currentRatingAvg = prof.rating_avg || 0;
-                const currentRatingCount = prof.rating_count || 0;
-
-                const newCount = currentCount + 1;
-
-                if (existingReview) {
-                    // Update existing review
-                    await supabase.from('reviews').update({
-                        rating,
-                        comment: reviewComment,
-                        contract_id: activeContract.id,
-                        created_at: new Date().toISOString()
-                    }).eq('id', existingReview.id);
-
-                    // Recalculate average without changing count
-                    const newRatingAvg = currentRatingCount > 0
-                        ? ((currentRatingAvg * currentRatingCount) - existingReview.rating + rating) / currentRatingCount
-                        : rating;
-
-                    await supabase.from('worker_profiles').update({
-                        completed_contracts: newCount,
-                        rating_avg: newRatingAvg
-                    }).eq('user_id', receiverId);
-                } else {
-                    // Insert new review
-                    await supabase.from('reviews').insert({
-                        contract_id: activeContract.id,
-                        from_id: uid,
-                        to_id: receiverId,
-                        rating,
-                        comment: reviewComment
-                    });
-
-                    const newRatingCount = currentRatingCount + 1;
-                    const newRatingAvg = ((currentRatingAvg * currentRatingCount) + rating) / newRatingCount;
-
-                    await supabase.from('worker_profiles').update({
-                        completed_contracts: newCount,
-                        rating_avg: newRatingAvg,
-                        rating_count: newRatingCount
-                    }).eq('user_id', receiverId);
-                }
-            } else {
-                if (!existingReview) {
-                    await supabase.from('reviews').insert({
-                        contract_id: activeContract.id,
-                        from_id: uid,
-                        to_id: receiverId,
-                        rating,
-                        comment: reviewComment
-                    });
-                }
-            }
-
-            // System message
-            await supabase.from('messages').insert({
-                conversation_id: id,
-                sender_id: '00000000-0000-0000-0000-000000000000',
-                content: `✨ Trabalho concluído e recomendado com ${rating} estrelas!`
+            // Insert notification for completion
+            await supabase.from('notifications').insert({
+                user_id: receiverId,
+                sender_id: uid,
+                title: 'Trabalho Concluído! ✨',
+                description: `${user.name} concluiu o contrato e deixou uma avaliação.`,
+                type: 'COMPLETED',
+                is_read: false,
+                route: `/chat/${id}`
             });
 
             setActiveContract(null);
             setShowReviewModal(false);
             Alert.alert('Sucesso', 'Trabalho concluído e recomendação enviada!');
         } catch (err) {
-            console.error('Review error:', err);
-            Alert.alert('Erro', 'Não foi possível gravar a recomendação.');
+            console.error('Review error details:', JSON.stringify(err, null, 2));
+            Alert.alert('Erro', `Não foi possível gravar: ${err.message || err.details || 'Erro desconhecido'}`);
         } finally {
             setIsSubmittingReview(false);
             setContractStatus('completed');
@@ -486,7 +456,8 @@ export default function ChatScreen() {
             // System message
             await supabase.from('messages').insert({
                 conversation_id: id,
-                sender_id: '00000000-0000-0000-0000-000000000000',
+                sender_id: user.uid || user.id,
+                receiver_id: receiverId,
                 content: '✅ Contacto autorizado. Podem agora trocar mensagens.'
             });
 
@@ -539,7 +510,8 @@ export default function ChatScreen() {
 
                             await supabase.from('messages').insert({
                                 conversation_id: id,
-                                sender_id: '00000000-0000-0000-0000-000000000000',
+                                sender_id: uid,
+                                receiver_id: receiverId,
                                 content: '🚫 Infelizmente, o empregador decidiu não prosseguir com esta candidatura. Contacto encerrado.'
                             });
 

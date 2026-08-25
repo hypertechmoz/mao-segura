@@ -45,8 +45,27 @@ export default function CreateJob() {
             quality: 0.8,
         });
 
-        if (!result.canceled) {
-            setImageUri(result.assets[0].uri);
+        if (!result.canceled && result.assets && result.assets[0].uri) {
+            const asset = result.assets[0];
+            let size = asset.fileSize;
+            
+            if (Platform.OS === 'web' && asset.file) {
+                size = asset.file.size;
+            } else if (!size && Platform.OS === 'web') {
+                try {
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    size = blob.size;
+                } catch(e) {}
+            }
+
+            if (size && size > 2 * 1024 * 1024) {
+                const msg = 'O tamanho da imagem excede o limite máximo de 2MB.';
+                Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Imagem Muito Grande', msg);
+                return;
+            }
+
+            setImageUri(asset.uri);
         }
     };
 
@@ -431,25 +450,26 @@ export default function CreateJob() {
                         </TouchableOpacity>
                     </View>
                 )}
+                
+                {!imageUri && (
+                    <TouchableOpacity style={styles.inlineImageBtn} onPress={pickImage}>
+                        <Ionicons name="image-outline" size={24} color={Colors.primary} />
+                        <Text style={styles.inlineImageBtnText}>Adicionar Imagem</Text>
+                    </TouchableOpacity>
+                )}
 
                 <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={handleCreate} disabled={loading} activeOpacity={0.8}>
                     {loading ? <ActivityIndicator color={Colors.white} /> : <Text style={styles.buttonText}>Publicar Vaga</Text>}
                 </TouchableOpacity>
             </ScrollView>
 
-            <View style={styles.toolbar}>
-                <TouchableOpacity style={styles.toolbarBtn} onPress={pickImage}>
-                    <Ionicons name="image-outline" size={24} color={Colors.primary} />
-                    <Text style={styles.toolbarBtnText}>Adicionar Imagem</Text>
-                </TouchableOpacity>
-            </View>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.white },
-    content: { padding: Spacing.md, paddingBottom: Spacing.xxl },
+    content: { padding: Spacing.md, paddingBottom: Spacing.xxl, width: '100%', maxWidth: 700, alignSelf: 'center' },
     header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg, paddingTop: Platform.OS === 'ios' ? 0 : 10 },
     backButton: { width: 44, height: 44, justifyContent: 'center' },
     headerTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text },
@@ -518,9 +538,8 @@ const styles = StyleSheet.create({
         })
     },
     
-    toolbar: { flexDirection: 'row', alignItems: 'center', padding: Spacing.md, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingBottom: Platform.OS === 'ios' ? 30 : Spacing.md },
-    toolbarBtn: { flexDirection: 'row', alignItems: 'center', padding: 8, backgroundColor: Colors.primaryBg, borderRadius: 8 },
-    toolbarBtnText: { marginLeft: 8, color: Colors.primary, fontWeight: '600', fontSize: Fonts.sizes.sm },
+    inlineImageBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 14, backgroundColor: Colors.primaryBg, borderRadius: 12, marginBottom: Spacing.lg, borderWidth: 1, borderColor: Colors.primary + '30', borderStyle: 'dashed' },
+    inlineImageBtnText: { marginLeft: 8, color: Colors.primary, fontWeight: '700', fontSize: Fonts.sizes.md },
 
     button: { backgroundColor: Colors.primary, borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: Spacing.sm },
     buttonDisabled: { backgroundColor: Colors.borderLight },

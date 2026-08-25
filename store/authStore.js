@@ -99,7 +99,11 @@ export const useAuthStore = create((set, get) => ({
             const uid = user.id;
 
             // 0. Sync premium status to revoke expired plans
-            await supabase.rpc('sync_user_premium_status').catch(() => {});
+            try {
+                await supabase.rpc('sync_user_premium_status');
+            } catch (rpcErr) {
+                console.warn('[refreshUser] sync_user_premium_status error:', rpcErr);
+            }
 
             // 1. Fetch base metadata from Users table
             let { data: userData, error: userError } = await supabase

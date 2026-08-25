@@ -4,7 +4,7 @@ export const Colors = {
     primaryLight: '#004d00', // Lighter shade
     primaryBg: '#E6F0E6',    // Soft Background
     white: '#FFFFFF',
-    background: '#F3F4F6',   // Soft light background
+    background: '#E5E7EB',   // Noticeably darker grey to ensure card contrast
     surface: '#FFFFFF',
     text: '#1A202C',         // Standard Dark text
     textSecondary: '#4A5568',

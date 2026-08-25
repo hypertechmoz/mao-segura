@@ -41,8 +41,27 @@ export default function CreatePost() {
             quality: 0.8,
         });
 
-        if (!result.canceled) {
-            setImageUri(result.assets[0].uri);
+        if (!result.canceled && result.assets && result.assets[0].uri) {
+            const asset = result.assets[0];
+            let size = asset.fileSize;
+            
+            if (Platform.OS === 'web' && asset.file) {
+                size = asset.file.size;
+            } else if (!size && Platform.OS === 'web') {
+                try {
+                    const response = await fetch(asset.uri);
+                    const blob = await response.blob();
+                    size = blob.size;
+                } catch(e) {}
+            }
+
+            if (size && size > 2 * 1024 * 1024) {
+                const msg = 'O tamanho da imagem excede o limite máximo de 2MB.';
+                Platform.OS === 'web' ? window.alert(msg) : Alert.alert('Imagem Muito Grande', msg);
+                return;
+            }
+
+            setImageUri(asset.uri);
         }
     };
 
@@ -266,7 +285,7 @@ export default function CreatePost() {
                         </>
                     )}
 
-                    {category === 'Outro' && (
+                    {(category === 'Outro' || workType === 'Outro') && (
                         <TextInput
                             style={[styles.input, { minHeight: 48, marginBottom: Spacing.md, borderRadius: 12, paddingHorizontal: 16, paddingTop: 14 }]}
                             placeholder="Especifique a sua área / vaga..."
