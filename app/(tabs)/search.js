@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, FlatList, StyleSheet, TouchableOpacity, Platform, ActivityIndicator, RefreshControl } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
-import { Colors, Spacing, Fonts, PROVINCES } from '../../constants';
+import { Colors, Spacing, Fonts, PROVINCES, CONTRACT_TYPES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
 import PostCard from '../../components/PostCard';
@@ -220,7 +220,7 @@ export default function Search() {
                                     <Text style={styles.resultTitle}>{item.title}</Text>
                                     <Text style={styles.resultMeta}>
                                         <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
-                                        <Text>{` ${item.city || ''} · ${item.contract_type === 'DAILY' ? 'Diarista' : item.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}`}</Text>
+                                        <Text>{` ${item.city || ''} · ${CONTRACT_TYPES.find(c => c.value === item.contract_type)?.label || item.contract_type || 'Trabalho'}`}</Text>
                                     </Text>
                                 </TouchableOpacity>
                             )

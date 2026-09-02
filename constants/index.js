@@ -227,6 +227,11 @@ export const CONTRACT_TYPES = [
     { label: 'Por Projeto', value: 'PROJECT' },
     { label: 'Recorrente', value: 'RECURRING' },
     { label: 'Contrato Contínuo', value: 'CONTINUOUS' },
+    { label: 'Tempo Inteiro', value: 'FULL_TIME' },
+    { label: 'Meio Tempo', value: 'PART_TIME' },
+    { label: 'Freelance', value: 'FREELANCE' },
+    { label: 'Temporário', value: 'TEMPORARY' },
+    { label: 'Estágio', value: 'INTERNSHIP' },
 ];
 
 export const AVAILABILITY_TYPES = [

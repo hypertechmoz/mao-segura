@@ -126,46 +126,14 @@ export default function JobDetail() {
 
     const handleApply = async () => {
         if (!requireAuth()) return;
-        const uid = user?.uid || user?.id;
         
-        if (isConnected) {
-            try {
-                const { data: existing } = await supabase
-                    .from('chat_conversations')
-                    .select('id')
-                    .eq('employer_id', job.employer_id)
-                    .eq('worker_id', uid)
-                    .maybeSingle();
+        if (hasPendingRequest || applicationStatus) {
+            Alert.alert("Aviso", "Já existe uma candidatura para esta vaga.");
+            return;
+        }
 
-                let conversationId;
-                if (existing) {
-                    conversationId = existing.id;
-                } else {
-                    const { data: newConv, error } = await supabase
-                        .from('chat_conversations')
-                        .insert({
-                            employer_id: job.employer_id,
-                            worker_id: uid,
-                            job_id: id,
-                            last_message: 'Candidatura iniciada',
-                            is_authorized: true,
-                            initiated_by: uid,
-                            participants: [uid, job.employer_id]
-                        })
-                        .select()
-                        .single();
-                    if (error) throw error;
-                    conversationId = newConv.id;
-                }
-                router.push({ pathname: `/chat/${conversationId}`, params: { name: job.employer?.name } });
-            } catch (err) {
-                Alert.alert('Erro', err.message);
-            }
-        } else if (hasPendingRequest) {
-            Alert.alert("Aviso", "Já enviou um pedido de candidatura para esta vaga.");
-        } else {
-            const uid = user?.uid || user?.id;
-            try {
+        const uid = user?.uid || user?.id;
+        try {
                 // Verificação de limites de plano
                 const plan = user?.subscription_plan || 'FREE';
                 if (plan !== 'MAX') {
@@ -221,7 +189,6 @@ export default function JobDetail() {
             } catch (err) {
                 Alert.alert('Erro', err.message);
             }
-        }
     };
 
     const handleChat = async () => {
@@ -410,10 +377,24 @@ export default function JobDetail() {
                                 <Text style={[styles.applyButtonText, { color: Colors.textSecondary }]}>Candidatura não selecionada</Text>
                             </View>
                         </View>
+                    ) : applicationStatus === 'CANCELLED' ? (
+                        <View style={[styles.applyButton, { backgroundColor: Colors.borderLight, elevation: 0, shadowOpacity: 0 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="remove-circle" size={18} color={Colors.textSecondary} />
+                                <Text style={[styles.applyButtonText, { color: Colors.textSecondary }]}>Candidatura Cancelada</Text>
+                            </View>
+                        </View>
+                    ) : applicationStatus === 'PENDING' ? (
+                        <View style={[styles.applyButton, { backgroundColor: Colors.borderLight, elevation: 0, shadowOpacity: 0 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Ionicons name="time" size={18} color={Colors.textSecondary} />
+                                <Text style={[styles.applyButtonText, { color: Colors.textSecondary }]}>Pedido Pendente</Text>
+                            </View>
+                        </View>
                     ) : applicationStatus === 'ACCEPTED' ? (
                         <TouchableOpacity 
                             style={styles.applyButton} 
-                            onPress={handleApply} 
+                            onPress={handleChat} 
                             activeOpacity={0.8}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -423,15 +404,13 @@ export default function JobDetail() {
                         </TouchableOpacity>
                     ) : (
                         <TouchableOpacity 
-                            style={[styles.applyButton, (!isConnected && hasPendingRequest) && { backgroundColor: Colors.borderLight, elevation: 0, shadowOpacity: 0 }]} 
+                            style={styles.applyButton} 
                             onPress={handleApply} 
                             activeOpacity={0.8}
                         >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Ionicons name={isConnected ? "chatbubble-ellipses" : (hasPendingRequest ? "time" : "document-text")} size={18} color={(!isConnected && hasPendingRequest) ? Colors.textSecondary : Colors.white} />
-                                <Text style={[styles.applyButtonText, (!isConnected && hasPendingRequest) && { color: Colors.textSecondary }]}>
-                                    {isConnected ? 'Enviar Mensagem' : (hasPendingRequest ? 'Pedido Pendente' : 'Pedir para Candidatar-se')}
-                                </Text>
+                                <Ionicons name="document-text" size={18} color={Colors.white} />
+                                <Text style={styles.applyButtonText}>Pedir para Candidatar-se</Text>
                             </View>
                         </TouchableOpacity>
                     )}

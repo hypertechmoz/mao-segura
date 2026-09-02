@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Fonts } from '../constants';
+import { Colors, Spacing, Fonts, CONTRACT_TYPES } from '../constants';
 import { formatTime } from '../utils/profileUtils';
 import VerifiedBadge from './VerifiedBadge';
 
@@ -67,7 +67,7 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                         <Text style={styles.locationText}> {job.city || 'Moçambique'}{(job.bairro || job.province) ? `, ${job.bairro || job.province}` : ''}</Text>
                     </View>
                     <View style={styles.cardContract}>
-                        <Text style={styles.contractText}>{job.contract_type === 'DAILY' ? 'Diarista' : job.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}</Text>
+                        <Text style={styles.contractText}>{CONTRACT_TYPES.find(c => c.value === job.contract_type)?.label || job.contract_type || 'Trabalho'}</Text>
                     </View>
                 </View>
 
@@ -76,27 +76,29 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                         <Text style={styles.applicants}>{job.applications_count || 0} candidatos</Text>
                     </View>
 
-                    <TouchableOpacity
-                        style={[
-                            styles.actionButton,
-                            isApplied === 'PENDING' ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
-                        ]}
-                        onPress={() => {
-                            if (isApplied && isApplied !== 'PENDING' && isApplied !== 'AUTHORIZED') {
-                                router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name, pending_job_id: job.id } });
-                            } else if (isApplied === 'AUTHORIZED') {
-                                onPress('MESSAGE', job);
-                            } else if (!isApplied) {
-                                onPress('APPLY', job);
-                            }
-                        }}
-                        disabled={isApplied === 'PENDING'}
-                    >
-                        <Ionicons name={isApplied === 'PENDING' ? "time" : (isApplied ? "chatbubbles" : "document-text")} size={16} color={isApplied === 'PENDING' ? Colors.textSecondary : Colors.white} style={{ marginRight: 6 }} />
-                        <Text style={{ color: isApplied === 'PENDING' ? Colors.textSecondary : Colors.white, fontWeight: '700', fontSize: 14 }}>
-                            {isApplied === 'PENDING' ? 'Pendente' : (isApplied ? 'Mensagem' : 'Candidatar')}
-                        </Text>
-                    </TouchableOpacity>
+                    {isApplied === 'CANCELLED' || isApplied === 'REJECTED' ? null : (
+                        <TouchableOpacity
+                            style={[
+                                styles.actionButton,
+                                isApplied === 'PENDING' ? { backgroundColor: Colors.borderLight } : { backgroundColor: Colors.primary }
+                            ]}
+                            onPress={() => {
+                                if (isApplied && isApplied !== 'PENDING' && isApplied !== 'AUTHORIZED' && isApplied !== 'ACCEPTED') {
+                                    router.push({ pathname: `/chat/${isApplied}`, params: { name: job.employer?.name, pending_job_id: job.id } });
+                                } else if (isApplied === 'AUTHORIZED' || isApplied === 'ACCEPTED') {
+                                    onPress('MESSAGE', job);
+                                } else if (!isApplied) {
+                                    onPress('APPLY', job);
+                                }
+                            }}
+                            disabled={isApplied === 'PENDING'}
+                        >
+                            <Ionicons name={isApplied === 'PENDING' ? "time" : (isApplied ? "chatbubbles" : "document-text")} size={16} color={isApplied === 'PENDING' ? Colors.textSecondary : Colors.white} style={{ marginRight: 6 }} />
+                            <Text style={{ color: isApplied === 'PENDING' ? Colors.textSecondary : Colors.white, fontWeight: '700', fontSize: 14 }}>
+                                {isApplied === 'PENDING' ? 'Pendente' : (isApplied ? 'Mensagem' : 'Candidatar')}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             </View>
         </TouchableOpacity>

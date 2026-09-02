@@ -16,6 +16,8 @@ export default function CreateJob() {
     const { user, isLoading: authLoading } = useAuthStore();
     const [loading, setLoading] = useState(false);
     const [showSuccessCard, setShowSuccessCard] = useState(false);
+    const [showErrorModal, setShowErrorModal] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
     const { categories, specialties } = useTaxonomy();
     
     const [titleQuery, setTitleQuery] = useState('');
@@ -132,30 +134,39 @@ export default function CreateJob() {
             return;
         }
 
-        const { title, type, contractType, description } = form;
+        const { title, type, contractType, availability, description } = form;
         const { province, city, bairro } = user;
-        console.log('Validating job creation form:', { title, type, contractType, description, province, city });
+        console.log('Validating job creation form:', { title, type, contractType, availability, description, province, city });
+
+        const showAlert = (title, msg) => {
+            setErrorMessage(msg);
+            setShowErrorModal(true);
+        };
 
         // Specific field validation for better feedback
         if (!title.trim()) {
-            Alert.alert('Atenção', 'O título da vaga é obrigatório.');
+            showAlert('Atenção', 'O título da vaga é obrigatório.');
             return;
         }
         if (!type.trim()) {
-            Alert.alert('Atenção', 'O tipo de trabalho é obrigatório.');
+            showAlert('Atenção', 'O tipo de trabalho é obrigatório.');
             return;
         }
         if (!contractType) {
-            Alert.alert('Atenção', 'Selecione o tipo de contrato.');
+            showAlert('Atenção', 'Selecione o tipo de contrato.');
+            return;
+        }
+        if (!availability) {
+            showAlert('Atenção', 'Selecione a disponibilidade (Integral, Parcial, etc.).');
             return;
         }
 
         if (!description.trim()) {
-            Alert.alert('Atenção', 'A descrição da vaga é obrigatória.');
+            showAlert('Atenção', 'A descrição da vaga é obrigatória.');
             return;
         }
         if (!province || !city) {
-            Alert.alert('Atenção', 'Selecione a localização (Província e Cidade) no seu perfil primeiro.');
+            showAlert('Atenção', 'Selecione a localização (Província e Cidade) no seu perfil primeiro.');
             return;
         }
 
@@ -164,9 +175,11 @@ export default function CreateJob() {
             console.log('Creating job...');
             
             // Verificação de limites de plano (Empregador)
-            const plan = user?.subscription_plan || 'FREE';
-            if (plan !== 'MAX') {
-                const limit = plan === 'PLUS' ? 5 : 1;
+            let plan = user?.subscription_plan || 'FREE';
+            if (user?.is_premium && plan === 'FREE') plan = 'PLUS';
+            
+            if (plan === 'FREE') {
+                const limit = 10;
                 
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -179,7 +192,7 @@ export default function CreateJob() {
                 
                 if (!countErr && count >= limit) {
                     setLoading(false);
-                    setUpgradeMessage(`Atingiu o limite de publicações de vagas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para publicar mais vagas e não perder talento!`);
+                    setUpgradeMessage(`Atingiu o limite de publicações de vagas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para publicar vagas ilimitadas e não perder talento!`);
                     setShowUpgradeModal(true);
                     return;
                 }
@@ -246,11 +259,7 @@ export default function CreateJob() {
             setShowSuccessCard(true);
         } catch (err) {
             console.error('Job creation error:', err);
-            if (Platform.OS === 'web') {
-                window.alert('Erro: ' + err.message);
-            } else {
-                Alert.alert('Erro', err.message);
-            }
+            showAlert('Erro', err.message);
         } finally {
             setLoading(false);
         }
@@ -268,6 +277,24 @@ export default function CreateJob() {
                 title="Limite de Vagas Atingido"
                 message={upgradeMessage}
             />
+
+            <Modal visible={showErrorModal} transparent animationType="fade">
+                <View style={styles.modalOverlay}>
+                    <View style={styles.errorCard}>
+                        <View style={styles.errorIconBox}>
+                            <Ionicons name="warning" size={48} color="#f44336" />
+                        </View>
+                        <Text style={styles.errorTitle}>Atenção</Text>
+                        <Text style={styles.errorDesc}>{errorMessage}</Text>
+                        <TouchableOpacity 
+                            style={styles.errorBtn} 
+                            onPress={() => setShowErrorModal(false)}
+                        >
+                            <Text style={styles.errorBtnText}>Entendi</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             <Modal visible={loading} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
@@ -523,7 +550,7 @@ const styles = StyleSheet.create({
 
     // Chips
     optionRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
-    option: { flex: 1, backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14, borderWidth: 1, borderColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center' },
+    option: { backgroundColor: Colors.white, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: Colors.borderLight, alignItems: 'center', justifyContent: 'center' },
     optionActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
     optionText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '600' },
     optionTextActive: { color: Colors.primary },
@@ -588,6 +615,28 @@ const styles = StyleSheet.create({
             elevation: 10, 
         })
     },
+    errorCard: { 
+        backgroundColor: Colors.white, 
+        borderRadius: 24, 
+        padding: Spacing.xl, 
+        width: '100%', 
+        maxWidth: 400, 
+        alignItems: 'center', 
+        ...(Platform.OS === 'web' ? {
+            boxShadow: '0 10px 20px rgba(0,0,0,0.1)',
+        } : {
+            shadowColor: '#000', 
+            shadowOffset: { width: 0, height: 10 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 20,
+            elevation: 10, 
+        })
+    },
+    errorIconBox: { backgroundColor: '#FFEBEE', borderRadius: 100, padding: 16, marginBottom: Spacing.lg },
+    errorTitle: { fontSize: Fonts.sizes.xl, fontWeight: '800', color: Colors.text, marginBottom: Spacing.sm, textAlign: 'center' },
+    errorDesc: { fontSize: Fonts.sizes.md, color: Colors.textSecondary, textAlign: 'center', lineHeight: 22, paddingHorizontal: Spacing.sm, marginBottom: Spacing.xl },
+    errorBtn: { backgroundColor: '#f44336', borderRadius: 16, paddingVertical: 16, width: '100%', alignItems: 'center' },
+    errorBtnText: { color: Colors.white, fontSize: Fonts.sizes.md, fontWeight: '800' },
     loadingCard: { 
         backgroundColor: Colors.white, 
         borderRadius: 24, 

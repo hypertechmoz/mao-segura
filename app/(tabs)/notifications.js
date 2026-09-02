@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Platform, Animated, Image, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useUnreadCount, useUnreadStore } from '../../utils/useUnreadCount';
@@ -55,8 +55,20 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                             if (isProcessing) return;
                             setIsProcessing(true);
                             try {
-                                const chatId = await acceptConnectionRequest(reqId, user, senderId);
-                                if (chatId) router.push(`/chat/${chatId}`);
+                                if (type === 'NEW_APPLICATION') {
+                                    const jobId = route ? route.replace('/job/', '') : null;
+                                    if (jobId && senderId) {
+                                        await supabase.from('applications').update({ status: 'ACCEPTED', updated_at: new Date().toISOString() }).eq('job_id', jobId).eq('worker_id', senderId);
+                                        if (user) {
+                                            const { acceptConnectionRequest, sendConnectionRequest } = require('../../utils/chatSecureHelper');
+                                            try { await sendConnectionRequest(user, senderId, { type: 'CONNECTION' }); } catch(err){}
+                                        }
+                                        Alert.alert("Sucesso", "Candidatura aceite!");
+                                    }
+                                } else {
+                                    const chatId = await acceptConnectionRequest(reqId, user, senderId);
+                                    if (chatId) router.push(`/chat/${chatId}`);
+                                }
                             } catch(err) { console.error(err); } finally { setIsProcessing(false); }
                         }} style={[{ backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }, isProcessing && { opacity: 0.7 }]}>
                             {isProcessing ? <ActivityIndicator size="small" color={Colors.white} /> : <Text style={{ color: Colors.white, fontSize: 12, fontWeight: '700' }}>Aceitar</Text>}
@@ -66,7 +78,15 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                             if (isProcessing) return;
                             setIsProcessing(true);
                             try {
-                                await rejectConnectionRequest(reqId);
+                                if (type === 'NEW_APPLICATION') {
+                                    const jobId = route ? route.replace('/job/', '') : null;
+                                    if (jobId && senderId) {
+                                        await supabase.from('applications').update({ status: 'REJECTED', updated_at: new Date().toISOString() }).eq('job_id', jobId).eq('worker_id', senderId);
+                                        Alert.alert("Sucesso", "Candidatura recusada!");
+                                    }
+                                } else {
+                                    await rejectConnectionRequest(reqId);
+                                }
                             } catch(err) { console.error(err); } finally { setIsProcessing(false); }
                         }} style={[{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }, isProcessing && { opacity: 0.7 }]}>
                             {isProcessing ? <ActivityIndicator size="small" color={Colors.textSecondary} /> : <Text style={{ color: Colors.textSecondary, fontSize: 12, fontWeight: '700' }}>Recusar</Text>}
@@ -128,21 +148,40 @@ export default function Notifications() {
         }
 
         try {
-            // 1. Explicit Notifications
-            const { data: explicit } = await supabase
+            // 1. Explicit Notifications (Try with sender name first, fallback if it fails)
+            let explicit = [];
+            const { data: explicitWithName, error: explicitErr } = await supabase
                 .from('notifications')
-                .select('*')
+                .select('*, sender:users!notifications_sender_id_fkey(name)')
                 .eq('user_id', uid)
                 .order('created_at', { ascending: false })
                 .range(from, to);
 
+            if (explicitErr) {
+                const { data: fallback } = await supabase
+                    .from('notifications')
+                    .select('*')
+                    .eq('user_id', uid)
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+                explicit = fallback || [];
+            } else {
+                explicit = explicitWithName || [];
+            }
+
             const explicitFormatted = explicit?.map(d => ({
                 id: `notif-${d.id}`,
                 route: d.route,
+                type: d.type,
+                senderId: d.sender_id,
+                requiresAction: d.type === 'NEW_APPLICATION',
+                user: user,
                 icon: d.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (d.type === 'USER_HIRED' ? 'trophy' : (d.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
                 iconColor: d.type === 'APPLICATION_ACCEPTED' || d.type === 'USER_HIRED' ? '#4CAF50' : (d.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
                 title: d.title || 'Notificação',
-                description: d.description || d.content,
+                description: d.type === 'NEW_APPLICATION' 
+                    ? `${d.sender?.name || 'Alguém'} candidatou-se à sua vaga.` 
+                    : (d.description || d.content),
                 time: d.created_at,
                 isNew: !d.is_read,
             })) || [];
@@ -227,15 +266,28 @@ export default function Notifications() {
         // Subscribe to real-time changes
         const channel = supabase
             .channel(`notifications-changes-${Date.now()}`)
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, payload => {
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${uid}` }, async payload => {
                 const d = payload.new;
+                
+                let senderName = 'Um candidato';
+                if (d.sender_id) {
+                    const { data: sender } = await supabase.from('users').select('name').eq('id', d.sender_id).maybeSingle();
+                    if (sender?.name) senderName = sender.name;
+                }
+
                 const newNotif = {
                     id: `notif-${d.id}`,
                     route: d.route,
+                    type: d.type,
+                    senderId: d.sender_id,
+                    requiresAction: d.type === 'NEW_APPLICATION',
+                    user: user,
                     icon: d.type === 'APPLICATION_ACCEPTED' ? 'checkmark-circle' : (d.type === 'USER_HIRED' ? 'trophy' : (d.type === 'APPLICATION_REJECTED' ? 'close-circle' : 'mail-unread')),
                     iconColor: d.type === 'APPLICATION_ACCEPTED' || d.type === 'USER_HIRED' ? '#4CAF50' : (d.type === 'APPLICATION_REJECTED' ? Colors.error : Colors.info),
                     title: d.title || 'Notificação',
-                    description: d.description || d.content,
+                    description: d.type === 'NEW_APPLICATION' 
+                        ? `${senderName} candidatou-se à sua vaga.` 
+                        : (d.description || d.content),
                     time: d.created_at,
                     isNew: true,
                 };

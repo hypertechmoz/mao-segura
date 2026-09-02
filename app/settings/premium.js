@@ -49,7 +49,7 @@ export default function Premium() {
             });
 
             // Sync user premium status
-            await supabase.from('users').update({ is_premium: true }).eq('id', uid);
+            await supabase.from('users').update({ is_premium: true, subscription_plan: 'PLUS' }).eq('id', uid);
 
             const { refreshUser } = useAuthStore.getState();
             await refreshUser();
@@ -74,7 +74,7 @@ export default function Premium() {
                 onPress: async () => {
                     try {
                         await supabase.from('subscriptions').update({ plan: 'FREE' }).eq('user_id', uid);
-                        await supabase.from('users').update({ is_premium: false }).eq('id', uid);
+                        await supabase.from('users').update({ is_premium: false, subscription_plan: 'FREE' }).eq('id', uid);
                         
                         const { refreshUser } = useAuthStore.getState();
                         await refreshUser();
@@ -127,7 +127,7 @@ export default function Premium() {
                 <View style={styles.featuresList}>
                     {renderFeature("Perfil básico", true)}
                     {renderFeature(isEmployer ? "Acesso a profissionais da sua cidade" : "Acesso a vagas da sua cidade", true)}
-                    {isEmployer ? renderFeature("1 Vaga ativa em simultâneo", true) : renderFeature("3 Candidaturas ativas em simultâneo", true)}
+                    {isEmployer ? renderFeature("10 Vagas ativas em simultâneo", true) : renderFeature("3 Candidaturas ativas em simultâneo", true)}
                     {!isEmployer && renderFeature("1 Publicação (Post) no Feed", true)}
                     {renderFeature("1 Imagem por conversa de Chat", true)}
                     
@@ -151,7 +151,7 @@ export default function Premium() {
                 
                 <View style={styles.featuresList}>
                     {renderFeature("Tudo do plano Free", true, true)}
-                    {isEmployer ? renderFeature("5 Vagas ativas em simultâneo", true, true) : renderFeature("10 Candidaturas ativas em simultâneo", true, true)}
+                    {isEmployer ? renderFeature("Vagas ILIMITADAS", true, true) : renderFeature("10 Candidaturas ativas em simultâneo", true, true)}
                     {!isEmployer && renderFeature("10 Publicações (Posts) no Feed", true, true)}
                     {renderFeature("10 Imagens por conversa de Chat", true, true)}
                     {renderFeature(isEmployer ? "Destaque absoluto visual nas suas Vagas" : "Destaque absoluto nas pesquisas", true, true)}

@@ -519,29 +519,36 @@ export default function Home() {
             if (user && uid && !isLoadMore) {
                 let currentActionedIds = new Map();
 
-                // Conversas [2]
-                results[2].data?.forEach(d => {
-                    if (d.is_authorized) {
-                        if (d.job_id) currentActionedIds.set(d.job_id, d.id);
-                        const otherId = user.role === 'WORKER' ? d.employer_id : d.worker_id;
-                        if (otherId) currentActionedIds.set(otherId, d.id);
+                // 1. Candidaturas [4]
+                results[4].data?.forEach(d => {
+                    if (d.job_id && !currentActionedIds.has(d.job_id)) {
+                        currentActionedIds.set(d.job_id, d.status); // PENDING, ACCEPTED, REJECTED, CANCELLED
                     }
                 });
 
-                // Pedidos [3]
+                // 2. Conversas [2]
+                results[2].data?.forEach(d => {
+                    if (d.is_authorized) {
+                        if (d.job_id) {
+                            const existing = currentActionedIds.get(d.job_id);
+                            if (existing !== 'CANCELLED' && existing !== 'REJECTED') {
+                                currentActionedIds.set(d.job_id, d.id);
+                            }
+                        }
+                        const otherId = user.role === 'WORKER' ? d.employer_id : d.worker_id;
+                        if (otherId) {
+                            currentActionedIds.set(otherId, d.id);
+                        }
+                    }
+                });
+
+                // 3. Pedidos Genéricos [3]
                 results[3].data?.forEach(d => {
                     if (d.job_id && !currentActionedIds.has(d.job_id)) {
                         currentActionedIds.set(d.job_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
                     }
                     if (d.receiver_id && !currentActionedIds.has(d.receiver_id)) {
                         currentActionedIds.set(d.receiver_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
-                    }
-                });
-
-                // Candidaturas [4]
-                results[4].data?.forEach(d => {
-                    if (d.job_id && !currentActionedIds.has(d.job_id)) {
-                        currentActionedIds.set(d.job_id, d.status === 'PENDING' ? 'PENDING' : 'AUTHORIZED');
                     }
                 });
                 setActionedIds(currentActionedIds);
