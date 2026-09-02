@@ -223,7 +223,14 @@ export const PROVINCE_CITIES = {
 };
 
 export const CONTRACT_TYPES = [
-    { label: 'Diarista', value: 'DAILY' },
-    { label: 'Temporário', value: 'TEMPORARY' },
-    { label: 'Permanente', value: 'PERMANENT' },
+    { label: 'Serviço Único / Tarefa', value: 'SINGLE_TASK' },
+    { label: 'Por Projeto', value: 'PROJECT' },
+    { label: 'Recorrente', value: 'RECURRING' },
+    { label: 'Contrato Contínuo', value: 'CONTINUOUS' },
+];
+
+export const AVAILABILITY_TYPES = [
+    { label: 'Imediata', value: 'IMMEDIATE' },
+    { label: 'Agendada / Programada', value: 'SCHEDULED' },
+    { label: 'Horário Flexível', value: 'FLEXIBLE' },
 ];

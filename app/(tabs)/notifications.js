@@ -163,7 +163,7 @@ export default function Notifications() {
             if (currentPage === 0) {
                 const { data: reqs } = await supabase
                     .from('connection_requests')
-                    .select('*')
+                    .select('*, job:jobs(title)')
                     .eq('receiver_id', uid)
                     .eq('status', 'PENDING')
                     .order('created_at', { ascending: false });
@@ -175,8 +175,10 @@ export default function Notifications() {
                     senderId: d.sender_id,
                     icon: 'person-add',
                     iconColor: Colors.primary,
-                    title: d.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
-                    description: `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
+                    title: d.type === 'APPLY' ? 'Nova Candidatura' : 'Pedido de Contacto',
+                    description: d.type === 'APPLY'
+                        ? `${d.sender_name || 'Alguém'} candidatou-se à sua vaga${d.job?.title ? ` "${d.job.title}"` : ''}.`
+                        : `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
                     time: d.created_at,
                     isNew: true,
                     requiresAction: true,
@@ -248,8 +250,10 @@ export default function Notifications() {
                     senderId: d.sender_id,
                     icon: 'person-add',
                     iconColor: Colors.primary,
-                    title: d.type === 'APPLY' ? 'Nova Candidatura / Contacto' : 'Pedido de Contacto',
-                    description: `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
+                    title: d.type === 'APPLY' ? 'Nova Candidatura' : 'Pedido de Contacto',
+                    description: d.type === 'APPLY'
+                        ? `${d.sender_name || 'Alguém'} candidatou-se à sua vaga.`
+                        : `${d.sender_name || 'Alguém'} enviou um pedido de contacto.`,
                     time: d.created_at,
                     isNew: true,
                     requiresAction: true,

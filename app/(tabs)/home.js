@@ -16,6 +16,7 @@ import { useUnreadCount } from '../../utils/useUnreadCount';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { BackHandler } from 'react-native';
+import * as Location from 'expo-location';
 import { handleError } from '../../utils/errorHandler';
 import { MOCK_POSTS } from '../../utils/mockData';
 
@@ -578,6 +579,29 @@ export default function Home() {
         loadData();
     }, [authLoading, uid, userRole, userProvince, userCity]);
 
+    // Location Tracking
+    useEffect(() => {
+        const updateLocation = async () => {
+            if (!user || !uid || isWeb) return;
+            try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== 'granted') return;
+                
+                const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                if (location) {
+                    await supabase.rpc('update_user_location', {
+                        user_id: uid,
+                        lat: location.coords.latitude,
+                        lon: location.coords.longitude
+                    });
+                }
+            } catch (e) {
+                console.log('Error getting location:', e);
+            }
+        };
+        updateLocation();
+    }, [uid, isWeb]);
+
     // Recarregar os dados de forma silenciosa sempre que a página ganhar foco
     useFocusEffect(
         useCallback(() => {
@@ -786,6 +810,9 @@ export default function Home() {
                             <Text style={styles.headerTitle}>Konekta</Text>
                         </View>
                         <View style={styles.headerActions}>
+                            <TouchableOpacity onPress={() => router.push('/services')} style={styles.headerIconBtn}>
+                                <Ionicons name="grid-outline" size={24} color={Colors.primary} />
+                            </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
                                 <Ionicons name="search-outline" size={24} color={Colors.primary} />
                             </TouchableOpacity>

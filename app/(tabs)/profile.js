@@ -169,6 +169,7 @@ export default function Profile() {
                     .from('reviews')
                     .select(`
                         id, rating, comment, created_at,
+                        contract:contracts(service_title),
                         employer:users!reviews_from_id_fkey(name, profile_photo, is_verified, is_premium)
                     `)
                     .eq('to_id', targetId)
@@ -670,6 +671,11 @@ export default function Profile() {
                                                 <Text style={{ fontWeight: 'bold', color: Colors.primary, fontSize: 14, marginLeft: 4 }}>{review.rating}</Text>
                                             </View>
                                         </View>
+                                        {review.contract?.service_title && (
+                                            <View style={{ marginTop: 8, paddingHorizontal: 10, paddingVertical: 4, backgroundColor: Colors.primaryBg, borderRadius: 6, alignSelf: 'flex-start' }}>
+                                                <Text style={{ fontSize: 12, color: Colors.primary, fontWeight: '600' }}>{review.contract.service_title}</Text>
+                                            </View>
+                                        )}
                                         {review.comment ? (
                                             <Text style={{ marginTop: 12, color: Colors.text, fontSize: 14, fontStyle: 'italic' }}>"{review.comment}"</Text>
                                         ) : null}

@@ -6,7 +6,7 @@ import { supabase } from '../../services/supabase';
 import { uploadImage } from '../../services/storageService';
 import { useAuthStore } from '../../store/authStore';
 import { sendPushNotification } from '../../services/notificationService';
-import { Colors, Spacing, Fonts, CONTRACT_TYPES } from '../../constants';
+import { Colors, Spacing, Fonts, CONTRACT_TYPES, AVAILABILITY_TYPES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import { useTaxonomy } from '../../hooks/useTaxonomy';
 import UpgradeModal from '../../components/UpgradeModal';
@@ -33,6 +33,7 @@ export default function CreateJob() {
         title: '',
         type: '',
         contractType: null,
+        availability: null,
         description: '',
     });
     const [imageUri, setImageUri] = useState(null);
@@ -199,7 +200,7 @@ export default function CreateJob() {
                 type: type.trim(),
                 description: description.trim(),
                 contract_type: contractType,
-                for_residence: true, // Defaulting to true as we removed Mini-empresa option
+                availability: form.availability,
                 province: province,
                 city: city,
                 bairro: bairro || '',
@@ -404,6 +405,21 @@ export default function CreateJob() {
                                 onPress={() => update('contractType', ct.value)}
                             >
                                 <Text style={[styles.optionText, form.contractType === ct.value && styles.optionTextActive]}>{ct.label}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Disponibilidade *</Text>
+                    <View style={styles.optionRow}>
+                        {AVAILABILITY_TYPES.map((av) => (
+                            <TouchableOpacity
+                                key={av.value}
+                                style={[styles.option, form.availability === av.value && styles.optionActive]}
+                                onPress={() => update('availability', av.value)}
+                            >
+                                <Text style={[styles.optionText, form.availability === av.value && styles.optionTextActive]}>{av.label}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>

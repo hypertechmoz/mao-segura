@@ -229,10 +229,22 @@ export default function Register() {
                 )}
 
                 <View style={styles.recommendations}>
-                    <Text style={styles.recText}>• No mínimo 8 caracteres</Text>
-                    <Text style={styles.recText}>• Pelo menos uma letra Maiúscula e uma minúscula</Text>
-                    <Text style={styles.recText}>• Pelo menos um número</Text>
-                    <Text style={styles.recText}>• Use símbolos (ex: ! @ # $ % &) para máxima segurança</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name={form.password.length >= 8 ? "checkmark-circle" : "ellipse-outline"} size={16} color={form.password.length >= 8 ? "#2E7D32" : Colors.textLight} style={{ marginRight: 6 }} />
+                        <Text style={[styles.recText, { color: form.password.length >= 8 ? "#2E7D32" : Colors.textSecondary, marginBottom: 0 }]}>No mínimo 8 caracteres</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name={/[A-Z]/.test(form.password) && /[a-z]/.test(form.password) ? "checkmark-circle" : "ellipse-outline"} size={16} color={/[A-Z]/.test(form.password) && /[a-z]/.test(form.password) ? "#2E7D32" : Colors.textLight} style={{ marginRight: 6 }} />
+                        <Text style={[styles.recText, { color: /[A-Z]/.test(form.password) && /[a-z]/.test(form.password) ? "#2E7D32" : Colors.textSecondary, marginBottom: 0 }]}>Letras maiúsculas e minúsculas</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Ionicons name={/[0-9]/.test(form.password) ? "checkmark-circle" : "ellipse-outline"} size={16} color={/[0-9]/.test(form.password) ? "#2E7D32" : Colors.textLight} style={{ marginRight: 6 }} />
+                        <Text style={[styles.recText, { color: /[0-9]/.test(form.password) ? "#2E7D32" : Colors.textSecondary, marginBottom: 0 }]}>Pelo menos um número</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name={/[^A-Za-z0-9]/.test(form.password) ? "checkmark-circle" : "ellipse-outline"} size={16} color={/[^A-Za-z0-9]/.test(form.password) ? "#2E7D32" : Colors.textLight} style={{ marginRight: 6 }} />
+                        <Text style={[styles.recText, { color: /[^A-Za-z0-9]/.test(form.password) ? "#2E7D32" : Colors.textSecondary, marginBottom: 0 }]}>Símbolos especiais (ex: !@#$%)</Text>
+                    </View>
                 </View>
             </View>
 

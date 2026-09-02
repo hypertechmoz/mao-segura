@@ -3,12 +3,28 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../services/supabase';
 import { useAuthStore } from '../../store/authStore';
-import { Colors, Spacing, Fonts } from '../../constants';
+import { Colors, Spacing, Fonts, CONTRACT_TYPES, AVAILABILITY_TYPES } from '../../constants';
 import { Ionicons } from '@expo/vector-icons';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { useAuthGuard } from '../../utils/useAuthGuard';
 import { startOrGetConversation } from '../../utils/chatHelper';
 import UpgradeModal from '../../components/UpgradeModal';
+
+const getContractTypeLabel = (val) => {
+    if (!val) return 'A combinar';
+    const found = CONTRACT_TYPES.find(c => c.value === val);
+    if (found) return found.label;
+    if (val === 'DAILY') return 'Diarista';
+    if (val === 'TEMPORARY') return 'Temporário';
+    if (val === 'PERMANENT') return 'Permanente';
+    return val;
+};
+
+const getAvailabilityLabel = (val) => {
+    if (!val) return null;
+    const found = AVAILABILITY_TYPES.find(a => a.value === val);
+    return found ? found.label : val;
+};
 
 export default function JobDetail() {
     const router = useRouter();
@@ -318,9 +334,20 @@ export default function JobDetail() {
                 <View style={styles.metaRow}>
                     <Text style={styles.meta}>
                         <Ionicons name="document-text-outline" size={14} color={Colors.textSecondary} />
-                        <Text>{` ${job.contract_type === 'DAILY' ? 'Diarista' : job.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'} · `}</Text>
-                        <Ionicons name={job.forResidence ? 'home-outline' : 'business-outline'} size={14} color={Colors.textSecondary} />
-                        <Text>{` ${job.forResidence ? 'Residência' : 'Mini-empresa'}`}</Text>
+                        <Text>{` ${getContractTypeLabel(job.contract_type)}`}</Text>
+                        {job.availability ? (
+                            <>
+                                <Text>{' · '}</Text>
+                                <Ionicons name="time-outline" size={14} color={Colors.textSecondary} />
+                                <Text>{` ${getAvailabilityLabel(job.availability)}`}</Text>
+                            </>
+                        ) : job.forResidence !== undefined ? (
+                            <>
+                                <Text>{' · '}</Text>
+                                <Ionicons name={job.forResidence ? 'home-outline' : 'business-outline'} size={14} color={Colors.textSecondary} />
+                                <Text>{` ${job.forResidence ? 'Residência' : 'Mini-empresa'}`}</Text>
+                            </>
+                        ) : null}
                     </Text>
                 </View>
             </View>

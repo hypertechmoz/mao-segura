@@ -11,6 +11,10 @@ import { useTaxonomy } from '../../hooks/useTaxonomy';
 export default function Search() {
     const router = useRouter();
     const { q } = useLocalSearchParams();
+    
+    // Default Tab is VAGAS for Workers, and PROFISSIONAIS (which searches workers) for Employers.
+    // We will keep the default tabs but just change the placeholder and logic.
+    // Wait, the user reverted my tabs. I will just change the placeholder here.
     const [activeTab, setActiveTab] = useState('VAGAS'); // 'VAGAS' or 'COMUNIDADE'
     const [searchQuery, setSearchQuery] = useState(q || '');
     const [results, setResults] = useState([]);
@@ -39,19 +43,30 @@ export default function Search() {
         try {
             setLoading(true);
             setSearched(true);
-            
+
             let query;
-            const table = activeTab === 'VAGAS' ? 'jobs' : 'posts';
+            const table = activeTab === 'VAGAS' ? (user?.role === 'EMPLOYER' ? 'users' : 'jobs') : 'posts';
 
             if (activeTab === 'VAGAS') {
-                query = supabase.from('jobs').select('*, employer:users!employer_id(*)').eq('status', 'ACTIVE');
-                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
-                    query = query.eq('province', user.province);
-                }
-                if (isType) {
-                    query = query.eq('type', searchTerm);
-                } else if (searchTerm) {
-                    query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+                if (user?.role === 'EMPLOYER') {
+                    // Search workers
+                    // We'll search users and also their worker_profiles
+                    query = supabase.from('users').select('*, workerProfile:worker_profiles!inner(*)').eq('role', 'WORKER');
+                    if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
+                        query = query.eq('province', user.province);
+                    }
+                    // O filtro será feito em memória (JavaScript) abaixo para evitar erros de join no PostgREST
+                } else {
+                    // Search jobs
+                    query = supabase.from('jobs').select('*, employer:users!employer_id(*)').eq('status', 'ACTIVE');
+                    if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
+                        query = query.eq('province', user.province);
+                    }
+                    if (isType) {
+                        query = query.eq('type', searchTerm);
+                    } else if (searchTerm) {
+                        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`);
+                    }
                 }
             } else {
                 query = supabase.from('posts').select('*, user:users!inner(*)');
@@ -62,11 +77,27 @@ export default function Search() {
                     query = query.ilike('content', `%${searchTerm}%`);
                 }
             }
-            
+
             const { data, error } = await query.order('created_at', { ascending: false });
 
             if (error) throw error;
-            setResults(data || []);
+            
+            let finalData = data || [];
+            
+            // Filtro local para pesquisa de profissionais (Empregador a pesquisar)
+            if (activeTab === 'VAGAS' && user?.role === 'EMPLOYER' && searchTerm) {
+                const term = searchTerm.toLowerCase();
+                finalData = finalData.filter(item => {
+                    const profileTitle = Array.isArray(item.workerProfile) 
+                        ? item.workerProfile[0]?.title 
+                        : item.workerProfile?.title;
+                        
+                    return (item.name && item.name.toLowerCase().includes(term)) || 
+                           (profileTitle && profileTitle.toLowerCase().includes(term));
+                });
+            }
+
+            setResults(finalData);
         } catch (err) {
             console.error('Search error:', err);
         } finally {
@@ -98,14 +129,16 @@ export default function Search() {
         <View style={styles.container}>
             {/* Tab Switcher */}
             <View style={styles.tabContainer}>
-                <TouchableOpacity 
-                    style={[styles.tabBtn, activeTab === 'VAGAS' && styles.tabBtnActive]} 
+                <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'VAGAS' && styles.tabBtnActive]}
                     onPress={() => setActiveTab('VAGAS')}
                 >
-                    <Text style={[styles.tabBtnText, activeTab === 'VAGAS' && styles.tabBtnTextActive]}>Vagas</Text>
+                    <Text style={[styles.tabBtnText, activeTab === 'VAGAS' && styles.tabBtnTextActive]}>
+                        {user?.role === 'EMPLOYER' ? 'Profissionais' : 'Vagas'}
+                    </Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
-                    style={[styles.tabBtn, activeTab === 'COMUNIDADE' && styles.tabBtnActive]} 
+                <TouchableOpacity
+                    style={[styles.tabBtn, activeTab === 'COMUNIDADE' && styles.tabBtnActive]}
                     onPress={() => setActiveTab('COMUNIDADE')}
                 >
                     <Text style={[styles.tabBtnText, activeTab === 'COMUNIDADE' && styles.tabBtnTextActive]}>Comunidade</Text>
@@ -115,7 +148,11 @@ export default function Search() {
             <View style={styles.searchBar}>
                 <TextInput
                     style={styles.searchInput}
-                    placeholder={activeTab === 'VAGAS' ? "Procurar vagas..." : "Procurar na comunidade..."}
+                    placeholder={
+                        activeTab === 'VAGAS' 
+                            ? (user?.role === 'EMPLOYER' ? "Procurar profissionais..." : "Encontrar vagas/oportunidades...")
+                            : "Procurar na comunidade..."
+                    }
                     placeholderTextColor={Colors.textLight}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
@@ -153,16 +190,40 @@ export default function Search() {
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
                     renderItem={({ item }) => (
                         activeTab === 'VAGAS' ? (
-                            <TouchableOpacity
-                                style={styles.resultCard}
-                                onPress={() => router.push(`/job/${item.id}`)}
-                            >
-                                <Text style={styles.resultTitle}>{item.title}</Text>
-                                <Text style={styles.resultMeta}>
-                                    <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
-                                    <Text>{` ${item.city} · ${item.contract_type === 'DAILY' ? 'Diarista' : item.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}`}</Text>
-                                </Text>
-                            </TouchableOpacity>
+                            user?.role === 'EMPLOYER' ? (
+                                <TouchableOpacity
+                                    style={styles.resultCard}
+                                    onPress={() => router.push(`/user/${item.id}`)}
+                                >
+                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                        <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryBg, marginRight: 10, justifyContent: 'center', alignItems: 'center' }}>
+                                            <Text style={{ color: Colors.primary, fontWeight: 'bold' }}>{item.name?.charAt(0) || 'P'}</Text>
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={styles.resultTitle}>{item.name}</Text>
+                                            <Text style={styles.resultMeta}>
+                                                <Ionicons name="briefcase-outline" size={12} color={Colors.textSecondary} />
+                                                <Text style={{ fontWeight: '600' }}>{` ${item.workerProfile?.[0]?.title || item.workerProfile?.title || 'Profissional'}`}</Text>
+                                            </Text>
+                                            <Text style={styles.resultMeta}>
+                                                <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
+                                                <Text>{` ${item.city || item.province || 'Sem localização'}`}</Text>
+                                            </Text>
+                                        </View>
+                                    </View>
+                                </TouchableOpacity>
+                            ) : (
+                                <TouchableOpacity
+                                    style={styles.resultCard}
+                                    onPress={() => router.push(`/job/${item.id}`)}
+                                >
+                                    <Text style={styles.resultTitle}>{item.title}</Text>
+                                    <Text style={styles.resultMeta}>
+                                        <Ionicons name="location-outline" size={12} color={Colors.textSecondary} />
+                                        <Text>{` ${item.city || ''} · ${item.contract_type === 'DAILY' ? 'Diarista' : item.contract_type === 'TEMPORARY' ? 'Temporário' : 'Permanente'}`}</Text>
+                                    </Text>
+                                </TouchableOpacity>
+                            )
                         ) : (
                             <PostCard post={item} />
                         )

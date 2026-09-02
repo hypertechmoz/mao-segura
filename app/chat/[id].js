@@ -319,7 +319,8 @@ export default function ChatScreen() {
                 conversation_id: id,
                 employer_id: uid,
                 worker_id: receiverId,
-                status: 'hired'
+                status: 'hired',
+                service_title: replyContext?.type === 'job' ? replyContext.data.title : 'Serviço Direto'
             };
             const { data: newContract, error } = await supabase
                 .from('contracts')
