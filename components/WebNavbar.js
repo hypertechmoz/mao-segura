@@ -67,12 +67,13 @@ export default function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNot
     };
 
     const navItems = [
-        { label: t('tabs.home'), icon: 'home', route: '/home' },
-        { label: 'Minha Rede', icon: 'people', route: '/network' },
-        ...(isSmall ? [{ label: t('tabs.search'), icon: 'search', route: '/search' }] : []),
-        { label: t('tabs.jobs'), icon: 'briefcase', route: '/jobs' },
-        { label: t('tabs.messages'), icon: 'chatbubble-ellipses', route: '/messages' },
-        { label: t('tabs.notifications'), icon: 'notifications', route: '/notifications' },
+        { label: t('tabs.home'), icon: 'home', route: '/(tabs)/home' },
+        { label: 'Serviços', icon: 'grid', route: '/services' },
+        { label: 'Minha Rede', icon: 'people', route: '/(tabs)/network' },
+        ...(isSmall ? [{ label: t('tabs.search'), icon: 'search', route: '/(tabs)/search' }] : []),
+        { label: t('tabs.jobs'), icon: 'briefcase', route: '/(tabs)/jobs' },
+        { label: t('tabs.messages'), icon: 'chatbubble-ellipses', route: '/(tabs)/messages' },
+        { label: t('tabs.notifications'), icon: 'notifications', route: '/(tabs)/notifications' },
     ];
 
     return (
@@ -143,16 +144,16 @@ export default function WebNavbar({ isSmall, isMobile, unreadMessages, unreadNot
                                     icon={item.icon}
                                     label={item.label}
                                     isSmall={isSmall}
-                                    isActive={pathname?.endsWith(item.route)}
-                                    badge={item.route === '/messages' ? unreadMessages : (item.route === '/notifications' ? unreadNotifications : (item.route === '/network' ? unreadConnectionRequests : 0))}
+                                    isActive={pathname?.endsWith(item.route.split('/').pop())}
+                                    badge={item.route.includes('/messages') ? unreadMessages : (item.route.includes('/notifications') ? unreadNotifications : (item.route.includes('/network') ? unreadConnectionRequests : 0))}
                                     onPress={() => {
-                                        if (['/messages', '/notifications'].includes(item.route)) {
+                                        if (item.route.includes('/messages') || item.route.includes('/notifications')) {
                                             if (!requireAuth()) {
                                                 closeAllMenus();
                                                 return;
                                             }
                                         }
-                                        router.push(`/(tabs)${item.route}`);
+                                        router.push(item.route);
                                         closeAllMenus();
                                     }}
                                 />

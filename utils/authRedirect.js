@@ -8,7 +8,7 @@ export function getEmailRedirectTo() {
     return 'maosegura://auth/verify-email';
 }
 
-export const KONEKTA_APP_URL =
+export const KWICK_APP_URL =
     Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.location.origin
-        : 'https://morstar-konekta.web.app';
+        : 'https://morstar-kwick.web.app';

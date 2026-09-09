@@ -224,7 +224,7 @@ export default function ChatScreen() {
         
         if (userSentImagesCount >= maxAllowedImages) {
             if (plan === 'FREE') {
-                setUpgradeMessage('Atingiu o seu limite semanal de imagens (1 imagem por semana). Atualize para o Konekt Mais para enviar mais imagens e mostrar o seu trabalho!');
+                setUpgradeMessage('Atingiu o seu limite semanal de imagens (1 imagem por semana). Atualize para o Kwick Mais para enviar mais imagens e mostrar o seu trabalho!');
                 setShowUpgradeModal(true);
             } else if (plan === 'PLUS') {
                 setUpgradeMessage('Atingiu o seu limite diário de imagens nesta conversa (10 imagens por dia). Atualize para o plano MAX para imagens ilimitadas!');

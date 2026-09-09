@@ -55,7 +55,7 @@ export default function Premium() {
             await refreshUser();
             await fetchSubscription();
             setShowPayment(false);
-            Alert.alert('Sucesso', 'Subscrição Konekt Mais ativada!');
+            Alert.alert('Sucesso', 'Subscrição Kwick Mais ativada!');
         } catch (err) {
             Alert.alert('Erro', err.message);
         } finally {
@@ -66,7 +66,7 @@ export default function Premium() {
     const handleCancel = async () => {
         const uid = user?.uid || user?.id;
         if (!uid) return;
-        Alert.alert('Cancelar Plano', 'Tem certeza que deseja cancelar o Konekt Mais?', [
+        Alert.alert('Cancelar Plano', 'Tem certeza que deseja cancelar o Kwick Mais?', [
             { text: 'Não', style: 'cancel' },
             {
                 text: 'Sim, cancelar',
@@ -111,14 +111,14 @@ export default function Premium() {
                     <Ionicons name="diamond" size={36} color={Colors.white} />
                 </View>
                 <Text style={styles.mainTitle}>Escolha o seu plano</Text>
-                <Text style={styles.mainSubtitle}>Melhore a sua experiência e alcance mais clientes com o Konekt Mais.</Text>
+                <Text style={styles.mainSubtitle}>Melhore a sua experiência e alcance mais clientes com o Kwick Mais.</Text>
             </View>
 
             {/* PLANO FREE */}
             <View style={styles.cardsContainer}>
                 <View style={[styles.planCard, isPremium ? styles.planCardInactive : styles.planCardActive]}>
                 <View style={styles.planHeader}>
-                    <Text style={styles.planTitle}>Konekta Free</Text>
+                    <Text style={styles.planTitle}>Kwick Free</Text>
                     {!isPremium && <View style={styles.currentBadge}><Text style={styles.currentBadgeText}>Plano Atual</Text></View>}
                 </View>
                 <Text style={styles.planPrice}>0 MT<Text style={styles.planPricePeriod}>/mês</Text></Text>
@@ -141,7 +141,7 @@ export default function Premium() {
             <View style={[styles.planCard, styles.premiumCard, isPremium && styles.planCardActive]}>
                 <View style={styles.planHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekt Mais</Text>
+                        <Text style={[styles.planTitle, { color: Colors.white }]}>Kwick Mais</Text>
                         <Ionicons name="checkmark-circle" size={20} color={Colors.white} />
                     </View>
                     {isPremium && <View style={[styles.currentBadge, { backgroundColor: Colors.white }]}><Text style={[styles.currentBadgeText, { color: Colors.premium }]}>Plano Atual</Text></View>}
@@ -171,7 +171,7 @@ export default function Premium() {
                     <View style={styles.subscribeContainer}>
                         {!showPayment ? (
                             <TouchableOpacity style={styles.btnStart} onPress={() => setShowPayment(true)}>
-                                <Text style={styles.btnStartText}>Começar Konekt Mais</Text>
+                                <Text style={styles.btnStartText}>Começar Kwick Mais</Text>
                                 <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
                             </TouchableOpacity>
                         ) : (
@@ -204,7 +204,7 @@ export default function Premium() {
             <View style={[styles.planCard, styles.maxCard]}>
                 <View style={styles.planHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={[styles.planTitle, { color: Colors.white }]}>Konekta Max</Text>
+                        <Text style={[styles.planTitle, { color: Colors.white }]}>Kwick Max</Text>
                         <Ionicons name="infinite" size={20} color={Colors.white} />
                     </View>
                     <View style={[styles.currentBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}><Text style={[styles.currentBadgeText, { color: Colors.white }]}>Em Breve</Text></View>
@@ -213,7 +213,7 @@ export default function Premium() {
                 <Text style={[styles.planDesc, { color: 'rgba(255,255,255,0.9)' }]}>Acesso total e absoluto. Seja o melhor e sem limites.</Text>
                 
                 <View style={styles.featuresList}>
-                    {renderFeature("Tudo do Konekt Mais", true, true)}
+                    {renderFeature("Tudo do Kwick Mais", true, true)}
                     {renderFeature(isEmployer ? "Acesso a profissionais de TODO O PAÍS" : "Acesso a vagas de TODO O PAÍS", true, true)}
                     {isEmployer && renderFeature("Criar e gerir Conta Empresarial (Business)", true, true)}
                     {isEmployer ? renderFeature("Vagas ILIMITADAS", true, true) : renderFeature("Candidaturas e Publicações ILIMITADAS", true, true)}

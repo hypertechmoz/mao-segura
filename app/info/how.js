@@ -52,8 +52,27 @@ export default function HowItWorks() {
                 <Text style={styles.sectionTitle}>Primeiro contacto com bom senso</Text>
                 <Text style={styles.text}>
                     Nunca realize pagamentos antecipados sem confirmar a identidade do profissional. 
-                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Konekta.
+                    Recomendamos que a primeira entrevista seja feita em locais públicos ou através de referências verificadas no Kwick.
                 </Text>
+            </View>
+
+            <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Boas Práticas e Segurança</Text>
+                <Text style={styles.text}>
+                    Para garantir a máxima segurança e fortalecer o seu perfil na plataforma, siga estas recomendações:
+                </Text>
+                <View style={[styles.step, { marginTop: 12 }]}>
+                    <Text style={styles.stepNumber}>•</Text>
+                    <Text style={styles.stepText}><Text style={{fontWeight: '700'}}>Converse e feche contratos na plataforma:</Text> Mantenha o histórico de mensagens e o acordo do serviço no Kwick para sua segurança e suporte em caso de disputas.</Text>
+                </View>
+                <View style={styles.step}>
+                    <Text style={styles.stepNumber}>•</Text>
+                    <Text style={styles.stepText}><Text style={{fontWeight: '700'}}>Conclua os trabalhos e peça avaliações:</Text> Profissionais, incentivem os vossos clientes a voltarem à aplicação para terminar o contrato e deixar uma avaliação. Perfis com boas classificações ganham mais destaque e atraem mais clientes!</Text>
+                </View>
+                <View style={styles.step}>
+                    <Text style={styles.stepNumber}>•</Text>
+                    <Text style={styles.stepText}><Text style={{fontWeight: '700'}}>Faça pagamentos seguros:</Text> Recomendamos vivamente que os pagamentos sejam efetuados através da plataforma. Embora transferências rápidas externas sejam comuns, pagar no Kwick garante o registo da transação e maior segurança para ambas as partes.</Text>
+                </View>
             </View>
 
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>

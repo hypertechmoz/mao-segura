@@ -4,4 +4,4 @@ Disallow: /admin/
 Disallow: /settings/
 Disallow: /chat/
 
-Sitemap: https://konekta.com/sitemap.xml
+Sitemap: https://kwick.com/sitemap.xml

@@ -17,7 +17,7 @@ export default function ChooseType() {
         <ScreenSafeArea style={{ flex: 1 }}>
             <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={[styles.container, { paddingBottom: Spacing.xxl + insets.bottom }]}>
                 <View style={styles.header}>
-                    <Text style={styles.title}>Como deseja usar{'\n'}o Konekta?</Text>
+                    <Text style={styles.title}>Como deseja usar{'\n'}o Kwick?</Text>
                     <Text style={styles.subtitle}>Escolha o tipo de conta que melhor se adequa a si.</Text>
                 </View>
 

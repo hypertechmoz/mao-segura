@@ -20,6 +20,8 @@ import * as Location from 'expo-location';
 import { handleError } from '../../utils/errorHandler';
 import { MOCK_POSTS } from '../../utils/mockData';
 
+import CitySelector from '../../components/CitySelector';
+
 // === Shared Components ===
 function ProfileBanner({ completeness }) {
     const router = useRouter();
@@ -45,7 +47,6 @@ function ProfileBanner({ completeness }) {
     );
 }
 
-
 // === Web-Only: Left Sidebar ===
 function WebLeftSidebar({ user, completeness, router }) {
     if (!user) return <View style={webStyles.leftSidebar} />;
@@ -66,9 +67,8 @@ function WebLeftSidebar({ user, completeness, router }) {
                     <Text style={webStyles.profileRole}>
                         {user.role === 'WORKER' ? user.profession_category || 'Profissional' : 'Cliente'}
                     </Text>
-                    {user.city && (
-                        <Text style={webStyles.profileLocation}>{user.city}{(user.bairro || user.province) ? `, ${user.bairro || user.province}` : ''}</Text>
-                    )}
+                    
+                    <CitySelector isWeb={true} />
                 </View>
 
                 <View style={webStyles.profileDivider} />
@@ -114,7 +114,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds, u
     useEffect(() => {
         try {
             if (Platform.OS === 'web') {
-                const count = parseInt(localStorage.getItem('konekta_app_opens') || '0', 10);
+                const count = parseInt(localStorage.getItem('kwick_app_opens') || '0', 10);
                 setAppOpens(count);
                 // Increment logic is handled in _layout or main home mount
             }
@@ -259,7 +259,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds, u
                     <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={webStyles.footerLink}>Termos</Text></TouchableOpacity>
                 </View>
                 <Text style={webStyles.footerText}>A maior rede de contactos perto de si</Text>
-                <Text style={webStyles.footerSub}>© 2026 Konekta. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
+                <Text style={webStyles.footerSub}>© 2026 Kwick. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
             </View>
         </View>
     );
@@ -268,7 +268,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds, u
 // === Main Component ===
 export default function Home() {
     const router = useRouter();
-    const { user, isLoading: authLoading } = useAuthStore();
+    const { user, exploredCity, setExploredCity, isLoading: authLoading } = useAuthStore();
     const { unreadMessages, unreadNotifications } = useUnreadCount();
     const { requireAuth } = useAuthGuard();
     const [jobs, setJobs] = useState([]);
@@ -394,6 +394,8 @@ export default function Home() {
         try {
             const isWorker = !user || user?.role === 'WORKER';
 
+            const activeCity = exploredCity || userCity;
+
             // 1. Preparar todos os pedidos para rodar em paralelo
             const queries = [];
 
@@ -403,8 +405,10 @@ export default function Home() {
                     .select('*, employer:users!employer_id(id, name, city, province, is_verified, is_premium)')
                     .eq('status', 'ACTIVE');
 
-                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
-                    jobQuery = jobQuery.eq('province', user.province);
+                if (activeCity) {
+                    jobQuery = jobQuery.eq('city', activeCity);
+                } else if (userProvince) {
+                    jobQuery = jobQuery.eq('province', userProvince);
                 }
 
                 queries.push(jobQuery.order('created_at', { ascending: false }).range(from, to));
@@ -413,8 +417,10 @@ export default function Home() {
                     .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
                     .eq('role', 'WORKER');
 
-                if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
-                    workerQuery = workerQuery.eq('province', user.province);
+                if (activeCity) {
+                    workerQuery = workerQuery.eq('city', activeCity);
+                } else if (userProvince) {
+                    workerQuery = workerQuery.eq('province', userProvince);
                 }
 
                 queries.push(workerQuery.order('created_at', { ascending: false }).range(from, to));
@@ -426,9 +432,10 @@ export default function Home() {
                 .order('created_at', { ascending: false })
                 .range(from, to);
             
-            // Restrição Freemium: Apenas ver posts da mesma província
-            if ((user?.subscription_plan === 'FREE' || !user?.subscription_plan) && user?.province) {
-                postQuery = postQuery.eq('author.province', user.province);
+            if (activeCity) {
+                postQuery = postQuery.eq('author.city', activeCity);
+            } else if (userProvince) {
+                postQuery = postQuery.eq('author.province', userProvince);
             }
             
             queries.push(postQuery);
@@ -444,7 +451,11 @@ export default function Home() {
 
                 // [5] Utilizadores Sugeridos
                 let sQuery = supabase.from('users').select('*').limit(15);
-                if (user.province) sQuery = sQuery.eq('province', user.province);
+                if (activeCity) {
+                    sQuery = sQuery.eq('city', activeCity);
+                } else if (userProvince) {
+                    sQuery = sQuery.eq('province', userProvince);
+                }
                 queries.push(sQuery);
 
                 // [6 e 7] Dados de Perfil e Completude
@@ -579,12 +590,12 @@ export default function Home() {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [authLoading, uid, userRole, userProvince, userCity, page]);
+    }, [authLoading, uid, userRole, userProvince, userCity, exploredCity, page]);
 
     useEffect(() => {
         if (authLoading) return;
         loadData();
-    }, [authLoading, uid, userRole, userProvince, userCity]);
+    }, [authLoading, uid, userRole, userProvince, userCity, exploredCity]);
 
     // Location Tracking
     useEffect(() => {
@@ -617,11 +628,11 @@ export default function Home() {
 
             if (Platform.OS === 'web') {
                 try {
-                    const currentOpens = parseInt(localStorage.getItem('konekta_app_opens') || '0', 10);
-                    localStorage.setItem('konekta_app_opens', (currentOpens + 1).toString());
+                    const currentOpens = parseInt(localStorage.getItem('kwick_app_opens') || '0', 10);
+                    localStorage.setItem('kwick_app_opens', (currentOpens + 1).toString());
                 } catch(e) {}
             }
-        }, [authLoading, uid, userRole, userProvince, userCity])
+        }, [authLoading, uid, userRole, userProvince, userCity, exploredCity])
     );
 
     useFocusEffect(
@@ -813,8 +824,9 @@ export default function Home() {
                     }
                 ]}>
                     <View style={styles.headerContent}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Text style={styles.headerTitle}>Konekta</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                            <Text style={styles.headerTitle}>Kwick</Text>
+                            <CitySelector isWeb={false} />
                         </View>
                         <View style={styles.headerActions}>
                             <TouchableOpacity onPress={() => router.push('/services')} style={styles.headerIconBtn}>
@@ -823,8 +835,8 @@ export default function Home() {
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
                                 <Ionicons name="search-outline" size={24} color={Colors.primary} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.headerIconBtn}>
-                                <Ionicons name="chatbubble-ellipses-outline" size={24} color={Colors.primary} />
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/chat')} style={styles.headerIconBtn}>
+                                <Ionicons name="chatbubble-outline" size={24} color={Colors.primary} />
                                 {unreadMessages > 0 && (
                                     <View style={styles.headerBadge}>
                                         <Text style={styles.headerBadgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>

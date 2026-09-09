@@ -69,7 +69,7 @@ export default function Login() {
                         <Ionicons name="lock-closed" size={32} color={Colors.white} />
                     </View>
                     <Text style={styles.title}>Bem-vindo de volta</Text>
-                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Konekta.</Text>
+                    <Text style={styles.subtitle}>Inicie sessão para continuar a usar o Kwick.</Text>
                 </View>
 
                 <View style={styles.form}>

@@ -6,7 +6,7 @@ import { supabase } from '../../services/supabase';
 import { Colors, Spacing, Fonts } from '../../constants';
 import VerifiedBadge from '../../components/VerifiedBadge';
 import { Ionicons } from '@expo/vector-icons';
-import { sendKonektaTransactionalEmail } from '../../services/emailService';
+import { sendKwickTransactionalEmail } from '../../services/emailService';
 
 export default function AdminUsers() {
   const insets = useSafeAreaInsets();
@@ -167,10 +167,10 @@ export default function AdminUsers() {
       setUsers(prev => prev.map(u => u.id === id ? { ...u, email_confirmed: true } : u));
 
       if (wasNew !== false && email) {
-        await sendKonektaTransactionalEmail('email_verified', { email, name: userName });
+        await sendKwickTransactionalEmail('email_verified', { email, name: userName });
       }
 
-      showModal('Sucesso', 'Email confirmado com sucesso. O utilizador já pode aceder ao Konekta.', 'OK', false, null, true);
+      showModal('Sucesso', 'Email confirmado com sucesso. O utilizador já pode aceder ao Kwick.', 'OK', false, null, true);
     } catch (err) {
       const hint = err.message?.includes('function') || err.code === 'PGRST202'
         ? ' Execute o script SQL em supabase/migrations/20250807_admin_email_and_welcome.sql no Supabase.'
@@ -200,7 +200,7 @@ export default function AdminUsers() {
 
       setUsers(prev => prev.map(u => u.id === id ? { ...u, is_premium: !currentStatus } : u));
       
-      showModal('Sucesso', !currentStatus ? 'Konekt Mais ativado com sucesso.' : 'Konekt Mais removido com sucesso.', 'OK', false, null, true);
+      showModal('Sucesso', !currentStatus ? 'Kwick Mais ativado com sucesso.' : 'Kwick Mais removido com sucesso.', 'OK', false, null, true);
     } catch (err) {
       showModal('Erro', err.message, 'OK', true, null, true);
     }

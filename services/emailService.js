@@ -1,19 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
-import { KONEKTA_APP_URL } from '../utils/authRedirect';
+import { KWICK_APP_URL } from '../utils/authRedirect';
 
-const welcomeSentKey = (userId) => `konekta_welcome_email_${userId}`;
+const welcomeSentKey = (userId) => `kwick_welcome_email_${userId}`;
 
-export async function sendKonektaTransactionalEmail(type, { email, name }) {
+export async function sendKwickTransactionalEmail(type, { email, name }) {
     if (!email) return { ok: false, skipped: true };
 
     try {
-        const { data, error } = await supabase.functions.invoke('send-konekta-email', {
+        const { data, error } = await supabase.functions.invoke('send-kwick-email', {
             body: {
                 type,
                 email,
                 name: name || 'Utilizador',
-                appUrl: KONEKTA_APP_URL,
+                appUrl: KWICK_APP_URL,
             },
         });
 
@@ -39,7 +39,7 @@ export async function sendWelcomeEmailOnce(user) {
     const already = await AsyncStorage.getItem(key);
     if (already === '1') return;
 
-    const result = await sendKonektaTransactionalEmail('welcome', {
+    const result = await sendKwickTransactionalEmail('welcome', {
         email,
         name: user.name || user.firstName,
     });

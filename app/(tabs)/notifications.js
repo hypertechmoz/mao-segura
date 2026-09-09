@@ -11,9 +11,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptConnectionRequest, rejectConnectionRequest } from '../../utils/chatSecureHelper';
 import { BackHandler } from 'react-native';
 
-function NotificationItem({ id, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user, onRead }) {
+function NotificationItem({ id, type, icon, iconColor, title, description, time, isNew, route, requiresAction, reqId, senderId, user, onRead }) {
     const router = useRouter();
     const [isProcessing, setIsProcessing] = useState(false);
+    const [actionTaken, setActionTaken] = useState(false);
 
     const handlePress = async () => {
         try {
@@ -48,7 +49,7 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                 <Text style={nStyles.itemDesc} numberOfLines={2}>{description}</Text>
                 <Text style={nStyles.itemTime}>{formatRelativeTime(time)}</Text>
 
-                {requiresAction && (
+                {requiresAction && !actionTaken && (
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                         <TouchableOpacity disabled={isProcessing} onPress={async (e) => {
                             e.stopPropagation();
@@ -60,13 +61,25 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                                     if (jobId && senderId) {
                                         await supabase.from('applications').update({ status: 'ACCEPTED', updated_at: new Date().toISOString() }).eq('job_id', jobId).eq('worker_id', senderId);
                                         if (user) {
-                                            const { acceptConnectionRequest, sendConnectionRequest } = require('../../utils/chatSecureHelper');
-                                            try { await sendConnectionRequest(user, senderId, { type: 'CONNECTION' }); } catch(err){}
+                                            const { startOrGetConversation } = require('../../utils/chatHelper');
+                                            const conversationId = await startOrGetConversation(user, senderId, { last_message: 'Candidatura aceite! Pode iniciar a conversa.', job_id: jobId });
+                                            await supabase.from('chat_conversations').update({ is_authorized: true }).eq('id', conversationId);
+                                            await supabase.from('notifications').insert({
+                                                user_id: senderId,
+                                                sender_id: user.uid || user.id,
+                                                title: 'Candidatura Aceite! 🎉',
+                                                description: `A sua candidatura foi aceite. Já pode conversar com o empregador.`,
+                                                type: 'APPLICATION_ACCEPTED',
+                                                is_read: false,
+                                                route: `/chat/${conversationId}`
+                                            });
+                                            setActionTaken(true);
+                                            router.push(`/chat/${conversationId}`);
                                         }
-                                        Alert.alert("Sucesso", "Candidatura aceite!");
                                     }
                                 } else {
                                     const chatId = await acceptConnectionRequest(reqId, user, senderId);
+                                    setActionTaken(true);
                                     if (chatId) router.push(`/chat/${chatId}`);
                                 }
                             } catch(err) { console.error(err); } finally { setIsProcessing(false); }
@@ -82,10 +95,12 @@ function NotificationItem({ id, icon, iconColor, title, description, time, isNew
                                     const jobId = route ? route.replace('/job/', '') : null;
                                     if (jobId && senderId) {
                                         await supabase.from('applications').update({ status: 'REJECTED', updated_at: new Date().toISOString() }).eq('job_id', jobId).eq('worker_id', senderId);
+                                        setActionTaken(true);
                                         Alert.alert("Sucesso", "Candidatura recusada!");
                                     }
                                 } else {
                                     await rejectConnectionRequest(reqId);
+                                    setActionTaken(true);
                                 }
                             } catch(err) { console.error(err); } finally { setIsProcessing(false); }
                         }} style={[{ backgroundColor: Colors.borderLight, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 16 }, isProcessing && { opacity: 0.7 }]}>

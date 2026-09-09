@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Fonts, Spacing } from '../constants';
 
 export default function FloatingSupportButton({
-    whatsappMessage = 'Olá! Estou com dificuldades ao criar conta no Konekta e preciso de suporte.',
+    whatsappMessage = 'Olá! Estou com dificuldades ao criar conta no Kwick e preciso de suporte.',
     bottomOffset = 24,
 }) {
     const [modalVisible, setModalVisible] = useState(false);

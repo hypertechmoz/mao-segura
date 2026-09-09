@@ -96,7 +96,7 @@ export default function CreatePost() {
                 
                 if (!countErr && count >= limit) {
                     setLoading(false);
-                    setUpgradeMessage(`Atingiu o limite de publicações (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para partilhar a sua disponibilidade sem limites!`);
+                    setUpgradeMessage(`Atingiu o limite de publicações (${limit} por mês) do seu plano atual. Atualize para o Kwick Mais para partilhar a sua disponibilidade sem limites!`);
                     setShowUpgradeModal(true);
                     return;
                 }

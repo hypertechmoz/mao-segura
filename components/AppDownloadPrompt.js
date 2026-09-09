@@ -14,7 +14,7 @@ export default function AppDownloadPrompt() {
         // Only show if on web, screen is small, and not explicitly dismissed
         if (isWeb && isSmallScreen) {
             try {
-                const hasDismissed = window.localStorage.getItem('konekta_dismiss_app_prompt');
+                const hasDismissed = window.localStorage.getItem('kwick_dismiss_app_prompt');
                 if (!hasDismissed) {
                     setIsVisible(true);
                     Animated.timing(slideAnim, {
@@ -40,7 +40,7 @@ export default function AppDownloadPrompt() {
             setIsVisible(false);
             if (isWeb) {
                 try {
-                    window.localStorage.setItem('konekta_dismiss_app_prompt', 'true');
+                    window.localStorage.setItem('kwick_dismiss_app_prompt', 'true');
                 } catch(e) {}
             }
         });
@@ -48,7 +48,7 @@ export default function AppDownloadPrompt() {
 
     const handleDownload = () => {
         // Here you would redirect to the App Store or Play Store
-        // Example: window.location.href = 'https://play.google.com/store/apps/details?id=com.konekta.app';
+        // Example: window.location.href = 'https://play.google.com/store/apps/details?id=com.kwick.app';
         alert("Link para a loja de aplicações em breve!");
         handleDismiss();
     };
@@ -62,7 +62,7 @@ export default function AppDownloadPrompt() {
                     <Ionicons name="logo-google-playstore" size={24} color={Colors.white} />
                 </View>
                 <View style={styles.textContainer}>
-                    <Text style={styles.title}>Instalar a App KoneKta</Text>
+                    <Text style={styles.title}>Instalar a App Kwick</Text>
                     <Text style={styles.subtitle}>Experiência mais rápida e fluída no seu telemóvel.</Text>
                 </View>
                 <TouchableOpacity style={styles.button} onPress={handleDownload}>

@@ -30,7 +30,7 @@ export default function VerifySuccess() {
                 
                 <Text style={styles.title}>Email Verificado!</Text>
                 <Text style={styles.description}>
-                    A sua conta foi ativada com sucesso. Agora já pode explorar todos os serviços do Konekta.
+                    A sua conta foi ativada com sucesso. Agora já pode explorar todos os serviços do Kwick.
                 </Text>
 
                 <TouchableOpacity style={styles.button} onPress={handleContinue}>

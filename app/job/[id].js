@@ -149,7 +149,7 @@ export default function JobDetail() {
                         .gte('created_at', thirtyDaysAgo.toISOString());
                     
                     if (!countErr && count >= limit) {
-                        setUpgradeMessage(`Atingiu o limite de candidaturas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para candidatar-se sem limites!`);
+                        setUpgradeMessage(`Atingiu o limite de candidaturas (${limit} por mês) do seu plano atual. Atualize para o Kwick Mais para candidatar-se sem limites!`);
                         setShowUpgradeModal(true);
                         return;
                     }

@@ -25,7 +25,7 @@ export default function SubmitTestimonial() {
 
             const { error } = await supabase.from('testimonials').insert({
                 user_id: uid,
-                name: user.name || 'Utilizador Konekta',
+                name: user.name || 'Utilizador Kwick',
                 role: user.role,
                 text: text.trim(),
                 rating: rating,
@@ -79,7 +79,7 @@ export default function SubmitTestimonial() {
                     <Text style={[styles.label, { marginTop: Spacing.lg }]}>O seu depoimento</Text>
                     <TextInput
                         style={styles.input}
-                        placeholder="Escreva aqui como o Konekta mudou a sua vida ou o seu negócio..."
+                        placeholder="Escreva aqui como o Kwick mudou a sua vida ou o seu negócio..."
                         placeholderTextColor={Colors.textLight}
                         multiline
                         numberOfLines={6}

@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Colors } from '../constants';
 
 /**
- * Marca "Konekta" com suporte a:
+ * Marca "Kwick" com suporte a:
  * - texto empilhado (mobile/app icon feel)
  * - texto em linha (web)
  * - apenas ícone (telas pequenas)
@@ -22,7 +22,7 @@ export default function BrandWordmark({
     const v = stylesByVariant[variant] || stylesByVariant.default;
     const isInline = layout === 'inline';
     return (
-        <View style={[styles.wrap, isInline && styles.inlineWrap, style]} accessibilityRole="header" accessibilityLabel="Konekta">
+        <View style={[styles.wrap, isInline && styles.inlineWrap, style]} accessibilityRole="header" accessibilityLabel="Kwick">
             {showIcon && (
                 <View style={[styles.iconSquare, v.iconSquare]}>
                     <Text style={[styles.iconText, v.iconText]}>K</Text>
@@ -30,7 +30,7 @@ export default function BrandWordmark({
             )}
             {!iconOnly && (
                 <View style={isInline && styles.inlineTextWrap}>
-                    <Text style={[styles.line1, v.line1]}>Konekta</Text>
+                    <Text style={[styles.line1, v.line1]}>Kwick</Text>
                 </View>
             )}
         </View>

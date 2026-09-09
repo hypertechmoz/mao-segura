@@ -48,7 +48,7 @@ export default function ChooseProfile() {
             <ScrollView style={{ flex: 1, backgroundColor: Colors.background }} contentContainerStyle={[styles.container, { paddingBottom: Spacing.xxl + insets.bottom }]}>
                 <View style={styles.header}>
                     <Text style={styles.title}>Quase lá, {user?.name?.split(' ')[0] || 'Utilizador'}!</Text>
-                    <Text style={styles.subtitle}>Como deseja usar o Konekta?</Text>
+                    <Text style={styles.subtitle}>Como deseja usar o Kwick?</Text>
                 </View>
 
                 <View style={styles.cards}>

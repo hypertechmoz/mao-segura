@@ -1,5 +1,5 @@
-# Konekta Platform
-Konekta is a generalized service connection platform where clients (Employers) can find and hire professionals (Workers) across various categories such as Technology, Construction, Home Services, and more.
+# Kwick Platform
+Kwick is a generalized service connection platform where clients (Employers) can find and hire professionals (Workers) across various categories such as Technology, Construction, Home Services, and more.
 
 ## Architecture
 - Frontend: React Native with Expo Router (Web, iOS, Android)
@@ -14,4 +14,4 @@ Konekta is a generalized service connection platform where clients (Employers) c
 - Posts: Availability or community posts by WORKERs or EMPLOYERs.
 
 ## API Notes for AI Agents
-When interacting with Konekta models, note that it uses a generic taxonomy approach. Avoid hardcoding professions like "Empregada doméstica". Rely on the taxonomy fetched from `categories` and `specialties` tables.
+When interacting with Kwick models, note that it uses a generic taxonomy approach. Avoid hardcoding professions like "Empregada doméstica". Rely on the taxonomy fetched from `categories` and `specialties` tables.

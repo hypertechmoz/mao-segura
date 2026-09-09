@@ -13,20 +13,20 @@ export default function AboutUs() {
                     <Ionicons name="arrow-back" size={24} color={Colors.text} />
                 </TouchableOpacity>
                 <Text style={styles.title}>Sobre Nós</Text>
-                <Text style={styles.date}>A missão Konekta</Text>
+                <Text style={styles.date}>A missão Kwick</Text>
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>A Nossa História</Text>
                 <Text style={styles.text}>
-                    O Konekta é uma plataforma inovadora de emprego focada em aproximar clientes, empresas e profissionais qualificados. A nossa missão é facilitar a contratação de forma rápida e segura.
+                    O Kwick é uma plataforma inovadora de emprego focada em aproximar clientes, empresas e profissionais qualificados. A nossa missão é facilitar a contratação de forma rápida e segura.
                 </Text>
             </View>
 
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>A Nossa Visão e Valores</Text>
                 <Text style={styles.text}>
-                    Acreditamos que cada empresa e cada lar merece profissionais de excelência, e que cada trabalhador deve ter as suas competências valorizadas. Através da nossa tecnologia, o Konekta conecta oportunidades a talentos, promovendo o crescimento económico e a geração de emprego.
+                    Acreditamos que cada empresa e cada lar merece profissionais de excelência, e que cada trabalhador deve ter as suas competências valorizadas. Através da nossa tecnologia, o Kwick conecta oportunidades a talentos, promovendo o crescimento económico e a geração de emprego.
                 </Text>
             </View>
 

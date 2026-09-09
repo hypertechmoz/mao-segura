@@ -54,24 +54,25 @@ export default function TermsModal() {
                 <View style={styles.modalCard}>
                     <View style={styles.header}>
                         <Ionicons name="briefcase" size={36} color={Colors.primary} style={{ marginBottom: 12 }} />
-                        <Text style={styles.title}>Bem-vindo ao Konekta</Text>
+                        <Text style={styles.title}>Bem-vindo ao Kwick</Text>
                         <Text style={styles.subtitle}>Antes de entrar, por favor leia atentamente as nossas regras essenciais de convivência e termos de uso da comunidade.</Text>
                     </View>
 
                     <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={true}>
-                        <Text style={[styles.sectionTitle, { marginTop: 0 }]}>1. Informação Real e Honesta</Text>
                         <Text style={styles.text}>
-                            Para manter a comunidade fiável, é obrigatório o uso do seu nome real e o fornecimento de contatos válidos. A criação de perfis falsos resultará no banimento imediato da conta.
+                            Ao utilizar esta plataforma, concorda com as seguintes condições de uso:
                         </Text>
-                        
-                        <Text style={styles.sectionTitle}>2. Respeito mútuo</Text>
                         <Text style={styles.text}>
-                            A nossa plataforma baseia-se no respeito entre profissionais e clientes. Qualquer comportamento abusivo, assédio, violência ou linguagem inadequada será motivo de expulsão. Se suspeitar de uma burla, reporte de imediato.
+                            1. <Text style={styles.bold}>Uso da Plataforma:</Text> O utilizador compromete-se a usar a plataforma de forma ética e legal, respeitando os outros utilizadores.
                         </Text>
-
-                        <Text style={styles.sectionTitle}>3. Responsabilidade do Serviço</Text>
                         <Text style={styles.text}>
-                            O Konekta facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
+                            2. <Text style={styles.bold}>Privacidade e Dados:</Text> Recolhemos apenas os dados necessários para o funcionamento do serviço. As suas informações não serão vendidas a terceiros.
+                        </Text>
+                        <Text style={styles.text}>
+                            3. <Text style={styles.bold}>Comportamento:</Text> Não é tolerado assédio, linguagem ofensiva ou atividades ilegais. Contas que violem estas regras serão suspensas.
+                        </Text>
+                        <Text style={styles.text}>
+                            4. <Text style={styles.bold}>Isenção de Responsabilidade:</Text> O Kwick facilita a ligação e o primeiro contacto entre as partes. Todas as negociações de valores, duração e qualidade do serviço a prestar são da inteira responsabilidade do cliente e do trabalhador.
                         </Text>
 
                         <Text style={styles.sectionTitle}>4. Veracidade das Vagas</Text>

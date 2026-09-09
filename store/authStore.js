@@ -28,7 +28,9 @@ export const useAuthStore = create((set, get) => ({
     isLoading: true,
     isAuthActionLoading: false,
     isOnboarded: false,
+    exploredCity: null,
 
+    setExploredCity: (city) => set({ exploredCity: city }),
     setOnboarded: () => set({ isOnboarded: true }),
 
     initialize: async () => {
@@ -224,7 +226,7 @@ export const useAuthStore = create((set, get) => ({
 
             // Persist pending verification email so resend works without active session
             if (email) {
-                await AsyncStorage.setItem('konekta_pending_verify_email', email);
+                await AsyncStorage.setItem('kwick_pending_verify_email', email);
                 set({ pendingVerifyEmail: email });
             }
 
@@ -385,7 +387,7 @@ export const useAuthStore = create((set, get) => ({
 
     checkEmailVerification: async () => {
         try {
-            const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('konekta_pending_verify_email'));
+            const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('kwick_pending_verify_email'));
             const targetEmail = get().user?.email || pendingEmail;
 
             // 1. First check directly via RPC if the email has been confirmed in auth.users
@@ -428,7 +430,7 @@ export const useAuthStore = create((set, get) => ({
 
     resendVerificationEmail: async (overrideEmail = null) => {
         const storeUser = get().user;
-        const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('konekta_pending_verify_email'));
+        const pendingEmail = get().pendingVerifyEmail || (await AsyncStorage.getItem('kwick_pending_verify_email'));
         let email = overrideEmail || storeUser?.email || pendingEmail;
 
         if (!email) {

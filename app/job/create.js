@@ -192,7 +192,7 @@ export default function CreateJob() {
                 
                 if (!countErr && count >= limit) {
                     setLoading(false);
-                    setUpgradeMessage(`Atingiu o limite de publicações de vagas (${limit} por mês) do seu plano atual. Atualize para o Konekt Mais para publicar vagas ilimitadas e não perder talento!`);
+                    setUpgradeMessage(`Atingiu o limite de publicações de vagas (${limit} por mês) do seu plano atual. Atualize para o Kwick Mais para publicar vagas ilimitadas e não perder talento!`);
                     setShowUpgradeModal(true);
                     return;
                 }

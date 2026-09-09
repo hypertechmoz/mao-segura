@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BackHandler } from 'react-native';
 
 export default function Network() {
-    const { user } = useAuthStore();
+    const { user, exploredCity } = useAuthStore();
     const router = useRouter();
     const insets = useSafeAreaInsets();
     const [suggestions, setSuggestions] = useState([]);
@@ -50,9 +50,14 @@ export default function Network() {
             setConnectionsCount(connIds.size);
 
             let suggestionsQuery = supabase.from('users').select('*').neq('id', uid).limit(50);
-            if (!user?.is_premium && user?.province) {
+            
+            const activeCity = exploredCity || user?.city || user?.province;
+            if (activeCity) {
+                suggestionsQuery = suggestionsQuery.eq('city', activeCity);
+            } else if (user?.province) {
                 suggestionsQuery = suggestionsQuery.eq('province', user.province);
             }
+            
             const { data: suggestionsRaw } = await suggestionsQuery;
 
             const receivedIds = new Set(recData?.map(r => r.sender_id) || []);
@@ -70,7 +75,7 @@ export default function Network() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, [user]);
+    }, [user, exploredCity]);
 
     const onRefresh = React.useCallback(() => {
         setRefreshing(true);

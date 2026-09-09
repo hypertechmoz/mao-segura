@@ -89,7 +89,7 @@ export default function WebLandingOrSplash() {
                 <View style={styles.splashVidmateCenterBox}>
                     <View style={styles.splashCubeGlow} />
 
-                    {/* Floating Service & User Badges around Konekta */}
+                    {/* Floating Service & User Badges around Kwick */}
                     <View style={[styles.splashFloatBadge, styles.badgeTopLeft]}>
                         <Ionicons name="code-slash" size={16} color={Colors.primary} />
                         <Text style={styles.splashBadgeText}>TI & Dev</Text>
@@ -107,7 +107,7 @@ export default function WebLandingOrSplash() {
                         <Text style={styles.splashBadgeText}>Formação</Text>
                     </View>
 
-                    {/* Center Konekta Box */}
+                    {/* Center Kwick Box */}
                     <View style={styles.splashCenterCube}>
                         <BrandWordmark variant="default" layout="inline" showIcon />
                     </View>
@@ -167,7 +167,7 @@ export default function WebLandingOrSplash() {
                         <TouchableOpacity onPress={() => scrollToSection(testimonialsRef)}>
                             <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.testimonials')}</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => scrollToSection(aboutUsRef)}>
+                        <TouchableOpacity onPress={() => router.push('/info/about')}>
                             <Text style={[styles.navLinkCenter, { color: Colors.white }]}>{t('lander.about_us')}</Text>
                         </TouchableOpacity>
                     </View>
@@ -214,10 +214,10 @@ export default function WebLandingOrSplash() {
                         </View>
 
                         <Text style={[styles.heroTitleOver, isMobileWeb && { fontSize: 36, lineHeight: 44 }]}>
-                            {t('home.hero_title')}<Text style={{ color: Colors.primary }}>{t('lander.hero_title_accent')}.</Text>
+                            Encontre. Contrate. Trabalhe. <Text style={{ color: '#10B981' }}>Em um único aplicativo.</Text>
                         </Text>
                         <Text style={styles.heroSubtitleOver}>
-                            {t('home.hero_subtitle')}
+                            A maior plataforma de serviços de Moçambique.
                         </Text>
 
                         <View style={[styles.heroButtonsOver, isMobileWeb && { flexDirection: 'column', width: '100%' }]}>
@@ -235,193 +235,308 @@ export default function WebLandingOrSplash() {
                         </View>
                     </View>
                 </View>
-                {/* ====== SECTION 1B: FIND JOB (DARK) ====== */}
-                <View ref={howItWorksRef} style={styles.darkSectionFull}>
-                    <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
-                    <View style={styles.sectionDarkOverlay} />
-                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
-                        <View style={styles.sectionVisualCol}>
-                            <View style={styles.floatingPreviewCard}>
-                                <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
-                                <Text style={styles.previewTitle}>{t('lander.worker_card_title')}</Text>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>{t('tabs.jobs')}:</Text><Text style={styles.previewValue}>Limpeza / Babá</Text></View>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Maputo / Matola</Text></View>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Disponib.:</Text><Text style={styles.previewValue}>Imediata</Text></View>
-                                <View style={[styles.previewBadge, { backgroundColor: Colors.primary + '20' }]}><Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '800' }}>{t('lander.worker_card_verified')}</Text></View>
-                            </View>
+                {/* ====== SECTION: GRID OF FEATURES ====== */}
+                <View style={[styles.darkSectionFull, { backgroundColor: '#003B24', paddingVertical: 80 }]}>
+                    <Text style={[styles.sectionHeadingDark, { textAlign: 'center', fontSize: 40 }]}>
+                        Tudo o que <Text style={{ color: '#10B981' }}>precisa</Text>
+                    </Text>
+                    <Text style={[styles.sectionBodyDark, { textAlign: 'center', alignSelf: 'center', maxWidth: 600, color: '#A7F3D0', marginBottom: 60, fontSize: 18 }]}>
+                        Um único aplicativo para procurar, contratar profissionais e encontrar trabalho. Esqueça os problemas de confiança.
+                    </Text>
+                    
+                    <View style={[styles.featuresGrid, isMobileWeb && { gridTemplateColumns: '1fr' }]}>
+                        {/* CARD 1 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Ionicons name="star" size={24} color="#10B981" /></View>
+                            <Text style={styles.featureTitle}>Profissionais qualificados</Text>
+                            <Text style={styles.featureText}>Encontre trabalhadores verificados e experientes para qualquer tarefa doméstica e empresarial.</Text>
                         </View>
-                        <View style={styles.sectionTextCol}>
-                            <Text style={styles.sectionHeadingDark}>{t('lander.worker_heading')}</Text>
-                            <Text style={styles.sectionBodyDark}>{t('lander.worker_body_1')}</Text>
-                            <Text style={styles.sectionBodyDark}>{t('lander.worker_body_2')}</Text>
-                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
-                                <Text style={styles.btnSectionActionText}>{t('home.find_job')}</Text>
-                            </TouchableOpacity>
+                        {/* CARD 2 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Ionicons name="chatbubbles" size={24} color="#3B82F6" /></View>
+                            <Text style={styles.featureTitle}>Mensagens Integradas</Text>
+                            <Text style={styles.featureText}>Comunique-se diretamente com clientes e profissionais de forma rápida e segura no aplicativo.</Text>
+                        </View>
+                        {/* CARD 3 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Ionicons name="briefcase" size={24} color="#F59E0B" /></View>
+                            <Text style={styles.featureTitle}>Mais de 500 Serviços</Text>
+                            <Text style={styles.featureText}>Para clientes e profissionais: encontre desde jardinagem até TI num só lugar.</Text>
+                        </View>
+                        {/* CARD 4 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Ionicons name="shield-checkmark" size={24} color="#10B981" /></View>
+                            <Text style={styles.featureTitle}>Total segurança</Text>
+                            <Text style={styles.featureText}>Verificação de documentos, identidade e suporte garantido em caso de conflitos.</Text>
+                        </View>
+                        {/* CARD 5 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Text style={{ color: '#06B6D4', fontSize: 20, fontWeight: '900' }}>W</Text></View>
+                            <Text style={styles.featureTitle}>M-Pesa & e-Mola</Text>
+                            <Text style={styles.featureText}>Envie e receba dinheiro pelas plataformas mais populares, tudo integrado.</Text>
+                        </View>
+                        {/* CARD 6 */}
+                        <View style={styles.featureCard}>
+                            <View style={styles.featureIconWrap}><Ionicons name="star-half" size={24} color="#F59E0B" /></View>
+                            <Text style={styles.featureTitle}>Recomendações</Text>
+                            <Text style={styles.featureText}>Avaliações reais que dão confiança tanto a quem contrata como a quem trabalha.</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* ====== SECTION 1: POST JOB (DARK) ====== */}
-                <View style={styles.darkSectionFull}>
-                    <Image source={require('../assets/images/post_job_bg.png')} style={styles.sectionBgImage} resizeMode="cover" />
-                    <View style={styles.sectionDarkOverlay} />
+                {/* ====== SECTION 1: ENCONTRE TRABALHO ====== */}
+                <View style={[styles.darkSectionFull, { backgroundColor: '#0F172A' }]}>
                     <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobile]}>
                         <View style={styles.sectionTextCol}>
-                            <Text style={styles.sectionHeadingDark}>{t('lander.employer_heading')}</Text>
-                            <Text style={styles.sectionBodyDark}>{t('lander.employer_body_1')}</Text>
-                            <Text style={styles.sectionBodyDark}>{t('lander.employer_body_2')}</Text>
-                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push('/auth/register')}>
-                                <Text style={styles.btnSectionActionText}>{t('lander.employer_action')}</Text>
+                            <Text style={styles.sectionHeadingDark}>Encontre trabalho em minutos</Text>
+                            <Text style={styles.sectionBodyDark}>
+                                É simples e gratuito! Centenas de clientes estão à procura de profissionais qualificados. Crie o seu perfil, defina as suas habilidades e comece a receber propostas.
+                            </Text>
+                            <Text style={styles.sectionBodyDark}>
+                                Desde reparações elétricas a remodelações e TI, o Kwick ajuda-o a conseguir a oportunidade certa para si.
+                            </Text>
+                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'WORKER' } })}>
+                                <Text style={styles.btnSectionActionText}>Encontrar Trabalho</Text>
                             </TouchableOpacity>
                         </View>
                         <View style={styles.sectionVisualCol}>
-                            <View style={styles.floatingPreviewCard}>
-                                <View style={styles.previewHeader}><Text style={styles.previewDot}>●</Text><Text style={styles.previewDot}>●</Text></View>
-                                <Text style={styles.previewTitle}>{t('lander.employer_card_title')}</Text>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Tipo:</Text><Text style={styles.previewValue}>Cozinheira / Limpeza</Text></View>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Local:</Text><Text style={styles.previewValue}>Sommerschield, Maputo</Text></View>
-                                <View style={styles.previewRow}><Text style={styles.previewLabel}>Turnos:</Text><Text style={styles.previewValue}>Segunda a Sexta (Diarista)</Text></View>
-                                <View style={[styles.previewBadge, { backgroundColor: Colors.primary + '20' }]}><Text style={{ color: Colors.primary, fontSize: 10, fontWeight: '800' }}>{t('lander.employer_card_recommended')}</Text></View>
+                            <View style={[styles.floatingPreviewCard, { backgroundColor: '#1E293B' }]}>
+                                <View style={styles.previewHeader}>
+                                    <Text style={styles.previewDot}>●</Text>
+                                    <Text style={styles.previewDot}>●</Text>
+                                </View>
+                                <Text style={[styles.previewTitle, { color: Colors.white }]}>O seu Perfil Profissional</Text>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Vagas:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Eletricista / Canalizador</Text>
+                                </View>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Local:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Maputo / Matola</Text>
+                                </View>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Disponib.:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Imediata</Text>
+                                </View>
+                                <View style={[styles.previewBadge, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981' }}>PERFIL VERIFICADO</Text>
+                                </View>
                             </View>
                         </View>
                     </View>
                 </View>
 
-                {/* ====== SECTION 2: CHOOSE WORKERS (LIGHT) ====== */}
-                <View style={[styles.sectionLight, { paddingTop: isMobileWeb ? 60 : 100 }]}>
-                    <Image source={require('../assets/images/workers_grid_bg.png')} style={[styles.sectionBgImage, { opacity: 0.25 }]} resizeMode="cover" />
+                {/* ====== SECTION 2: PUBLIQUE A SUA VAGA ====== */}
+                <View style={[styles.darkSectionFull, { backgroundColor: '#1C3134' }]}>
                     <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
                         <View style={styles.sectionVisualCol}>
-                            <View style={[styles.profilesGrid, isMobileWeb && { alignItems: 'center', width: '100%' }]}>
-                                <View style={styles.miniProfileCard}>
-                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=1' }} style={styles.miniAvatar} />
-                                    <View style={styles.miniInfo}>
-                                        <Text style={styles.miniName}>Sara Vuma</Text>
-                                        <Text style={styles.miniRole}>Limpeza e Cozinha</Text>
-                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.9 (24 avaliações)</Text>
-                                    </View>
+                            <View style={[styles.floatingPreviewCard, { backgroundColor: '#1E293B' }]}>
+                                <View style={styles.previewHeader}>
+                                    <Text style={styles.previewDot}>●</Text>
+                                    <Text style={styles.previewDot}>●</Text>
                                 </View>
-                                <View style={[styles.miniProfileCard, !isMobileWeb && { marginLeft: 30 }]}>
-                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=2' }} style={styles.miniAvatar} />
-                                    <View style={styles.miniInfo}>
-                                        <Text style={styles.miniName}>José Carlos</Text>
-                                        <Text style={styles.miniRole}>Jardineiro Especialista</Text>
-                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 4.8 (19 avaliações)</Text>
-                                    </View>
+                                <Text style={[styles.previewTitle, { color: Colors.white }]}>Nova Vaga de Trabalho</Text>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Tipo:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Pintor / Pedreiro</Text>
                                 </View>
-                                <View style={styles.miniProfileCard}>
-                                    <Image source={{ uri: 'https://i.pravatar.cc/150?u=3' }} style={styles.miniAvatar} />
-                                    <View style={styles.miniInfo}>
-                                        <Text style={styles.miniName}>Ana Maria</Text>
-                                        <Text style={styles.miniRole}>Babá Certificada</Text>
-                                        <Text style={styles.miniRating}><Ionicons name="star" size={12} color="#F59E0B" /> 5.0 (42 avaliações)</Text>
-                                    </View>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Local:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Sommerschield, Maputo</Text>
+                                </View>
+                                <View style={styles.previewRow}>
+                                    <Text style={styles.previewLabel}>Turnos:</Text>
+                                    <Text style={[styles.previewValue, { color: '#F1F5F9' }]}>Projeto Completo</Text>
+                                </View>
+                                <View style={[styles.previewBadge, { backgroundColor: 'rgba(245, 158, 11, 0.1)' }]}>
+                                    <Text style={{ fontSize: 10, fontWeight: '800', color: '#F59E0B' }}>RECOMENDADO</Text>
                                 </View>
                             </View>
                         </View>
                         <View style={styles.sectionTextCol}>
-                            <Text style={styles.sectionHeadingLight}>{t('lander.choose_heading')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.choose_body_1')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.choose_body_2')}</Text>
-                            <TouchableOpacity style={styles.btnSectionOutline} onPress={() => router.push('/auth/login')}>
-                                <Text style={styles.btnSectionOutlineText}>{t('lander.choose_action')}</Text>
+                            <Text style={styles.sectionHeadingDark}>Publique a sua vaga em minutos</Text>
+                            <Text style={styles.sectionBodyDark}>
+                                É simples e gratuito! Milhares de profissionais qualificados estão à espera de oportunidades. Descreva as suas necessidades, defina o seu orçamento e comece a receber propostas em poucos minutos.
+                            </Text>
+                            <Text style={styles.sectionBodyDark}>
+                                Desde limpezas profundas a instalações técnicas, o Kwick ajuda-o a encontrar a pessoa certa para o seu projeto.
+                            </Text>
+                            <TouchableOpacity style={styles.btnSectionAction} onPress={() => router.push({ pathname: '/auth/register', params: { role: 'EMPLOYER' } })}>
+                                <Text style={styles.btnSectionActionText}>Publicar Vaga Grátis</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
 
-                {/* ====== SECTION 4: SUPPORT (LIGHT) ====== */}
-                <View ref={supportSectionRef} style={styles.sectionLight}>
-                    <Image source={require('../assets/images/support_bg.png')} style={[styles.sectionBgImage, { opacity: 0.1 }]} resizeMode="cover" />
-                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
+                {/* ====== SECTION 3: ESCOLHA O PROFISSIONAL E SUPORTE ====== */}
+                <View style={styles.sectionLight}>
+                    <View style={[styles.sectionContentRow, isMobileWeb && styles.columnMobile, { marginBottom: 120 }]}>
                         <View style={styles.sectionVisualCol}>
-                            <View style={styles.supportCard}>
-                                <Ionicons name="headset" size={48} color={Colors.primary} style={{ marginBottom: 20 }} />
-                                <Text style={styles.supportCardTitle}>{t('lander.support_card_title')}</Text>
-                                <Text style={styles.supportCardText}>{t('lander.support_card_text')}</Text>
+                            <View style={styles.profilesGrid}>
+                                <View style={styles.miniProfileCard}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: '#DBEAFE' }]}><Ionicons name="person" size={24} color="#3B82F6" /></View>
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>João Silva</Text>
+                                        <Text style={styles.miniRole}>Eletricista</Text>
+                                        <Text style={styles.miniRating}>★ 4.9 (24 avaliações)</Text>
+                                    </View>
+                                </View>
+                                <View style={[styles.miniProfileCard, { marginLeft: 20 }]}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: '#FCE7F3' }]}><Ionicons name="person" size={24} color="#EC4899" /></View>
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>Ana Rita</Text>
+                                        <Text style={styles.miniRole}>Designer Gráfica</Text>
+                                        <Text style={styles.miniRating}>★ 4.8 (19 avaliações)</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.miniProfileCard}>
+                                    <View style={[styles.miniAvatar, { backgroundColor: '#FEF3C7' }]}><Ionicons name="person" size={24} color="#F59E0B" /></View>
+                                    <View style={styles.miniInfo}>
+                                        <Text style={styles.miniName}>Marcos Paulo</Text>
+                                        <Text style={styles.miniRole}>Pedreiro Especialista</Text>
+                                        <Text style={styles.miniRating}>★ 5.0 (42 avaliações)</Text>
+                                    </View>
+                                </View>
                             </View>
                         </View>
                         <View style={styles.sectionTextCol}>
-                            <Text style={styles.sectionHeadingLight}>{t('lander.support_heading')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.support_body_1')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.support_body_2')}</Text>
+                            <Text style={styles.sectionHeadingLight}>Escolha o profissional ideal</Text>
+                            <Text style={styles.sectionBodyLight}>
+                                Nenhum trabalho é demasiado pequeno. Temos milhares de profissionais para serviços de qualquer dimensão, em dezenas de especialidades.
+                            </Text>
+                            <Text style={styles.sectionBodyLight}>
+                                Consulte perfis detalhados, verifique referências reais e analise o histórico de trabalhos concluídos antes de tomar uma decisão.
+                            </Text>
                             <TouchableOpacity style={[styles.btnSectionOutline, { borderColor: Colors.primary }]} onPress={() => router.push('/auth/login')}>
-                                <Text style={[styles.btnSectionOutlineText, { color: Colors.primary }]}>{t('lander.support_action')}</Text>
+                                <Text style={[styles.btnSectionOutlineText, { color: Colors.primary }]}>Ver Profissionais Verificados</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
-                </View>
 
-                {/* ====== SECTION 5: TESTIMONIALS (DARK) ====== */}
-                <View ref={testimonialsRef} style={styles.darkSectionFull}>
-                    <View style={[styles.sectionContentRow, { flexDirection: 'column', gap: 40 }]}>
-                        <Text style={[styles.sectionHeadingDark, { textAlign: 'center' }]}>{t('lander.user_feedback_title')}</Text>
-                        <View style={[styles.grid, isMobileWeb && styles.gridMobile]}>
-                            {!loadingTestimonials && dynamicTestimonials.length > 0 ? (
-                                dynamicTestimonials.map((item) => (
-                                    <View key={item.id} style={styles.testimoCard}>
-                                        <View style={styles.testimoHeader}>
-                                            <View style={styles.testimoAvatar}>
-                                                {item.user_photo ? (
-                                                    <Image source={{ uri: item.user_photo }} style={{ width: 44, height: 44, borderRadius: 22 }} />
-                                                ) : (
-                                                    <Text style={{ fontWeight: '700' }}>{item.name?.[0]}</Text>
-                                                )}
-                                            </View>
-                                            <View>
-                                                <Text style={styles.testimoName}>{item.name}</Text>
-                                                <Text style={styles.testimoRole}>{item.role === 'WORKER' ? t('role_worker') : t('role_employer')}</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.testimoQuote}>"{item.text}"</Text>
-                                        <Text style={styles.stars}>
-                                            {'★'.repeat(item.rating)}{'☆'.repeat(5 - item.rating)}
-                                        </Text>
-                                    </View>
-                                ))
-                            ) : (
-                                <>
-                                    <View style={styles.testimoCard}>
-                                        <View style={styles.testimoHeader}>
-                                            <View style={styles.testimoAvatar}><Text style={{ fontWeight: '700' }}>ES</Text></View>
-                                            <View>
-                                                <Text style={styles.testimoName}>Elena Sitoe</Text>
-                                                <Text style={styles.testimoRole}>Empregadora - Maputo</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.testimoQuote}>"Consegui uma babá maravilhosa em menos de 2 dias. Ver o perfil verificado e as avaliações deu-me confiança para decidir rápido."</Text>
-                                        <Text style={styles.stars}>★★★★★</Text>
-                                    </View>
-                                    <View style={styles.testimoCard}>
-                                        <View style={styles.testimoHeader}>
-                                            <View style={styles.testimoAvatar}><Text style={{ fontWeight: '700' }}>AL</Text></View>
-                                            <View>
-                                                <Text style={styles.testimoName}>Armando Langa</Text>
-                                                <Text style={styles.testimoRole}>Trabalhador - Matola</Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.testimoQuote}>"Desde que entrei no Konekta, a minha agenda de jardinagem está sempre cheia. Recomendo a todos."</Text>
-                                        <Text style={styles.stars}>★★★★★</Text>
-                                    </View>
-                                </>
-                            )}
+                    <View ref={supportSectionRef} style={[styles.sectionContentRow, isMobileWeb && styles.columnMobileReverse]}>
+                        <View style={styles.sectionTextCol}>
+                            <Text style={styles.sectionHeadingLight}>Estamos aqui para ajudar</Text>
+                            <Text style={styles.sectionBodyLight}>
+                                O seu tempo é precioso. Deixe que a nossa equipa de mediadores e especialistas o ajude a poupar tempo na seleção de talentos.
+                            </Text>
+                            <Text style={styles.sectionBodyLight}>
+                                Desde a verificação de documentos até ao apoio em caso de conflitos, o Kwick é o seu parceiro para ligar oferta e procura de trabalho.
+                            </Text>
+                            <TouchableOpacity style={[styles.btnSectionOutline, { borderColor: '#111' }]} onPress={() => router.push('/info/help')}>
+                                <Text style={[styles.btnSectionOutlineText, { color: '#111' }]}>Falar com Suporte</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.sectionVisualCol}>
+                            <View style={[styles.supportCard, { backgroundColor: '#1E293B' }]}>
+                                <Ionicons name="headset" size={48} color="#10B981" style={{ marginBottom: 20 }} />
+                                <Text style={[styles.supportCardTitle, { color: Colors.white }]}>Suporte Local 24/7</Text>
+                                <Text style={[styles.supportCardText, { color: '#9CA3AF' }]}>
+                                    Estamos aqui para ajudar com qualquer dúvida ou mediação necessária.
+                                </Text>
+                            </View>
                         </View>
                     </View>
                 </View>
 
-                {/* ====== SECTION 6: ABOUT US (LIGHT) ====== */}
-                <View ref={aboutUsRef} style={[styles.sectionLight, { backgroundColor: '#F3F4F6' }]}>
-                    <View style={styles.sectionContentRow}>
-                        <View style={styles.sectionTextCol}>
-                            <Text style={styles.sectionHeadingLight}>{t('lander.about_heading')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.about_body_1')}</Text>
-                            <Text style={styles.sectionBodyLight}>{t('lander.about_body_2')}</Text>
+                {/* ====== SECTION: COMO FUNCIONA ====== */}
+                <View ref={howItWorksRef} style={[styles.darkSectionFull, { backgroundColor: '#0F2C1F', paddingVertical: 100 }]}>
+                    <Text style={[styles.sectionHeadingDark, { textAlign: 'center', fontSize: 40 }]}>
+                        Como <Text style={{ color: '#F97316' }}>funciona</Text> ?
+                    </Text>
+                    <Text style={[styles.sectionBodyDark, { textAlign: 'center', alignSelf: 'center', maxWidth: 600, color: '#A7F3D0', marginBottom: 80, fontSize: 18 }]}>
+                        Em 3 passos simples, você estará pronto para usar o Kwick.
+                    </Text>
+
+                    <View style={[styles.stepsContainer, isMobileWeb && { flexDirection: 'column', gap: 60 }]}>
+                        {/* Step 1 */}
+                        <View style={styles.stepItem}>
+                            <View style={styles.stepCircle}><Text style={styles.stepNumber}>1</Text></View>
+                            <Ionicons name="phone-portrait-outline" size={24} color="#A7F3D0" style={{ marginBottom: 16 }} />
+                            <Text style={styles.stepTitle}>Inscrever-se</Text>
+                            <Text style={styles.stepText}>Crie sua conta em 30 segundos e obtenha seu perfil verificado.</Text>
                         </View>
-                        {!isMobileWeb && (
-                            <View style={styles.sectionVisualCol}>
-                                <BrandWordmark variant="muted" />
-                            </View>
-                        )}
+                        {/* Step 2 */}
+                        <View style={styles.stepItem}>
+                            <View style={[styles.stepCircle, { backgroundColor: '#84CC16', borderColor: 'rgba(132, 204, 22, 0.2)', borderWidth: 8 }]}><Text style={styles.stepNumberActive}>2</Text></View>
+                            <Ionicons name="search-outline" size={24} color="#A7F3D0" style={{ marginBottom: 16 }} />
+                            <Text style={styles.stepTitle}>Explorar Serviços e Vagas</Text>
+                            <Text style={styles.stepText}>Encontre profissionais qualificados ou publique vagas e serviços num único clique.</Text>
+                        </View>
+                        {/* Step 3 */}
+                        <View style={styles.stepItem}>
+                            <View style={styles.stepCircle}><Text style={styles.stepNumber}>3</Text></View>
+                            <Ionicons name="briefcase-outline" size={24} color="#A7F3D0" style={{ marginBottom: 16 }} />
+                            <Text style={styles.stepTitle}>Contratar e Avaliar</Text>
+                            <Text style={styles.stepText}>Converse com clientes e profissionais, contrate com segurança e dê recomendações.</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* ====== SECTION: TESTIMONIALS ====== */}
+                <View ref={testimonialsRef} style={[styles.sectionLight, { backgroundColor: '#FAFAFA' }]}>
+                    <Text style={[styles.sectionHeadingLight, { textAlign: 'center', marginBottom: 60 }]}>
+                        O que dizem os nossos utilizadores
+                    </Text>
+                    {loadingTestimonials ? (
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                    ) : dynamicTestimonials.length > 0 ? (
+                        <View style={[styles.grid, isMobileWeb && styles.gridMobile, { flexWrap: 'wrap', justifyContent: 'center', maxWidth: 1200, alignSelf: 'center' }]}>
+                            {dynamicTestimonials.slice(0, 3).map((item, idx) => (
+                                <View key={idx} style={[styles.testimoCard, { minWidth: 300, maxWidth: 350 }]}>
+                                    <View style={styles.testimoHeader}>
+                                        <View style={styles.testimoAvatar}>
+                                            <Ionicons name="person" size={20} color="#9CA3AF" />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.testimoName}>{item.author?.name || 'Utilizador Kwick'}</Text>
+                                            <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                                                {[...Array(5)].map((_, i) => (
+                                                    <Ionicons key={i} name="star" size={14} color={i < (item.rating || 5) ? '#F59E0B' : '#E5E7EB'} />
+                                                ))}
+                                            </View>
+                                        </View>
+                                    </View>
+                                    <Text style={styles.testimoQuote}>"{item.content}"</Text>
+                                </View>
+                            ))}
+                        </View>
+                    ) : (
+                        <Text style={[styles.sectionBodyLight, { textAlign: 'center' }]}>Ainda não há depoimentos publicados.</Text>
+                    )}
+                </View>
+
+                {/* ====== SECTION: DOWNLOAD ====== */}
+                <View style={[styles.sectionLight, { backgroundColor: '#FAFAFA' }]}>
+                    <View style={styles.downloadCard}>
+                        <Text style={styles.downloadTitle}>
+                            Junte-se ao <Text style={{ color: '#84CC16' }}>Kwick</Text> agora
+                        </Text>
+                        <Text style={styles.downloadText}>
+                            Baixe o aplicativo gratuitamente e comece a procurar serviços, contratar profissionais e trabalhar hoje mesmo.
+                        </Text>
+                        <View style={[styles.downloadButtons, isMobileWeb && { flexDirection: 'column' }]}>
+                            <TouchableOpacity style={styles.downloadBtn}>
+                                <Ionicons name="logo-google-playstore" size={24} color="#FFF" />
+                                <View>
+                                    <Text style={styles.downloadBtnLabel}>Adquira já!</Text>
+                                    <Text style={styles.downloadBtnValue}>Google Play</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.downloadBtn}>
+                                <Ionicons name="logo-apple" size={24} color="#FFF" />
+                                <View>
+                                    <Text style={styles.downloadBtnLabel}>Em breve no</Text>
+                                    <Text style={styles.downloadBtnValue}>iPhone</Text>
+                                </View>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.downloadBtn} onPress={() => router.push('/auth/login')}>
+                                <Ionicons name="globe-outline" size={24} color="#FFF" />
+                                <View>
+                                    <Text style={styles.downloadBtnLabel}>Usar em</Text>
+                                    <Text style={styles.downloadBtnValue}>Aplicativo Web</Text>
+                                </View>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
 
@@ -442,7 +557,7 @@ export default function WebLandingOrSplash() {
                         <View style={styles.footerColLinks}>
                             <Text style={styles.footerTitle}>{t('lander.footer_company')}</Text>
                             <TouchableOpacity onPress={() => router.push('/info/about')}><Text style={styles.footerLink}>{t('lander.footer_about')}</Text></TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_careers')}</Text></TouchableOpacity>
+                            <TouchableOpacity onPress={() => router.push('/info/careers')}><Text style={styles.footerLink}>{t('lander.footer_careers')}</Text></TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/info/coming-soon')}><Text style={styles.footerLink}>{t('lander.footer_press')}</Text></TouchableOpacity>
                         </View>
                         <View style={styles.footerColLinks}>
@@ -453,7 +568,7 @@ export default function WebLandingOrSplash() {
                         </View>
                     </View>
                     <View style={styles.footerBottom}>
-                        <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Konekta. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
+                        <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Kwick. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
                     </View>
                 </View>
 
@@ -504,11 +619,11 @@ const styles = StyleSheet.create({
 
     heroButtonsOver: { flexDirection: 'row', gap: 16, marginBottom: 40 },
     btnHeroPrimary: {
-        backgroundColor: Colors.primary,
+        backgroundColor: '#10B981', // bright green for better visibility
         paddingHorizontal: 28, paddingVertical: 14, borderRadius: 8,
         ...Platform.select({
             web: { boxShadow: '0 4px 10px rgba(0,0,0,0.3)' },
-            ios: { shadowColor: Colors.primary, shadowOpacity: 0.3, shadowRadius: 10 },
+            ios: { shadowColor: '#10B981', shadowOpacity: 0.3, shadowRadius: 10 },
             android: { elevation: 5 }
         })
     },
@@ -602,6 +717,38 @@ const styles = StyleSheet.create({
     sectionDivider: { width: 60, height: 4, backgroundColor: Colors.primary, marginBottom: 20, borderRadius: 2 },
     sectionSubtitle: { fontSize: 15, color: Colors.textSecondary, textAlign: 'center', maxWidth: 600, marginBottom: 60, lineHeight: 22 },
 
+    featuresGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 24, width: '100%', maxWidth: 1200, alignSelf: 'center' },
+    featureCard: {
+        backgroundColor: '#0F2C1F', 
+        padding: 32,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: '#194A34',
+        alignItems: 'flex-start',
+        width: Platform.OS === 'web' ? 'calc(33.333% - 16px)' : '100%',
+        minWidth: 280,
+    },
+    featureIconWrap: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    featureTitle: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: Colors.white,
+        marginBottom: 12,
+    },
+    featureText: {
+        fontSize: 15,
+        color: '#A7F3D0',
+        lineHeight: 24,
+    },
+
     grid: { flexDirection: 'row', gap: 24, width: '100%', justifyContent: 'center' },
     gridMobile: { flexDirection: 'column' },
 
@@ -618,6 +765,25 @@ const styles = StyleSheet.create({
     cardIcon: { fontSize: 24 },
     cardTitle: { fontSize: 18, fontWeight: '700', color: Colors.text, marginBottom: 12 },
     cardText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 22 },
+
+    // Steps (Como funciona)
+    stepsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', maxWidth: 1000, width: '100%', alignSelf: 'center', marginTop: 40 },
+    stepItem: { flex: 1, alignItems: 'center', paddingHorizontal: 16 },
+    stepCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, zIndex: 2 },
+    stepNumber: { fontSize: 24, fontWeight: '800', color: '#64748B' },
+    stepNumberActive: { fontSize: 24, fontWeight: '900', color: '#0F2C1F' },
+    stepTitle: { fontSize: 20, fontWeight: '700', color: Colors.white, marginBottom: 12, textAlign: 'center' },
+    stepText: { fontSize: 15, color: '#A7F3D0', textAlign: 'center', lineHeight: 24 },
+    stepLine: { position: 'absolute', top: 32, left: '16%', right: '16%', height: 2, backgroundColor: 'rgba(255,255,255,0.05)', zIndex: 1 },
+
+    // Download Section
+    downloadCard: { backgroundColor: '#003B24', padding: 60, borderRadius: 32, alignItems: 'center', maxWidth: 1000, width: '100%', alignSelf: 'center' },
+    downloadTitle: { fontSize: 40, fontWeight: '900', color: Colors.white, marginBottom: 24, textAlign: 'center' },
+    downloadText: { fontSize: 18, color: '#A7F3D0', textAlign: 'center', maxWidth: 600, marginBottom: 48, lineHeight: 28 },
+    downloadButtons: { flexDirection: 'row', gap: 16, justifyContent: 'center' },
+    downloadBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, gap: 12 },
+    downloadBtnLabel: { fontSize: 11, color: '#A7F3D0', textTransform: 'uppercase', fontWeight: '700' },
+    downloadBtnValue: { fontSize: 18, color: Colors.white, fontWeight: '800' },
 
     // Security Section (Old - being replaced but keeping names if referenced)
     securitySection: { paddingVertical: 60, paddingHorizontal: '5%', alignItems: 'center', backgroundColor: '#FAFAFA' },
@@ -660,7 +826,7 @@ const styles = StyleSheet.create({
     stars: { fontSize: 12 },
 
     // Footer
-    footer: { backgroundColor: '#111827', paddingTop: 60, paddingBottom: 24 },
+    footer: { backgroundColor: '#003B24', paddingTop: 60, paddingBottom: 24 },
     footerGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: '8%', maxWidth: 1200, alignSelf: 'center', width: '100%', marginBottom: 60, gap: 40 },
     footerCol: { flex: 2, minWidth: 250 },
     footerColLinks: { flex: 1, minWidth: 120 },

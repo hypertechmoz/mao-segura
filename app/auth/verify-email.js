@@ -25,7 +25,7 @@ export default function VerifyEmail() {
     useEffect(() => {
         const resolveEmail = async () => {
             if (!emailAddress) {
-                const stored = await AsyncStorage.getItem('konekta_pending_verify_email');
+                const stored = await AsyncStorage.getItem('kwick_pending_verify_email');
                 if (stored) setEmailAddress(stored);
                 else if (user?.email) setEmailAddress(user.email);
             }
@@ -102,7 +102,7 @@ export default function VerifyEmail() {
     };
 
     const openEmailSupport = () => {
-        const message = `Olá! Não recebi o email de verificação da minha conta Konekta (${emailAddress || 'sem email'}). Podem ajudar?`;
+        const message = `Olá! Não recebi o email de verificação da minha conta Kwick (${emailAddress || 'sem email'}). Podem ajudar?`;
         Linking.openURL(`https://wa.me/258843623989?text=${encodeURIComponent(message)}`).catch(() => {});
     };
 
@@ -162,7 +162,7 @@ export default function VerifyEmail() {
             </View>
             <FloatingSupportButton
                 bottomOffset={Math.max(insets.bottom, 16) + 16}
-                whatsappMessage={`Olá! Não recebi o email de verificação da minha conta Konekta (${user?.email || 'sem email'}). Podem ajudar?`}
+                whatsappMessage={`Olá! Não recebi o email de verificação da minha conta Kwick (${user?.email || 'sem email'}). Podem ajudar?`}
             />
         </ScreenSafeArea>
     );

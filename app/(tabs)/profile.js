@@ -308,7 +308,7 @@ export default function Profile() {
                             <View style={[styles.badge, styles.premiumBadge]}>
                                 <Ionicons name="star" size={14} color={Colors.primary} style={{ marginRight: 4 }} />
                                 <Text style={[styles.badgeText, styles.premiumText]}>
-                                    {p?.subscription_plan === 'MAX' ? 'Konekta Max' : p?.subscription_plan === 'PLUS' ? 'Konekta Plus' : t('common.premium')}
+                                    {p?.subscription_plan === 'MAX' ? 'Kwick Max' : p?.subscription_plan === 'PLUS' ? 'Kwick Plus' : t('common.premium')}
                                 </Text>
                             </View>
                         )}
@@ -539,7 +539,7 @@ export default function Profile() {
                         </TouchableOpacity>
 
                         <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: Spacing.xs }}>
-                            <Text style={{ fontSize: 12, color: Colors.textLight }}>Konekta v1.0.1</Text>
+                            <Text style={{ fontSize: 12, color: Colors.textLight }}>Kwick v1.0.1</Text>
                             <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ fontWeight: '700', color: Colors.primary }}>Studio do Scott</Text></Text>
                         </View>
                     </View>

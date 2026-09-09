@@ -93,9 +93,9 @@ export default function RootLayout() {
     return (
         <SafeAreaProvider>
             <Head>
-                <title>Konekta | A sua plataforma de serviços e profissionais</title>
-                <meta name="description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design. Rápido, fácil e seguro no Konekta." />
-                <meta property="og:title" content="Konekta | A sua plataforma de serviços e profissionais" />
+                <title>Kwick | A sua plataforma de serviços e profissionais</title>
+                <meta name="description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design. Rápido, fácil e seguro no Kwick." />
+                <meta property="og:title" content="Kwick | A sua plataforma de serviços e profissionais" />
                 <meta property="og:description" content="Encontre os melhores profissionais para qualquer serviço, desde limpeza e construção até tecnologia e design." />
                 <meta property="og:type" content="website" />
                 <style>{`

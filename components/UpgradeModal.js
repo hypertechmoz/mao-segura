@@ -26,11 +26,11 @@ export default function UpgradeModal({ visible, onClose, title, message }) {
                     
                     <Text style={styles.title}>{title || 'Limite Atingido'}</Text>
                     <Text style={styles.message}>
-                        {message || 'Você atingiu o limite do seu plano atual. Atualize para o Konekt Mais para ter mais vantagens e remover limites!'}
+                        {message || 'Você atingiu o limite do seu plano atual. Atualize para o Kwick Mais para ter mais vantagens e remover limites!'}
                     </Text>
                     
                     <TouchableOpacity style={styles.upgradeBtn} onPress={handleUpgrade}>
-                        <Text style={styles.upgradeBtnText}>Conhecer o Konekt Mais</Text>
+                        <Text style={styles.upgradeBtnText}>Conhecer o Kwick Mais</Text>
                         <Ionicons name="arrow-forward" size={20} color={Colors.white} />
                     </TouchableOpacity>
                 </View>
