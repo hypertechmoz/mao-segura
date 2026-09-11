@@ -54,7 +54,8 @@ export default function Search() {
                     // We'll search users and also their worker_profiles
                     query = supabase.from('users').select('*, workerProfile:worker_profiles!inner(*)').eq('role', 'WORKER');
                     if (activeCity) {
-                        query = query.eq('city', activeCity);
+                        const safeCity = activeCity.replace(/"/g, '""');
+                        query = query.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
                     } else if (user?.province) {
                         query = query.eq('province', user.province);
                     }
@@ -63,7 +64,8 @@ export default function Search() {
                     // Search jobs
                     query = supabase.from('jobs').select('*, employer:users!employer_id(*)').eq('status', 'ACTIVE');
                     if (activeCity) {
-                        query = query.eq('city', activeCity);
+                        const safeCity = activeCity.replace(/"/g, '""');
+                        query = query.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
                     } else if (user?.province) {
                         query = query.eq('province', user.province);
                     }
@@ -77,7 +79,8 @@ export default function Search() {
             } else {
                 query = supabase.from('posts').select('*, user:users!inner(*)');
                 if (activeCity) {
-                    query = query.eq('user.city', activeCity);
+                    const safeCity = activeCity.replace(/"/g, '""');
+                    query = query.or(`city.eq."${safeCity}",province.eq."${safeCity}"`, { foreignTable: 'user' });
                 } else if (user?.province) {
                     query = query.eq('user.province', user.province);
                 }

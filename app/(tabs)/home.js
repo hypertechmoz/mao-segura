@@ -259,7 +259,7 @@ function WebRightSidebar({ router, suggestedUsers, handleContact, actionedIds, u
                     <TouchableOpacity onPress={() => router.push('/info/terms')}><Text style={webStyles.footerLink}>Termos</Text></TouchableOpacity>
                 </View>
                 <Text style={webStyles.footerText}>A maior rede de contactos perto de si</Text>
-                <Text style={webStyles.footerSub}>© 2026 Kwick. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
+                <Text style={webStyles.footerSub}>© {new Date().getFullYear()} Kwick. Todos os direitos reservados à <Text style={{ color: Colors.primary }}>Morstar</Text>.</Text>
             </View>
         </View>
     );
@@ -406,7 +406,8 @@ export default function Home() {
                     .eq('status', 'ACTIVE');
 
                 if (activeCity) {
-                    jobQuery = jobQuery.eq('city', activeCity);
+                    const safeCity = activeCity.replace(/"/g, '""');
+                    jobQuery = jobQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
                 } else if (userProvince) {
                     jobQuery = jobQuery.eq('province', userProvince);
                 }
@@ -418,7 +419,8 @@ export default function Home() {
                     .eq('role', 'WORKER');
 
                 if (activeCity) {
-                    workerQuery = workerQuery.eq('city', activeCity);
+                    const safeCity = activeCity.replace(/"/g, '""');
+                    workerQuery = workerQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
                 } else if (userProvince) {
                     workerQuery = workerQuery.eq('province', userProvince);
                 }
@@ -433,7 +435,8 @@ export default function Home() {
                 .range(from, to);
             
             if (activeCity) {
-                postQuery = postQuery.eq('author.city', activeCity);
+                const safeCity = activeCity.replace(/"/g, '""');
+                postQuery = postQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`, { foreignTable: 'author' });
             } else if (userProvince) {
                 postQuery = postQuery.eq('author.province', userProvince);
             }
@@ -452,7 +455,8 @@ export default function Home() {
                 // [5] Utilizadores Sugeridos
                 let sQuery = supabase.from('users').select('*').limit(15);
                 if (activeCity) {
-                    sQuery = sQuery.eq('city', activeCity);
+                    const safeCity = activeCity.replace(/"/g, '""');
+                    sQuery = sQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
                 } else if (userProvince) {
                     sQuery = sQuery.eq('province', userProvince);
                 }

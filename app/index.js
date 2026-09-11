@@ -568,7 +568,7 @@ export default function WebLandingOrSplash() {
                         </View>
                     </View>
                     <View style={styles.footerBottom}>
-                        <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Kwick. Todos os direitos reservados ao <Text onPress={() => Linking.openURL('https://studio-do-scott-ps2k.vercel.app/')} style={{ color: Colors.primary }}>Studio do Scott</Text>.</Text>
+                        <Text style={styles.footerBottomText}>© {new Date().getFullYear()} Kwick. Todos os direitos reservados à <Text style={{ color: Colors.primary }}>Morstar</Text>.</Text>
                     </View>
                 </View>
 

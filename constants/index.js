@@ -1,8 +1,8 @@
 export const Colors = {
-    primary: '#002800',      // Custom Dark Green
-    primaryDark: '#001a00',  // Darker shade
-    primaryLight: '#004d00', // Lighter shade
-    primaryBg: '#E6F0E6',    // Soft Background
+    primary: '#10B981',      // Custom Green (rgb(16, 185, 129))
+    primaryDark: '#059669',  // Darker shade
+    primaryLight: '#34D399', // Lighter shade
+    primaryBg: '#ECFDF5',    // Soft Background
     white: '#FFFFFF',
     background: '#E5E7EB',   // Noticeably darker grey to ensure card contrast
     surface: '#FFFFFF',

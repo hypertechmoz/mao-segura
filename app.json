@@ -2,17 +2,11 @@
   "expo": {
     "name": "Kwick",
     "slug": "mao-segura",
-    "version": "1.0.1",
+    "version": "0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "scheme": "maosegura",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.maosegura.app",
@@ -53,12 +47,22 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Konekta.",
+          "photosPermission": "Permite carregar uma fotografia para o perfil de Trabalhador ou Empregador no Kwick.",
           "cameraPermission": "Permite tirar uma nova fotografia com a câmera para atribuir ao seu perfil.",
           "microphonePermission": "Permite o acesso ao microfone ao gravar imagens em movimento."
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-status-bar"
     ],
     "extra": {
       "router": {},
