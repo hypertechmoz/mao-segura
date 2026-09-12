@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { AppState, View, ActivityIndicator } from 'react-native';
+import { AppState, View, ActivityIndicator, Platform, useWindowDimensions, StatusBar as RNStatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import Head from 'expo-router/head';
-import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '../constants';
 import { useAuthStore } from '../store/authStore';
@@ -17,7 +16,6 @@ import { GlobalAlerts } from '../components/GlobalAlerts';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import WebNavbar from '../components/WebNavbar';
 import { useSegments, usePathname } from 'expo-router';
-import { Platform, useWindowDimensions } from 'react-native';
 import AppDownloadPrompt from '../components/AppDownloadPrompt';
 import { useUnreadCount } from '../utils/useUnreadCount';
 
@@ -104,7 +102,7 @@ export default function RootLayout() {
                     }
                 `}</style>
             </Head>
-            <StatusBar style="dark" />
+            <RNStatusBar barStyle="dark-content" backgroundColor="#ffffff" />
             <GlobalAlerts />
             <TermsModal />
             <MainAppWrapper />

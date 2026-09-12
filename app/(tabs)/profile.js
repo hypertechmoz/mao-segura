@@ -250,7 +250,9 @@ export default function Profile() {
         <View style={styles.container}>
             {/* Custom Animated Header (Mobile) */}
             {!isWeb && (
-                <Animated.View style={[
+                <>
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: Colors.white, zIndex: 1001 }} />
+                    <Animated.View style={[
                     styles.mobileHeader,
                     {
                         height: HEADER_HEIGHT,
@@ -278,6 +280,7 @@ export default function Profile() {
                         </View>
                     </View>
                 </Animated.View>
+                </>
             )}
 
             <Animated.ScrollView
@@ -538,9 +541,9 @@ export default function Profile() {
                             <Text style={[styles.menuText, styles.logoutText]}>{t('common.logout')}</Text>
                         </TouchableOpacity>
 
-                        <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: Spacing.xs }}>
+                        <View style={{ alignItems: 'center', marginTop: Spacing.xl, marginBottom: 80 }}>
                             <Text style={{ fontSize: 12, color: Colors.textLight }}>Kwick v0.1</Text>
-                            <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido por <Text style={{ fontWeight: '700', color: Colors.primary }}>Morstar</Text></Text>
+                            <Text style={{ fontSize: 13, color: Colors.textSecondary, marginTop: 4 }}>Desenvolvido pela <Text style={{ fontWeight: '700', color: Colors.primary }}>Morstar</Text></Text>
                         </View>
                     </View>
                 ) : (!user || p?.id !== user?.uid) && (
@@ -709,7 +712,7 @@ export default function Profile() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    content: { paddingBottom: Spacing.xxl, ...(Platform.OS === 'web' ? { maxWidth: 600, alignSelf: 'center', width: '100%' } : {}) },
+    content: { paddingBottom: 150, ...(Platform.OS === 'web' ? { maxWidth: 600, alignSelf: 'center', width: '100%' } : {}) },
     header: {
         backgroundColor: Colors.white, paddingVertical: Spacing.xl, alignItems: 'center',
         borderBottomLeftRadius: 24, borderBottomRightRadius: 24,
@@ -733,15 +736,15 @@ const styles = StyleSheet.create({
     role: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 4 },
     location: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 2 },
     completeBanner: {
-        backgroundColor: Colors.primary + '10', borderRadius: 14, padding: Spacing.md, marginHorizontal: Spacing.md,
+        backgroundColor: Colors.primary + '10', padding: Spacing.md,
         marginBottom: Spacing.md, borderWidth: 1, borderColor: Colors.primary + '20',
     },
     completeText: { fontSize: Fonts.sizes.sm, fontWeight: '600', color: Colors.primary, marginBottom: 8 },
     progressBar: { height: 6, backgroundColor: Colors.primary + '20', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
-    section: { backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, marginHorizontal: Spacing.md, marginBottom: Spacing.md },
+    section: { backgroundColor: Colors.white, padding: Spacing.md, marginBottom: 2 },
     sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
-    tabsContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15 },
+    tabsContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, padding: 4 },
     tabButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
     tabButtonActive: { backgroundColor: Colors.primaryBg },
     tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
@@ -752,10 +755,10 @@ const styles = StyleSheet.create({
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
     tag: { backgroundColor: Colors.primaryBg, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
     tagText: { fontSize: Fonts.sizes.xs, color: Colors.primary, fontWeight: '500' },
-    menu: { marginHorizontal: Spacing.md },
+    menu: { marginHorizontal: 0 },
     menuItem: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
-        paddingHorizontal: Spacing.md, paddingVertical: 16, borderRadius: 14, marginBottom: Spacing.xs,
+        padding: Spacing.md, marginBottom: 2,
     },
     menuEmoji: { fontSize: 20, marginRight: Spacing.sm },
     menuText: { flex: 1, fontSize: Fonts.sizes.md, color: Colors.text, fontWeight: '500' },

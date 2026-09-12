@@ -429,7 +429,7 @@ const nStyles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
     content: { 
         padding: Spacing.md, 
-        paddingBottom: Spacing.xxl,
+        paddingBottom: 150,
         ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}),
     },
     headerTitle: { fontSize: Fonts.sizes.xl, fontWeight: '700', color: Colors.text },

@@ -107,26 +107,22 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
 
 const styles = StyleSheet.create({
     card: {
-        backgroundColor: Colors.white,
-        borderRadius: Platform.OS === 'web' ? 8 : 12,
-        marginBottom: Spacing.md,
+        backgroundColor: '#f5fbf6',
+        borderRadius: Platform.OS === 'web' ? 8 : 0,
+        marginBottom: 2,
         overflow: 'hidden',
         ...(Platform.OS === 'web' ? {
             borderWidth: 1,
             borderColor: '#E0DFDC',
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         } : {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 3,
-            elevation: 2,
+            borderBottomWidth: 0,
         }),
     },
     premiumCard: {
         borderWidth: 1.5,
-        borderColor: '#FFD700',
-        backgroundColor: '#FFFAEB',
+        borderColor: '#d1e7d2ff',
+        backgroundColor: '#f5fbf6',
     },
     contentContainer: {
         paddingHorizontal: Spacing.md,
@@ -143,8 +139,8 @@ const styles = StyleSheet.create({
     
     cardType: { backgroundColor: Colors.primaryBg, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
     cardTypeText: { fontSize: Fonts.sizes.xs, color: Colors.primary, fontWeight: '600' },
-    premiumBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF5E6', borderColor: '#FFD700', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-    premiumBadgeText: { fontSize: 10, color: '#B8860B', fontWeight: '700', textTransform: 'uppercase' },
+    premiumBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#d1e7d2ff', borderWidth: 1, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+    premiumBadgeText: { fontSize: 10, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
     proximityBadge: { backgroundColor: Colors.primary + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
     proximityText: { fontSize: 10, color: Colors.primary, fontWeight: '700', textTransform: 'uppercase' },
 

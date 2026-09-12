@@ -495,14 +495,24 @@ export default function Home() {
                     if (locA !== locB) return locB - locA;
                     return new Date(b.created_at) - new Date(a.created_at);
                 });
-                setJobs(prev => isLoadMore ? [...prev, ...mainFeedData] : mainFeedData);
+                setJobs(prev => {
+                    if (!isLoadMore) return mainFeedData;
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const uniqueNew = mainFeedData.filter(p => !existingIds.has(p.id));
+                    return [...prev, ...uniqueNew];
+                });
             } else {
                 const flattenedWorkers = mainFeedData.map(w => ({
                     ...w,
                     ...(w.worker_profiles?.[0] || {}),
                     id: w.id
                 }));
-                setJobs(prev => isLoadMore ? [...prev, ...flattenedWorkers] : flattenedWorkers);
+                setJobs(prev => {
+                    if (!isLoadMore) return flattenedWorkers;
+                    const existingIds = new Set(prev.map(p => p.id));
+                    const uniqueNew = flattenedWorkers.filter(p => !existingIds.has(p.id));
+                    return [...prev, ...uniqueNew];
+                });
             }
 
             // 4. Processar Posts
@@ -528,7 +538,12 @@ export default function Home() {
                 if (locA !== locB) return locB - locA;
                 return new Date(b.created_at) - new Date(a.created_at);
             });
-            setPosts(prev => isLoadMore ? [...prev, ...filteredPosts] : filteredPosts);
+            setPosts(prev => {
+                if (!isLoadMore) return filteredPosts;
+                const existingIds = new Set(prev.map(p => p.id));
+                const uniqueNew = filteredPosts.filter(p => !existingIds.has(p.id));
+                return [...prev, ...uniqueNew];
+            });
 
             // 5. Processar dados do utilizador logado (Apenas se não for Load More)
             if (user && uid && !isLoadMore) {
@@ -814,17 +829,27 @@ export default function Home() {
         });
     }, [posts, jobs]);
 
+    const dynamicHeaderHeight = insets.top + 95;
+
     // === MOBILE: Single column (unchanged) ===
     return (
         <View style={styles.container}>
             {/* Custom Animated Header (Mobile) */}
             {!isWeb && (
-                <Animated.View style={[
+                <>
+                    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: Colors.white, zIndex: 1001 }} />
+                    <Animated.View style={[
                     styles.mobileHeader,
                     {
-                        height: HEADER_HEIGHT,
+                        height: dynamicHeaderHeight,
                         paddingTop: insets.top,
-                        transform: [{ translateY: headerTranslateY }],
+                        transform: [{
+                            translateY: scrollY.interpolate({
+                                inputRange: [0, Math.max(0, dynamicHeaderHeight - insets.top)],
+                                outputRange: [0, -(dynamicHeaderHeight - insets.top)],
+                                extrapolate: 'clamp'
+                            })
+                        }],
                     }
                 ]}>
                     <View style={styles.headerContent}>
@@ -834,13 +859,13 @@ export default function Home() {
                         </View>
                         <View style={styles.headerActions}>
                             <TouchableOpacity onPress={() => router.push('/services')} style={styles.headerIconBtn}>
-                                <Ionicons name="grid-outline" size={24} color={Colors.primary} />
+                                <Ionicons name="grid-outline" size={24} color={Colors.text} />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
-                                <Ionicons name="search-outline" size={24} color={Colors.primary} />
+                                <Ionicons name="search-outline" size={24} color={Colors.text} />
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/chat')} style={styles.headerIconBtn}>
-                                <Ionicons name="chatbubble-outline" size={24} color={Colors.primary} />
+                                <Ionicons name="chatbubble-outline" size={24} color={Colors.text} />
                                 {unreadMessages > 0 && (
                                     <View style={styles.headerBadge}>
                                         <Text style={styles.headerBadgeText}>{unreadMessages > 9 ? '9+' : unreadMessages}</Text>
@@ -848,7 +873,7 @@ export default function Home() {
                                 )}
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => router.push('/(tabs)/notifications')} style={styles.headerIconBtn}>
-                                <Ionicons name="notifications-outline" size={24} color={Colors.primary} />
+                                <Ionicons name="notifications-outline" size={24} color={Colors.text} />
                                 {unreadNotifications > 0 && (
                                     <View style={styles.headerBadge}>
                                         <Text style={styles.headerBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
@@ -878,6 +903,7 @@ export default function Home() {
                         </View>
                     </View>
                 </Animated.View>
+                </>
             )}
 
             {loading ? (
@@ -887,7 +913,7 @@ export default function Home() {
             ) : (
                 <Animated.FlatList
                     data={feedTab === 'POSTS' ? mobileMixedFeed : jobs}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={(item) => item.title ? `job-${item.id}` : `post-${item.id}`}
                     onScroll={Animated.event(
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                         { useNativeDriver: Platform.OS !== 'web' }
@@ -924,8 +950,8 @@ export default function Home() {
                             <Text style={styles.emptySubtext}>Volte mais tarde para ver atualizações</Text>
                         </View>
                     )}
-                    contentContainerStyle={[styles.list, !isWeb && { paddingTop: HEADER_HEIGHT + 16, paddingBottom: insets.bottom + 100 }]}
-                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} progressViewOffset={!isWeb ? HEADER_HEIGHT + 20 : 0} />}
+                    contentContainerStyle={[styles.list, !isWeb && { paddingTop: dynamicHeaderHeight + 2, paddingBottom: 150 }]}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} progressViewOffset={!isWeb ? dynamicHeaderHeight + 20 : 0} />}
                     onEndReached={handleLoadMore}
                     onEndReachedThreshold={0.5}
                     ListFooterComponent={() => (
@@ -945,7 +971,7 @@ export default function Home() {
 // === Mobile Styles ===
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    list: { padding: Spacing.md, paddingBottom: Spacing.xxl },
+    list: { paddingTop: 2, paddingBottom: 150 },
     greeting: { marginBottom: Spacing.md },
     greetingText: { fontSize: Fonts.sizes.xl, fontWeight: '700', color: Colors.text },
     greetingSubtext: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, marginTop: 2 },
@@ -969,35 +995,23 @@ const styles = StyleSheet.create({
     // Switch Styles
     switchWrapper: {
         paddingHorizontal: Spacing.md,
-        paddingTop: 12,
-        paddingBottom: 12,
-        backgroundColor: Colors.white,
+        paddingTop: 4,
     },
     switchBackground: {
         flexDirection: 'row',
-        backgroundColor: Colors.background,
-        borderRadius: 25,
-        padding: 4,
-        borderWidth: 1,
-        borderColor: Colors.borderLight,
+        backgroundColor: Colors.white,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.borderLight,
     },
     switchBtn: {
         flex: 1,
-        paddingVertical: 10,
+        paddingVertical: 12,
         alignItems: 'center',
-        borderRadius: 22,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
     },
     switchBtnActive: {
-        backgroundColor: Colors.white,
-        ...(Platform.OS === 'web' ? {
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        } : {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 2,
-        }),
+        borderBottomColor: Colors.primary,
     },
     switchBtnText: {
         fontSize: 13,

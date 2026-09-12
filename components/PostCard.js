@@ -452,15 +452,17 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
 const styles = StyleSheet.create({
     card: {
         backgroundColor: Colors.white,
-        borderRadius: Platform.OS === 'web' ? 8 : 16,
-        padding: Spacing.md,
-        marginBottom: Spacing.md,
+        borderRadius: Platform.OS === 'web' ? 8 : 0,
+        paddingTop: Spacing.md,
+        paddingHorizontal: Spacing.md,
+        paddingBottom: Spacing.sm,
+        marginBottom: 2,
         ...(Platform.OS === 'web' ? {
             borderWidth: 1, borderColor: '#E0DFDC',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+            marginBottom: Spacing.md,
         } : {
-            shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+            borderBottomWidth: 0,
         }),
     },
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: Spacing.sm, zIndex: 10, elevation: 10 },
@@ -483,12 +485,12 @@ const styles = StyleSheet.create({
     miniActionBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.primaryBg,
+        backgroundColor: Colors.white,
         paddingHorizontal: 12,
         paddingVertical: 7,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: Colors.primary + '20',
+        borderColor: Colors.border,
     },
     actionedBtn: {
         backgroundColor: Colors.borderLight,

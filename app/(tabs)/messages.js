@@ -209,7 +209,7 @@ export default function Messages() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-    list: { paddingBottom: Spacing.xxl, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
+    list: { paddingBottom: 150, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
     conversationCard: {
         flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.white,
         paddingHorizontal: Spacing.md, paddingVertical: 14,

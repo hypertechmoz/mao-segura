@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
     },
     backBtn: { marginRight: 12 },
     headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.text },
-    content: { padding: Spacing.md, paddingBottom: 100, maxWidth: 800, alignSelf: 'center', width: '100%' },
+    content: { padding: Spacing.md, paddingBottom: 150, maxWidth: 800, alignSelf: 'center', width: '100%' },
     section: { marginBottom: 30, backgroundColor: Colors.white, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E0DFDC' },
     sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.text, marginBottom: 16 },
 

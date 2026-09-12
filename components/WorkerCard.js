@@ -81,19 +81,15 @@ export default function WorkerCard({ worker, onPress, userLocation, isContacted 
 const styles = StyleSheet.create({
     card: {
         backgroundColor: Colors.white,
-        borderRadius: Platform.OS === 'web' ? 8 : 16,
+        borderRadius: Platform.OS === 'web' ? 8 : 0,
         padding: Spacing.md,
-        marginBottom: Spacing.sm,
+        marginBottom: 2,
         ...(Platform.OS === 'web' ? {
             borderWidth: 1,
             borderColor: '#E0DFDC',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         } : {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 3,
+            borderBottomWidth: 0,
         }),
     },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },

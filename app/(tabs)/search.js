@@ -246,7 +246,7 @@ export default function Search() {
                             <Text style={styles.emptyText}>Nenhum resultado encontrado</Text>
                         </View>
                     )}
-                    contentContainerStyle={{ paddingBottom: Spacing.xxl }}
+                    contentContainerStyle={{ paddingBottom: 150 }}
                 />
             )}
         </View>

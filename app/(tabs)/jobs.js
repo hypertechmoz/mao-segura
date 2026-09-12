@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     tabActive: { borderBottomWidth: 2, borderBottomColor: Colors.primary },
     tabText: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary, fontWeight: '500' },
     tabTextActive: { color: Colors.primary, fontWeight: '700' },
-    list: { padding: Spacing.md, paddingBottom: 80, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
+    list: { padding: Spacing.md, paddingBottom: 150, ...(Platform.OS === 'web' ? { maxWidth: 700, alignSelf: 'center', width: '100%' } : {}) },
     card: { backgroundColor: Colors.white, borderRadius: 14, padding: Spacing.md, marginBottom: Spacing.sm },
     cardTitle: { fontSize: Fonts.sizes.md, fontWeight: '600', color: Colors.text, marginBottom: 4 },
     cardMeta: { fontSize: Fonts.sizes.sm, color: Colors.textSecondary },

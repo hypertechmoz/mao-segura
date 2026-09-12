@@ -15,30 +15,6 @@ export default function Onboarding() {
     const router = useRouter();
     const setOnboarded = useAuthStore((s) => s.setOnboarded);
     const insets = useSafeAreaInsets();
-    const [testimonials, setTestimonials] = useState([]);
-
-    useEffect(() => {
-        const fetchTestimonials = async () => {
-            try {
-                const { data } = await supabase
-                    .from('testimonials')
-                    .select('*, author:users!user_id(profile_photo)')
-                    .in('status', ['APPROVED_ONBOARDING', 'APPROVED_BOTH'])
-                    .order('created_at', { ascending: false })
-                    .limit(5);
-                
-                if (data) {
-                    setTestimonials(data.map(item => ({
-                        ...item,
-                        user_photo: item.author?.profile_photo || null
-                    })));
-                }
-            } catch (err) {
-                console.error('Error fetching testimonials:', err);
-            }
-        };
-        fetchTestimonials();
-    }, []);
 
     const handleStart = () => {
         setOnboarded();
@@ -54,52 +30,23 @@ export default function Onboarding() {
         <ScreenSafeArea style={styles.container} edges={['top', 'bottom']}>
             <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
             
-            {/* Background removed as requested */}
             <View style={styles.contentContainer}>
-                <View style={styles.topSpacer} />
-                
-                <View style={styles.textSection}>
+                <View style={[styles.textSection, { flex: 1, justifyContent: 'center' }]}>
                     <Image 
-                        source={require('../assets/splash-icon.jpg')} 
+                        source={require('../assets/icon.png')} 
                         style={styles.appIcon} 
                         resizeMode="contain" 
                     />
-                    <BrandWordmark style={{ marginBottom: 12 }} />
-                    <Text style={styles.subtitle}>
-                        Clientes e profissionais mais perto, para serviços{'\n'}
-                        domésticos e comerciais em Moçambique.
-                    </Text>
-                    <View style={styles.divider} />
+                    <BrandWordmark style={{ marginBottom: Spacing.xl }} />
                     <Text style={styles.tagline}>
-                        A oportunidade certa perto de si!
+                        A oportunidade certa{'\n'}perto de si!
+                    </Text>
+                    <Text style={styles.subtitle}>
+                        Clientes e profissionais mais perto,{'\n'}
+                        para serviços domésticos e comerciais{'\n'}
+                        em Moçambique.
                     </Text>
                 </View>
-
-                {testimonials.length > 0 && (
-                    <View style={styles.testimonialsSection}>
-                        <ScrollView 
-                            horizontal 
-                            pagingEnabled 
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={{ alignItems: 'center' }}
-                        >
-                            {testimonials.map((t) => (
-                                <View key={t.id} style={styles.testimonialCard}>
-                                    <Ionicons name="chatbubbles" size={24} color={Colors.primary + '30'} style={{ marginBottom: 8 }} />
-                                    <Text style={styles.testimonialText} numberOfLines={3}>"{t.text}"</Text>
-                                    <View style={styles.testimonialAuthor}>
-                                        <Text style={styles.testimonialName}>{t.name}</Text>
-                                        <View style={{ flexDirection: 'row' }}>
-                                            {[...Array(5)].map((_, i) => (
-                                                <Ionicons key={i} name="star" size={12} color={i < t.rating ? Colors.star : Colors.border} />
-                                            ))}
-                                        </View>
-                                    </View>
-                                </View>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
 
                 <View style={styles.buttonSection}>
                     <TouchableOpacity 
@@ -108,6 +55,7 @@ export default function Onboarding() {
                         activeOpacity={0.8}
                     >
                         <Text style={styles.primaryButtonText}>Começar</Text>
+                        <Ionicons name="arrow-forward" size={20} color={Colors.white} style={{ marginLeft: 8 }} />
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => router.push('/auth/login')} style={styles.loginContainer}>
@@ -122,113 +70,69 @@ export default function Onboarding() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.primaryBg,
     },
     contentContainer: {
         flex: 1,
         paddingHorizontal: Spacing.xl,
-        justifyContent: 'space-between',
-    },
-    topSpacer: {
-        height: 0,
+        paddingBottom: Spacing.xxl,
     },
     textSection: {
         alignItems: 'center',
     },
     appIcon: {
-        width: 90,
-        height: 90,
-        marginBottom: 16,
+        width: 80,
+        height: 80,
+        marginBottom: 12,
+        borderRadius: 20,
+    },
+    tagline: {
+        fontSize: 30,
+        fontWeight: '800',
+        color: Colors.text,
+        textAlign: 'center',
+        lineHeight: 38,
+        marginBottom: Spacing.lg,
     },
     subtitle: {
         fontSize: Fonts.sizes.md,
         color: Colors.textSecondary,
         textAlign: 'center',
         lineHeight: 24,
-        marginBottom: Spacing.lg,
-    },
-    divider: {
-        width: 40,
-        height: 4,
-        backgroundColor: Colors.primary,
-        borderRadius: 2,
-        marginBottom: Spacing.lg,
-    },
-    tagline: {
-        fontSize: 22,
-        fontWeight: '700',
-        color: Colors.text,
-        textAlign: 'center',
-    },
-    testimonialsSection: {
-        width: '100%',
-        height: 140,
-        marginVertical: Spacing.md,
-    },
-    testimonialCard: {
-        width: width - (Spacing.xl * 2),
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 16,
-        padding: Spacing.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    testimonialText: {
-        fontSize: 14,
-        color: Colors.textSecondary,
-        textAlign: 'center',
-        fontStyle: 'italic',
-        marginBottom: Spacing.sm,
-    },
-    testimonialAuthor: {
-        alignItems: 'center',
-        marginTop: 4,
-    },
-    testimonialName: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: Colors.text,
-        marginBottom: 2,
     },
     buttonSection: {
         width: '100%',
-        gap: Spacing.sm,
+        gap: Spacing.md,
+        alignItems: 'center',
     },
     button: {
         width: '100%',
-        borderRadius: 14,
-        paddingVertical: 18,
+        height: 56,
+        borderRadius: 99,
+        justifyContent: 'center',
         alignItems: 'center',
+        flexDirection: 'row',
     },
     primaryButton: {
         backgroundColor: Colors.primary,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 6,
     },
     primaryButtonText: {
         color: Colors.white,
-        fontSize: 16,
-        fontWeight: '700',
-    },
-    secondaryButton: {
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderWidth: 1.5,
-        borderColor: 'rgba(0, 0, 0, 0.1)',
-    },
-    secondaryButtonText: {
-        color: Colors.text,
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '700',
     },
     loginContainer: {
-        marginTop: Spacing.sm,
-        marginBottom: Spacing.xs,
-        alignItems: 'center',
+        paddingVertical: Spacing.sm,
     },
     loginLink: {
-        color: Colors.text,
-        fontSize: Fonts.sizes.md,
-        fontWeight: '600',
+        fontSize: 16,
+        fontWeight: '700',
+        color: Colors.primary,
         textDecorationLine: 'underline',
     },
 });
