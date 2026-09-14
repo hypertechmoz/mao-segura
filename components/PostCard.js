@@ -460,7 +460,6 @@ const styles = StyleSheet.create({
         ...(Platform.OS === 'web' ? {
             borderWidth: 1, borderColor: '#E0DFDC',
             boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
-            marginBottom: Spacing.md,
         } : {
             borderBottomWidth: 0,
         }),

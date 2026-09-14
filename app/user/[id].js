@@ -473,21 +473,45 @@ export default function UserDetail() {
                             <View style={styles.infoGrid}>
                                 <View style={styles.infoItem}>
                                     <Text style={styles.infoLabel}>Disponibilidade</Text>
-                                    <Text style={styles.infoValue}>{profileUser.availability === 'DAILY' ? 'Diarista' : 'Permanente'}</Text>
-                                </View>
-                                <View style={styles.infoItem}>
-                                    <Text style={styles.infoLabel}>Dorme no Local</Text>
-                                    <Text style={styles.infoValue}>{profileUser.can_sleep_onsite ? 'Sim' : 'Não'}</Text>
+                                    <Text style={styles.infoValue}>
+                                        {profileUser.availability === 'IMMEDIATE' ? 'Imediata' :
+                                         profileUser.availability === 'SCHEDULED' ? 'Agendada / Programada' :
+                                         profileUser.availability === 'FLEXIBLE' ? 'Horário Flexível' : 'Não definida'}
+                                    </Text>
                                 </View>
                                 <View style={styles.infoItem}>
                                     <Text style={styles.infoLabel}>Experiência</Text>
-                                    <Text style={styles.infoValue}>{profileUser.has_experience ? 'Com Experiência' : 'Iniciante'}</Text>
+                                    <Text style={styles.infoValue}>{profileUser.has_experience ? 'Sim' : 'Não'}</Text>
                                 </View>
                                 <View style={styles.infoItem}>
                                     <Text style={styles.infoLabel}>Bairro</Text>
                                     <Text style={styles.infoValue}>{profileUser.bairro || 'Não informado'}</Text>
                                 </View>
                             </View>
+
+                            {profileUser.work_modalities && profileUser.work_modalities.length > 0 && (
+                                <View style={{ marginTop: 16 }}>
+                                    <Text style={styles.infoLabel}>Modalidade de Atendimento</Text>
+                                    <View style={[styles.chips, { marginTop: 4 }]}>
+                                        {profileUser.work_modalities.map((m, i) => {
+                                            const label = m === 'PRESENCIAL' ? 'Presencial' : m === 'REMOTE' ? 'Remoto' : 'Híbrido';
+                                            return <View key={i} style={styles.chip}><Text style={styles.chipText}>{label}</Text></View>;
+                                        })}
+                                    </View>
+                                </View>
+                            )}
+                            
+                            {profileUser.service_types && profileUser.service_types.length > 0 && (
+                                <View style={{ marginTop: 16 }}>
+                                    <Text style={styles.infoLabel}>Tipos de Contratação Aceites</Text>
+                                    <View style={[styles.chips, { marginTop: 4 }]}>
+                                        {profileUser.service_types.map((s, i) => {
+                                            const label = s === 'SINGLE_TASK' ? 'Serviço Único / Tarefa' : s === 'PROJECT' ? 'Por Projeto' : s === 'RECURRING' ? 'Recorrente' : 'Contrato Contínuo';
+                                            return <View key={i} style={styles.chip}><Text style={styles.chipText}>{label}</Text></View>;
+                                        })}
+                                    </View>
+                                </View>
+                            )}
                         </View>
                     )}
 
@@ -684,12 +708,12 @@ const styles = StyleSheet.create({
     statNumber: { fontSize: 15, fontWeight: '700', color: Colors.text, marginRight: 4 },
     statLabel: { fontSize: 14, color: Colors.textSecondary },
     statDivider: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.border, marginHorizontal: 10 },
-    tabContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 15, borderRadius: 16, padding: 4, marginHorizontal: 15, borderWidth: 1, borderColor: Colors.primary + '30' },
+    tabContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 2, marginBottom: 2, borderRadius: 16, padding: 4, marginHorizontal: 15, borderWidth: 1, borderColor: Colors.primary + '30' },
     tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
     activeTab: { backgroundColor: Colors.primaryBg },
     tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
     activeTabText: { color: Colors.primary },
-    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginTop: 15, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary + '30' },
+    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginBottom: 2, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary + '30' },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
     description: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24 },
