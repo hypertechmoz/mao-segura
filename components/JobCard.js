@@ -45,11 +45,16 @@ export default function JobCard({ job, onPress, userLocation, isApplied }) {
                     <View style={styles.cardType}>
                         <Text style={styles.cardTypeText}>{job.type}</Text>
                     </View>
-                    {isNear && (
+                    {job.distance_km !== undefined ? (
+                        <View style={[styles.proximityBadge, { flexDirection: 'row', alignItems: 'center' }]}>
+                            <Ionicons name="location" size={10} color={Colors.primary} style={{ marginRight: 2 }} />
+                            <Text style={styles.proximityText}>{job.distance_km < 1 ? '< 1 km' : `${Math.round(job.distance_km)} km`}</Text>
+                        </View>
+                    ) : isNear ? (
                         <View style={styles.proximityBadge}>
                             <Text style={styles.proximityText}>Perto de si</Text>
                         </View>
-                    )}
+                    ) : null}
                 </View>
 
                 <Text style={styles.cardTitle}>{job.title}</Text>

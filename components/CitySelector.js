@@ -30,9 +30,9 @@ export default function CitySelector({ isWeb }) {
                 style={[styles.container, isWeb && styles.webContainer]} 
                 onPress={() => setModalVisible(true)}
             >
-                <Ionicons name="location" size={isWeb ? 14 : 16} color={Colors.primary} />
+                <Ionicons name={!exploredCity ? "location-sharp" : "location-outline"} size={isWeb ? 14 : 16} color={Colors.primary} />
                 <Text style={[styles.text, isWeb && styles.webText]} numberOfLines={1}>
-                    {activeCity}
+                    {!exploredCity ? 'Perto de mim' : activeCity}
                 </Text>
                 <Ionicons name="chevron-down" size={isWeb ? 12 : 14} color={Colors.textLight} />
             </TouchableOpacity>
@@ -60,6 +60,20 @@ export default function CitySelector({ isWeb }) {
                                 </Text>
                             </View>
                         )}
+
+                        <TouchableOpacity
+                            style={[styles.cityItem, !exploredCity && styles.cityItemActive]}
+                            onPress={() => {
+                                setExploredCity(null);
+                                setModalVisible(false);
+                            }}
+                        >
+                            <Ionicons name="location-sharp" size={18} color={!exploredCity ? Colors.primary : Colors.text} style={{ marginRight: 8 }} />
+                            <Text style={[styles.cityText, !exploredCity && styles.cityTextActive, { flex: 1 }]}>
+                                Perto de mim (Localização atual)
+                            </Text>
+                            {!exploredCity && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                        </TouchableOpacity>
 
                         <FlatList
                             data={PROVINCES}

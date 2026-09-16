@@ -742,7 +742,7 @@ const styles = StyleSheet.create({
     completeText: { fontSize: Fonts.sizes.sm, fontWeight: '600', color: Colors.primary, marginBottom: 8 },
     progressBar: { height: 6, backgroundColor: Colors.primary + '20', borderRadius: 3, overflow: 'hidden' },
     progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
-    section: { backgroundColor: Colors.white, padding: Spacing.md, marginBottom: 2 },
+    section: { backgroundColor: Colors.white, padding: Spacing.md, marginBottom: 2, marginTop: 2 },
     sectionTitle: { fontSize: Fonts.sizes.md, fontWeight: '700', color: Colors.text, marginBottom: Spacing.sm },
     tabsContainer: { flexDirection: 'row', backgroundColor: Colors.white, marginTop: 2, marginBottom: 2, padding: 4 },
     tabButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },

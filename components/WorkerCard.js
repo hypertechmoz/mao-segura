@@ -15,11 +15,16 @@ export default function WorkerCard({ worker, onPress, userLocation, isContacted 
                     <View style={styles.cardType}>
                         <Text style={styles.cardTypeText}>{worker.work_types?.[0] || worker.profession_category || 'Profissional'}</Text>
                     </View>
-                    {isNear && (
+                    {worker.distance_km !== undefined ? (
+                        <View style={[styles.proximityBadge, { flexDirection: 'row', alignItems: 'center' }]}>
+                            <Ionicons name="location" size={10} color={Colors.primary} style={{ marginRight: 2 }} />
+                            <Text style={styles.proximityText}>{worker.distance_km < 1 ? '< 1 km' : `${Math.round(worker.distance_km)} km`}</Text>
+                        </View>
+                    ) : isNear ? (
                         <View style={styles.proximityBadge}>
                             <Text style={styles.proximityText}>Perto de si</Text>
                         </View>
-                    )}
+                    ) : null}
                 </View>
                 <Text style={styles.cardTime}>
                     {worker.bairro || worker.province || ''}

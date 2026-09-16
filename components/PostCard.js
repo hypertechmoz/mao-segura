@@ -236,11 +236,16 @@ export default function PostCard({ post, connectionStatusProp, onDelete, onUpdat
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text style={styles.authorName}>{authorName}</Text>
                             {(isPremium || isVerified) && <VerifiedBadge size={14} style={{ marginLeft: 4 }} />}
-                            {(user?.city && post.city && user.city.toLowerCase() === post.city.toLowerCase()) && (
+                            {post.distance_km !== undefined ? (
+                                <View style={[styles.proximityBadge, { flexDirection: 'row', alignItems: 'center' }]}>
+                                    <Ionicons name="location" size={10} color={Colors.primary} style={{ marginRight: 2 }} />
+                                    <Text style={styles.proximityText}>{post.distance_km < 1 ? '< 1 km' : `${Math.round(post.distance_km)} km`}</Text>
+                                </View>
+                            ) : (user?.city && post.author?.city && user.city.toLowerCase() === post.author.city.toLowerCase()) ? (
                                 <View style={styles.proximityBadge}>
                                     <Text style={styles.proximityText}>Perto de si</Text>
                                 </View>
-                            )}
+                            ) : null}
                         </View>
                         <Text style={styles.time}>{postDate}</Text>
                     </View>

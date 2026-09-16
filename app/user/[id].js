@@ -713,7 +713,7 @@ const styles = StyleSheet.create({
     activeTab: { backgroundColor: Colors.primaryBg },
     tabText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
     activeTabText: { color: Colors.primary },
-    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginBottom: 2, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary + '30' },
+    section: { backgroundColor: Colors.white, marginHorizontal: 15, marginBottom: 2, padding: 20, borderRadius: 20, borderWidth: 1, borderColor: Colors.primary + '30', marginTop: 2 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text },
     description: { fontSize: 15, color: Colors.textSecondary, lineHeight: 24 },

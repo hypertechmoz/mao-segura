@@ -279,6 +279,7 @@ export default function Home() {
     const [loading, setLoading] = useState(true);
     const [actionedIds, setActionedIds] = useState(new Map());
     const [completeness, setCompleteness] = useState(user?.completeness || 0);
+    const [userLocation, setUserLocation] = useState(null);
     const { width } = useWindowDimensions();
     const isWeb = Platform.OS === 'web';
     const isSmallScreen = width < 800;
@@ -379,6 +380,23 @@ export default function Home() {
     const loadData = useCallback(async (isSilent = false, isLoadMore = false) => {
         if (authLoading) return;
 
+        // Fetch location once per app load if not set
+        if (!userLocation && !exploredCity && !isLoadMore) {
+            try {
+                let { status } = await Location.requestForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    let loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                    const newLoc = { lat: loc.coords.latitude, lon: loc.coords.longitude };
+                    setUserLocation(newLoc);
+                    if (uid) {
+                        supabase.rpc('update_user_location', { user_id: uid, lat: newLoc.lat, lon: newLoc.lon }).then();
+                    }
+                }
+            } catch (e) {
+                console.log("GPS erro:", e);
+            }
+        }
+
         const currentPage = isLoadMore ? page + 1 : 0;
         const from = currentPage * PAGE_SIZE;
         const to = from + PAGE_SIZE - 1;
@@ -394,54 +412,81 @@ export default function Home() {
         try {
             const isWorker = !user || user?.role === 'WORKER';
 
-            const activeCity = exploredCity || userCity;
+            const activeCity = exploredCity;
 
             // 1. Preparar todos os pedidos para rodar em paralelo
             const queries = [];
 
             // [0] Feed Principal (Vagas ou Trabalhadores) - Com Paginação
             if (isWorker) {
-                let jobQuery = supabase.from('jobs')
-                    .select('*, employer:users!employer_id(id, name, city, province, is_verified, is_premium)')
-                    .eq('status', 'ACTIVE');
+                if (!activeCity && userLocation) {
+                    queries.push(supabase.rpc('get_nearby_jobs_feed', { 
+                        p_lat: userLocation.lat, 
+                        p_lon: userLocation.lon, 
+                        p_limit: PAGE_SIZE, 
+                        p_offset: from 
+                    }));
+                } else {
+                    let jobQuery = supabase.from('jobs')
+                        .select('*, employer:users!employer_id(id, name, city, province, is_verified, is_premium)')
+                        .eq('status', 'ACTIVE');
 
-                if (activeCity) {
-                    const safeCity = activeCity.replace(/"/g, '""');
-                    jobQuery = jobQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
-                } else if (userProvince) {
-                    jobQuery = jobQuery.eq('province', userProvince);
+                    if (activeCity) {
+                        const safeCity = activeCity.replace(/"/g, '""');
+                        jobQuery = jobQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
+                    } else if (userCity || userProvince) {
+                        jobQuery = jobQuery.or(`city.eq."${userCity}",province.eq."${userProvince}"`);
+                    }
+
+                    queries.push(jobQuery.order('created_at', { ascending: false }).range(from, to));
                 }
-
-                queries.push(jobQuery.order('created_at', { ascending: false }).range(from, to));
             } else {
-                let workerQuery = supabase.from('users')
-                    .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
-                    .eq('role', 'WORKER');
+                if (!activeCity && userLocation) {
+                    queries.push(supabase.rpc('get_nearby_workers_feed', { 
+                        p_lat: userLocation.lat, 
+                        p_lon: userLocation.lon, 
+                        p_limit: PAGE_SIZE, 
+                        p_offset: from 
+                    }));
+                } else {
+                    let workerQuery = supabase.from('users')
+                        .select('id, name, city, bairro, province, profile_photo, role, worker_profiles(*)')
+                        .eq('role', 'WORKER');
 
-                if (activeCity) {
-                    const safeCity = activeCity.replace(/"/g, '""');
-                    workerQuery = workerQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
-                } else if (userProvince) {
-                    workerQuery = workerQuery.eq('province', userProvince);
+                    if (activeCity) {
+                        const safeCity = activeCity.replace(/"/g, '""');
+                        workerQuery = workerQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`);
+                    } else if (userCity || userProvince) {
+                        workerQuery = workerQuery.or(`city.eq."${userCity}",province.eq."${userProvince}"`);
+                    }
+
+                    queries.push(workerQuery.order('created_at', { ascending: false }).range(from, to));
                 }
-
-                queries.push(workerQuery.order('created_at', { ascending: false }).range(from, to));
             }
 
             // [1] Posts - Com Paginação
-            let postQuery = supabase.from('posts')
-                .select('*, author:users!inner(name, profile_photo, role, province, city, is_verified, is_premium)')
-                .order('created_at', { ascending: false })
-                .range(from, to);
-            
-            if (activeCity) {
-                const safeCity = activeCity.replace(/"/g, '""');
-                postQuery = postQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`, { foreignTable: 'author' });
-            } else if (userProvince) {
-                postQuery = postQuery.eq('author.province', userProvince);
+            if (!activeCity && userLocation) {
+                queries.push(supabase.rpc('get_nearby_posts_feed', {
+                    p_lat: userLocation.lat,
+                    p_lon: userLocation.lon,
+                    p_limit: PAGE_SIZE,
+                    p_offset: from
+                }));
+            } else {
+                let postQuery = supabase.from('posts')
+                    .select('*, author:users!inner(name, profile_photo, role, province, city, is_verified, is_premium)')
+                    .order('created_at', { ascending: false })
+                    .range(from, to);
+                
+                if (activeCity) {
+                    const safeCity = activeCity.replace(/"/g, '""');
+                    postQuery = postQuery.or(`city.eq."${safeCity}",province.eq."${safeCity}"`, { foreignTable: 'author' });
+                } else if (userProvince) {
+                    postQuery = postQuery.eq('author.province', userProvince);
+                }
+                
+                queries.push(postQuery);
             }
-            
-            queries.push(postQuery);
 
             // Pedidos específicos do utilizador (Apenas no carregamento inicial)
             if (user && uid && !isLoadMore) {
@@ -489,12 +534,16 @@ export default function Home() {
                 // Manter ordenação por localização mas dentro do chunk recebido
                 const userProvince = user?.province?.toLowerCase();
                 const userCity = user?.city?.toLowerCase();
-                mainFeedData.sort((a, b) => {
-                    const locA = (userCity && a.city?.toLowerCase() === userCity ? 2 : (userProvince && a.province?.toLowerCase() === userProvince ? 1 : 0));
-                    const locB = (userCity && b.city?.toLowerCase() === userCity ? 2 : (userProvince && b.province?.toLowerCase() === userProvince ? 1 : 0));
-                    if (locA !== locB) return locB - locA;
-                    return new Date(b.created_at) - new Date(a.created_at);
-                });
+                
+                if (!userLocation || activeCity) {
+                    // Sorting on client side fallback if GPS not used
+                    mainFeedData.sort((a, b) => {
+                        const locA = (userCity && a.city?.toLowerCase() === userCity ? 2 : (userProvince && a.province?.toLowerCase() === userProvince ? 1 : 0));
+                        const locB = (userCity && b.city?.toLowerCase() === userCity ? 2 : (userProvince && b.province?.toLowerCase() === userProvince ? 1 : 0));
+                        if (locA !== locB) return locB - locA;
+                        return new Date(b.created_at) - new Date(a.created_at);
+                    });
+                }
                 setJobs(prev => {
                     if (!isLoadMore) return mainFeedData;
                     const existingIds = new Set(prev.map(p => p.id));
@@ -529,15 +578,17 @@ export default function Home() {
 
             let filteredPosts = combinedPosts;
             if (postUserProvince) {
-                filteredPosts = combinedPosts.filter(p => p.is_mock || p.author?.province?.toLowerCase() === postUserProvince);
+                filteredPosts = combinedPosts.filter(p => p.is_mock || !activeCity || p.author?.province?.toLowerCase() === postUserProvince || p.author?.city?.toLowerCase() === postUserCity);
             }
 
-            filteredPosts.sort((a, b) => {
-                const locA = (postUserCity && a.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && a.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
-                const locB = (postUserCity && b.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && b.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
-                if (locA !== locB) return locB - locA;
-                return new Date(b.created_at) - new Date(a.created_at);
-            });
+            if (!userLocation || activeCity) {
+                filteredPosts.sort((a, b) => {
+                    const locA = (postUserCity && a.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && a.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
+                    const locB = (postUserCity && b.author?.city?.toLowerCase() === postUserCity ? 2 : (postUserProvince && b.author?.province?.toLowerCase() === postUserProvince ? 1 : 0));
+                    if (locA !== locB) return locB - locA;
+                    return new Date(b.created_at) - new Date(a.created_at);
+                });
+            }
             setPosts(prev => {
                 if (!isLoadMore) return filteredPosts;
                 const existingIds = new Set(prev.map(p => p.id));
