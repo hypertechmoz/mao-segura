@@ -1,11 +1,14 @@
 import { useAuthStore } from '../store/authStore';
 
-/** Navigate to login first, then clear session (avoids crash on tabs while user becomes null). */
+/** Logout safely */
 export async function logoutAndRedirect(router) {
     try {
-        router?.replace?.('/auth/login');
+        await useAuthStore.getState().logout();
+        // Fallback redirection in case root layout doesn't catch it quickly enough
+        setTimeout(() => {
+            router?.replace?.('/auth/login');
+        }, 100);
     } catch (e) {
-        console.warn('Navigation during logout:', e);
+        console.warn('Error during logout:', e);
     }
-    await useAuthStore.getState().logout();
 }

@@ -39,19 +39,14 @@ RETURNS TABLE (
     employer_id uuid,
     title text,
     description text,
-    requirements text,
-    category text,
-    specialty text,
     type text,
-    modality text,
-    budget_min numeric,
-    budget_max numeric,
-    payment_type text,
+    contract_type text,
+    availability text,
     province text,
     city text,
     bairro text,
-    availability text,
     status text,
+    image_url text,
     created_at timestamptz,
     applications_count int,
     distance_km float,
@@ -60,7 +55,7 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT 
-        j.id, j.employer_id, j.title, j.description, j.requirements, j.category, j.specialty, j.type, j.modality, j.budget_min, j.budget_max, j.payment_type, j.province, j.city, j.bairro, j.availability, j.status, j.created_at, j.applications_count,
+        j.id, j.employer_id, j.title, j.description, j.type, j.contract_type, j.availability, j.province, j.city, j.bairro, j.status, j.image_url, j.created_at, j.applications_count,
         (ST_Distance(u.location, ST_MakePoint(p_lon, p_lat)::geography) / 1000.0)::float AS distance_km,
         jsonb_build_object(
             'id', u.id,

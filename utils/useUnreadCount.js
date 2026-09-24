@@ -10,7 +10,9 @@ export const useUnreadStore = create((set, get) => ({
     unreadMessages: 0,
     unreadNotifications: 0,
     unreadConnectionRequests: 0,
+    activeChatId: null,
 
+    setActiveChatId: (chatId) => set({ activeChatId: chatId }),
     setUnreadMessages: (count) => set({ unreadMessages: Math.max(0, count) }),
     setUnreadNotifications: (count) => set({ unreadNotifications: Math.max(0, count) }),
     setUnreadConnectionRequests: (count) => set({ unreadConnectionRequests: Math.max(0, count) }),
@@ -55,7 +57,13 @@ export const useUnreadStore = create((set, get) => ({
                 
                 let msgTotal = 0;
                 convs?.forEach(c => {
-                    if (c.unread_count && c.unread_count[uid]) msgTotal += c.unread_count[uid];
+                    // Ignore unread count for the currently active chat because the user is already reading it
+                    if (get().activeChatId === c.id) {
+                        return;
+                    }
+                    if (c.unread_count && c.unread_count[uid]) {
+                        msgTotal += c.unread_count[uid];
+                    }
                 });
 
                 // 2. Notifications (Direct)
@@ -111,6 +119,7 @@ export const useUnreadCount = () => {
     const unreadConnectionRequests = useUnreadStore(s => s.unreadConnectionRequests);
     const fetchAndSubscribe = useUnreadStore(s => s.fetchAndSubscribe);
     const reset = useUnreadStore(s => s.reset);
+    const setActiveChatId = useUnreadStore(s => s.setActiveChatId);
 
     useEffect(() => {
         const uid = user?.uid || user?.id;
@@ -121,5 +130,5 @@ export const useUnreadCount = () => {
         }
     }, [user?.uid, user?.id, user?.role]);
 
-    return { unreadMessages, unreadNotifications, unreadConnectionRequests };
+    return { unreadMessages, unreadNotifications, unreadConnectionRequests, setActiveChatId };
 };

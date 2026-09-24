@@ -293,20 +293,15 @@ export default function Home() {
     const PAGE_SIZE = 10;
 
     // --- Header Animation (Mobile) ---
+    const dynamicHeaderHeight = insets.top + 95;
     const scrollY = useRef(new Animated.Value(0)).current;
     const TAB_BAR_HEIGHT = 58;
     const HEADER_HEIGHT = 64 + insets.top + TAB_BAR_HEIGHT;
 
-    const scrollYClamped = Animated.diffClamp(scrollY, 0, HEADER_HEIGHT);
+    const scrollYClamped = Animated.diffClamp(scrollY, 0, dynamicHeaderHeight - insets.top);
     const headerTranslateY = scrollYClamped.interpolate({
-        inputRange: [0, HEADER_HEIGHT],
-        outputRange: [0, -HEADER_HEIGHT],
-    });
-
-    const headerOpacity = scrollYClamped.interpolate({
-        inputRange: [0, (HEADER_HEIGHT - TAB_BAR_HEIGHT) * 0.5],
-        outputRange: [1, 0],
-        extrapolate: 'clamp',
+        inputRange: [0, dynamicHeaderHeight - insets.top],
+        outputRange: [0, -(dynamicHeaderHeight - insets.top)],
     });
 
     const uid = user?.uid || user?.id || null;
@@ -745,10 +740,14 @@ export default function Home() {
         });
     }, [posts, jobs, user?.role]);
 
-    if (isWeb) {
+    if (isWeb && !isSmallScreen) {
         return (
             <View style={[webStyles.webContainer, { height: '100vh', overflow: 'hidden' }]}>
-                <View style={[webStyles.threeCol, isSmallScreen ? { flexDirection: 'column', maxWidth: 600, alignItems: 'center' } : {}, { flex: 1 }]}>
+                <View style={[
+                    webStyles.threeCol, 
+                    isSmallScreen ? { flexDirection: 'column', maxWidth: '100%', paddingHorizontal: 0, gap: 0 } : {}, 
+                    { flex: 1 }
+                ]}>
                     {!isSmallScreen && (
                         <View style={{ width: 225 }}>
                             <WebLeftSidebar user={user} completeness={completeness} router={router} />
@@ -786,7 +785,7 @@ export default function Home() {
                                     {/* Create Post / Job Button */}
                                     {(user?.role === 'EMPLOYER' || feedTab === 'POSTS') && (
                                         <TouchableOpacity
-                                            style={webStyles.createJobBox}
+                                            style={[webStyles.createJobBox, isSmallScreen ? { borderRadius: 0, borderLeftWidth: 0, borderRightWidth: 0 } : {}]}
                                             onPress={() => {
                                                 if (requireAuth()) {
                                                     router.push(feedTab === 'POSTS' ? (user.role === 'EMPLOYER' ? '/job/create' : '/post/create') : '/job/create');
@@ -810,7 +809,7 @@ export default function Home() {
                                     )}
 
                                     {/* Sort bar & Tabs */}
-                                    <View style={webStyles.tabContainerWeb}>
+                                    <View style={[webStyles.tabContainerWeb, isSmallScreen ? { paddingHorizontal: 16 } : {}]}>
                                         <TouchableOpacity style={[webStyles.tabBtnWeb, feedTab === 'POSTS' && webStyles.tabBtnWebActive]} onPress={() => setFeedTab('POSTS')}>
                                             <Text style={[webStyles.tabBtnTextWeb, feedTab === 'POSTS' && webStyles.tabBtnWebActive]}>Atualizações</Text>
                                         </TouchableOpacity>
@@ -880,13 +879,11 @@ export default function Home() {
         });
     }, [posts, jobs]);
 
-    const dynamicHeaderHeight = insets.top + 95;
-
     // === MOBILE: Single column (unchanged) ===
     return (
         <View style={styles.container}>
             {/* Custom Animated Header (Mobile) */}
-            {!isWeb && (
+            {(!isWeb || isSmallScreen) && (
                 <>
                     <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: insets.top, backgroundColor: Colors.white, zIndex: 1001 }} />
                     <Animated.View style={[
@@ -895,11 +892,7 @@ export default function Home() {
                         height: dynamicHeaderHeight,
                         paddingTop: insets.top,
                         transform: [{
-                            translateY: scrollY.interpolate({
-                                inputRange: [0, Math.max(0, dynamicHeaderHeight - insets.top)],
-                                outputRange: [0, -(dynamicHeaderHeight - insets.top)],
-                                extrapolate: 'clamp'
-                            })
+                            translateY: headerTranslateY
                         }],
                     }
                 ]}>
@@ -915,7 +908,7 @@ export default function Home() {
                             <TouchableOpacity onPress={() => router.push('/(tabs)/search')} style={styles.headerIconBtn}>
                                 <Ionicons name="search-outline" size={24} color={Colors.text} />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => router.push('/(tabs)/chat')} style={styles.headerIconBtn}>
+                            <TouchableOpacity onPress={() => router.push('/(tabs)/messages')} style={styles.headerIconBtn}>
                                 <Ionicons name="chatbubble-outline" size={24} color={Colors.text} />
                                 {unreadMessages > 0 && (
                                     <View style={styles.headerBadge}>
@@ -969,6 +962,7 @@ export default function Home() {
                         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
                         { useNativeDriver: Platform.OS !== 'web' }
                     )}
+                    scrollEventThrottle={16}
                     ListHeaderComponent={() => (
                         <View>
                             <ProfileBanner completeness={completeness} />

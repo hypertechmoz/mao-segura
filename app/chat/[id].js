@@ -11,7 +11,7 @@ import { formatTime as formatTimeUtil } from '../../utils/profileUtils';
 import { sendPushNotification } from '../../services/notificationService';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useUnreadStore } from '../../utils/useUnreadCount';
+import { useUnreadCount, useUnreadStore } from '../../utils/useUnreadCount';
 
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '../../services/storageService';
@@ -44,8 +44,12 @@ export default function ChatScreen() {
     const [upgradeMessage, setUpgradeMessage] = useState('');
     const flatListRef = useRef(null);
 
+    const { setActiveChatId } = useUnreadCount();
+
     useEffect(() => {
         if (!user || !id) return;
+        
+        setActiveChatId(id);
         const uid = user.uid || user.id;
 
         // Ensure we know the other person's ID by checking the conversation
@@ -107,6 +111,14 @@ export default function ChatScreen() {
             }
         };
 
+        const markAsRead = async () => {
+            const { data: convData } = await supabase.from('chat_conversations').select('unread_count').eq('id', id).single();
+            if (convData && convData.unread_count && convData.unread_count[uid] > 0) {
+                const newUnread = { ...convData.unread_count, [uid]: 0 };
+                await supabase.from('chat_conversations').update({ unread_count: newUnread }).eq('id', id);
+            }
+        };
+
         getReceiver();
 
         // Subscriptions
@@ -133,6 +145,11 @@ export default function ChatScreen() {
                     if (!prev.find(m => m.id === payload.new.id)) return [...prev, payload.new];
                     return prev;
                 });
+                
+                // If we receive a message from the other person while chat is open, immediately mark as read
+                if (payload.new.sender_id !== uid) {
+                    markAsRead();
+                }
             })
             .subscribe();
 
@@ -148,6 +165,7 @@ export default function ChatScreen() {
         fetchMessages();
 
         return () => {
+            setActiveChatId(null);
             supabase.removeChannel(convChannel);
         };
     }, [id, user]);

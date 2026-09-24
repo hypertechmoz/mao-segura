@@ -44,7 +44,7 @@ export default function TabLayout() {
 
     const { unreadMessages, unreadNotifications, unreadConnectionRequests } = useUnreadCount();
 
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && !isSmallScreen) {
         return (
             <View style={styles.webLayout}>
                 <View style={styles.webContent}>
@@ -88,7 +88,7 @@ export default function TabLayout() {
                     name="home"
                     options={{
                         title: t('tabs.home'),
-                        headerShown: Platform.OS === 'web', // Hide on mobile for custom animated header
+                        headerShown: Platform.OS === 'web' && !isSmallScreen, // Hide on mobile for custom animated header
                         tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.home')} icon="home" focused={focused} />,
                     }}
                 />
@@ -97,7 +97,7 @@ export default function TabLayout() {
                     name="network"
                     options={{
                         title: 'Minha Rede',
-                        headerShown: Platform.OS === 'web',
+                        headerShown: Platform.OS === 'web' && !isSmallScreen,
                         tabBarIcon: ({ focused }) => <TabIcon label="Rede" icon="people" focused={focused} badge={unreadConnectionRequests} />,
                     }}
                 />
@@ -115,7 +115,7 @@ export default function TabLayout() {
                     name="jobs"
                     options={{
                         title: t('tabs.jobs'),
-                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        headerShown: Platform.OS === 'web' && !isSmallScreen, // Hide on mobile
                         tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.jobs')} icon="briefcase" focused={focused} />,
                     }}
                 />
@@ -124,7 +124,7 @@ export default function TabLayout() {
                     name="messages"
                     options={{
                         title: t('tabs.messages'),
-                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        headerShown: Platform.OS === 'web' && !isSmallScreen, // Hide on mobile
                         tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.messages')} icon="chatbubble-ellipses" focused={focused} badge={unreadMessages} />,
                     }}
                     listeners={{
@@ -148,7 +148,7 @@ export default function TabLayout() {
                     name="notifications"
                     options={{
                         title: t('tabs.notifications'),
-                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        headerShown: Platform.OS === 'web' && !isSmallScreen, // Hide on mobile
                         href: null, // Removed from bottom tabs
                     }}
                     listeners={{
@@ -164,7 +164,7 @@ export default function TabLayout() {
                     name="profile"
                     options={{
                         title: t('tabs.profile'),
-                        headerShown: Platform.OS === 'web', // Hide on mobile
+                        headerShown: Platform.OS === 'web' && !isSmallScreen, // Hide on mobile
                         tabBarIcon: ({ focused }) => <TabIcon label={t('tabs.profile')} icon="person" focused={focused} />,
                     }}
                     listeners={{

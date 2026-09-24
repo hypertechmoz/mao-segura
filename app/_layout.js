@@ -127,7 +127,7 @@ function MainAppWrapper() {
     // Do not show on auth pages or landing page
     const isAuthRoute = segments[0] === 'auth' || pathname === '/auth/login' || pathname === '/auth/register';
     const isLandingRoute = segments.length === 0 || pathname === '/' || pathname === '/index';
-    const showWebNav = isWeb && user && !isAuthRoute && !isLandingRoute;
+    const showWebNav = isWeb && user && !isAuthRoute && !isLandingRoute && !isSmallScreen;
 
     return (
         <View style={{ flex: 1, minHeight: Platform.OS === 'web' ? '100vh' : '100%', backgroundColor: Colors.background }}>

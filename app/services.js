@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, ScrollView, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ export default function ServicesScreen() {
     const [specialties, setSpecialties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState(null);
+    const { width } = useWindowDimensions();
+    const isSmallScreen = width < 768;
 
     useEffect(() => {
         fetchTaxonomy();
@@ -93,13 +95,12 @@ export default function ServicesScreen() {
                 <Text style={styles.headerTitle}>Explorar Serviços</Text>
             </View>
 
-            <View style={styles.content}>
-                {/* Categorias Sidebar (Web) ou Scroll Horizontal (Mobile) */}
-                <View style={styles.sidebar}>
+            <View style={[styles.content, isSmallScreen && { flexDirection: 'row', maxWidth: '100%' }]}>
+                {/* Categorias Sidebar */}
+                <View style={[styles.sidebar, isSmallScreen && { width: 120 }]}>
                     <ScrollView 
                         showsVerticalScrollIndicator={false}
                         showsHorizontalScrollIndicator={false}
-                        horizontal={Platform.OS !== 'web' && false} 
                     >
                         {categories.map(cat => (
                             <TouchableOpacity
@@ -117,7 +118,8 @@ export default function ServicesScreen() {
                                 />
                                 <Text style={[
                                     styles.categoryText,
-                                    selectedCategory === cat.id && styles.categoryTextActive
+                                    selectedCategory === cat.id && styles.categoryTextActive,
+                                    isSmallScreen && { fontSize: 11, textAlign: 'center' }
                                 ]}>{cat.name}</Text>
                             </TouchableOpacity>
                         ))}
@@ -223,8 +225,6 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         borderRadius: 12,
         marginBottom: Spacing.sm,
-        marginHorizontal: Platform.OS === 'web' ? Spacing.sm : 0,
-        borderWidth: 1,
         borderColor: Colors.borderLight,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 1 },

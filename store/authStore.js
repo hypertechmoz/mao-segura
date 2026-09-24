@@ -4,6 +4,7 @@ import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getEmailRedirectTo } from '../utils/authRedirect';
 import { sendWelcomeEmailOnce } from '../services/emailService';
+import { makeRedirectUri } from 'expo-auth-session';
 
 const PERSISTENCE_KEY = 'mao_segura_user_session';
 let hasInitializedAuthStore = false;
@@ -493,10 +494,10 @@ export const useAuthStore = create((set, get) => ({
     signInWithGoogle: async () => {
         set({ isAuthActionLoading: true });
         try {
-            const redirectTo =
-                Platform.OS === 'web' && typeof window !== 'undefined'
-                    ? `${window.location.origin}/(tabs)/home`
-                    : 'maosegura://home';
+            const redirectTo = makeRedirectUri({
+                path: '(tabs)/home',
+                preferLocalhost: true,
+            });
 
             console.log('[signInWithGoogle] Starting Google OAuth, redirectTo:', redirectTo);
 
