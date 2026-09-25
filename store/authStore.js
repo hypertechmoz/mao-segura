@@ -3,7 +3,7 @@ import { Platform, Linking } from 'react-native';
 import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getEmailRedirectTo } from '../utils/authRedirect';
-import { sendWelcomeEmailOnce } from '../services/emailService';
+import { sendWelcomeEmailOnce, sendKwickTransactionalEmail } from '../services/emailService';
 import { makeRedirectUri } from 'expo-auth-session';
 
 const PERSISTENCE_KEY = 'mao_segura_user_session';
@@ -117,6 +117,76 @@ export const useAuthStore = create((set, get) => ({
 
             if (userError) {
                 console.warn('Profile fetch warning:', userError.message);
+            }
+
+            // 1.5 Send expiration warning if premium and expiring within 5 days
+            if (userData?.is_premium) {
+                try {
+                    const { data: subData } = await supabase
+                        .from('subscriptions')
+                        .select('expires_at')
+                        .eq('user_id', uid)
+                        .maybeSingle();
+
+                    if (subData?.expires_at) {
+                        const daysRemaining = (new Date(subData.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
+                        if (daysRemaining <= 5 && daysRemaining > 0) {
+                            const warningKey = `premium_warning_${uid}_${subData.expires_at}`;
+                            const alreadyWarned = await AsyncStorage.getItem(warningKey);
+                            
+                            if (!alreadyWarned) {
+                                // Notification
+                                await supabase.from('notifications').insert({
+                                    user_id: uid,
+                                    type: 'SYSTEM',
+                                    message: `A sua subscrição Kwick Mais expira em ${Math.ceil(daysRemaining)} dias. Renove para não perder os benefícios!`,
+                                    reference_type: 'SYSTEM'
+                                });
+                                // Email
+                                await sendKwickTransactionalEmail('subscription_expiring', { email: user.email, name: userData.name });
+                                
+                                await AsyncStorage.setItem(warningKey, '1');
+                            }
+                        }
+                    }
+                } catch (subErr) {
+                    console.warn('[refreshUser] check expiration warning error:', subErr);
+                }
+            }
+
+            // 1.5 Send expiration warning if premium and expiring within 5 days
+            if (userData?.is_premium) {
+                try {
+                    const { data: subData } = await supabase
+                        .from('subscriptions')
+                        .select('expires_at')
+                        .eq('user_id', uid)
+                        .maybeSingle();
+
+                    if (subData?.expires_at) {
+                        const daysRemaining = (new Date(subData.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
+                        if (daysRemaining <= 5 && daysRemaining > 0) {
+                            const warningKey = `premium_warning_${uid}_${subData.expires_at}`;
+                            const alreadyWarned = await AsyncStorage.getItem(warningKey);
+                            
+                            if (!alreadyWarned) {
+                                // Notification
+                                await supabase.from('notifications').insert({
+                                    user_id: uid,
+                                    type: 'SYSTEM',
+                                    message: `A sua subscrição Kwick Mais expira em ${Math.ceil(daysRemaining)} dias. Renove para não perder os benefícios!`,
+                                    reference_type: 'SYSTEM'
+                                });
+                                // Email
+                                await sendKwickTransactionalEmail('subscription_expiring', { email: user.email, name: userData.name });
+                                
+                                await AsyncStorage.setItem(warningKey, '1');
+                            }
+                        }
+                    }
+                } catch (subErr) {
+                    console.warn('[refreshUser] check expiration warning error:', subErr);
+                }
             }
 
             // Fallback for OAuth / un-triggered users if public.users record does not exist yet

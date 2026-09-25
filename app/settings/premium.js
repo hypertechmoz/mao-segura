@@ -39,23 +39,17 @@ export default function Premium() {
         if (!uid) return;
         setLoading(true);
         try {
-            const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-            
             await supabase.from('subscriptions').upsert({
                 user_id: uid,
                 plan: 'PREMIUM',
                 payment_method: method,
-                expires_at: expiresAt
-            });
+                status: 'PENDING'
+                // expires_at will be set by admin upon approval
+            }, { onConflict: 'user_id' });
 
-            // Sync user premium status
-            await supabase.from('users').update({ is_premium: true, subscription_plan: 'PLUS' }).eq('id', uid);
-
-            const { refreshUser } = useAuthStore.getState();
-            await refreshUser();
             await fetchSubscription();
             setShowPayment(false);
-            Alert.alert('Sucesso', 'Subscrição Kwick Mais ativada!');
+            Alert.alert('Pedido Recebido', 'O seu pedido foi recebido com sucesso. A sua subscrição Kwick Mais será ativada assim que o administrador confirmar o pagamento.');
         } catch (err) {
             Alert.alert('Erro', err.message);
         } finally {
@@ -87,7 +81,8 @@ export default function Premium() {
         ]);
     };
 
-    const isPremium = subscription?.plan === 'PREMIUM' || user?.is_premium;
+    const isPremium = subscription?.plan === 'PREMIUM' && subscription?.status === 'ACTIVE' || user?.is_premium;
+    const isPending = subscription?.plan === 'PREMIUM' && subscription?.status === 'PENDING';
     const isEmployer = user?.role === 'EMPLOYER';
 
     const renderFeature = (text, included, premiumOnly = false) => (
@@ -169,7 +164,12 @@ export default function Premium() {
                     </View>
                 ) : (
                     <View style={styles.subscribeContainer}>
-                        {!showPayment ? (
+                        {isPending ? (
+                            <View style={[styles.btnStart, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                                <Ionicons name="time-outline" size={20} color={Colors.white} />
+                                <Text style={[styles.btnStartText, { color: Colors.white }]}>Pedido Pendente (Aguarde Confirmação)</Text>
+                            </View>
+                        ) : !showPayment ? (
                             <TouchableOpacity style={styles.btnStart} onPress={() => setShowPayment(true)}>
                                 <Text style={styles.btnStartText}>Começar Kwick Mais</Text>
                                 <Ionicons name="arrow-forward" size={20} color={Colors.primary} />

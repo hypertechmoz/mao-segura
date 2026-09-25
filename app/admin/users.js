@@ -189,14 +189,42 @@ export default function AdminUsers() {
     );
   };
 
-  const handleTogglePremium = async (id, currentStatus) => {
+  const handleTogglePremium = async (id, currentStatus, userName, email) => {
     try {
       const { error: userError } = await supabase
         .from('users')
-        .update({ is_premium: !currentStatus })
+        .update({ is_premium: !currentStatus, subscription_plan: !currentStatus ? 'PLUS' : 'FREE' })
         .eq('id', id);
       
       if (userError) throw userError;
+
+      // Update subscription
+      if (!currentStatus) {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await supabase.from('subscriptions').upsert({
+          user_id: id,
+          plan: 'PREMIUM',
+          status: 'ACTIVE',
+          expires_at: expiresAt
+        }, { onConflict: 'user_id' });
+
+        // Send Notification & Email
+        await supabase.from('notifications').insert({
+            user_id: id,
+            type: 'SYSTEM',
+            message: 'A sua subscrição Kwick Mais foi aprovada e já está ativa!',
+            reference_type: 'SYSTEM'
+        });
+        if (email) {
+            await sendKwickTransactionalEmail('subscription_approved', { email, name: userName });
+        }
+      } else {
+        await supabase.from('subscriptions').update({
+          plan: 'FREE',
+          status: 'EXPIRED',
+          expires_at: null
+        }).eq('user_id', id);
+      }
 
       setUsers(prev => prev.map(u => u.id === id ? { ...u, is_premium: !currentStatus } : u));
       
@@ -421,7 +449,7 @@ export default function AdminUsers() {
               )}
               <TouchableOpacity 
                 style={[styles.actionBtn, { backgroundColor: item.is_premium ? '#f44336' : '#FFD700' }]} 
-                onPress={() => handleTogglePremium(item.id, item.is_premium)}
+                onPress={() => handleTogglePremium(item.id, item.is_premium, item.name, item.email)}
               >
                 <Ionicons name={item.is_premium ? "close-circle-outline" : "star"} size={14} color={item.is_premium ? Colors.white : '#333'} />
                 <Text style={[styles.btnTextWhite, { color: item.is_premium ? Colors.white : '#333' }]}>
